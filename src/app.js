@@ -27,7 +27,7 @@ const DEFAULTS = {
   langA: 'ja-JP', langB: 'en-US', source: 'mic', apiKey: '',
   translateModel: 'gemini-3.5-flash-lite', interimTranslate: true, smart: false, record: true, glossary: '', fontSize: 18,
   captionItems: 3,      // sentences kept in the caption zone, including the one being spoken
-  interimInterval: 1.2, // seconds between re-translations of the sentence being spoken
+  interimInterval: 1.5, // seconds between re-translations of the sentence being spoken
 };
 const INTERIM_COOLDOWN_MS = 60_000;
 const HISTORY_LINES = 3;
