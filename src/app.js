@@ -32,6 +32,7 @@ const MIN_SPLIT_CHARS = 10;   // shorter sentences are merged with the next one
 const MAX_LIVE_CHARS = 180;   // force a split at a clause boundary beyond this
 const SENTENCE_END = /(?:[。！？]+[」』）]*|[.!?]+["')\]]*(?=\s))\s*/g;
 const MOCK = new URLSearchParams(location.search).has('mock');
+const DEBUG = new URLSearchParams(location.search).has('debug'); // log raw recognizer output to the console
 
 const $ = (id) => document.getElementById(id);
 const els = Object.fromEntries([
@@ -192,14 +193,14 @@ async function start() {
   }
   const langA = LANGS.find((l) => l.code === settings.langA);
   const langB = LANGS.find((l) => l.code === settings.langB);
-  const s = { utt: { committed: '', prevRest: '' }, interim: { busy: false, lastAt: 0, pausedUntil: 0, timer: null, text: '' } };
+  const s = { utt: newUtterance(), closed: null, interim: { busy: false, lastAt: 0, pausedUntil: 0, timer: null, text: '' } };
   session = s;
   setRunning(true);
   setStatus('connecting');
 
   const handlers = {
-    onInterim: (text) => session === s && handleInterim(s, text),
-    onFinal: (text) => session === s && handleFinal(s, text),
+    onInterim: (text) => { if (DEBUG) console.log('[interim]', text); if (session === s) handleInterim(s, text); },
+    onFinal: (text) => { if (DEBUG) console.log('[final]', text); if (session === s) handleFinal(s, text); },
     onState: (state) => session === s && setStatus(state),
     onError: (err) => { if (session === s) { toast(err.message, 10000); stop(); } },
   };
@@ -261,9 +262,38 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------- transcript + translation flow ----------
-// Returns the part of the utterance text that hasn't been split off into segments yet.
-function stripCommitted(s, text) {
+const newUtterance = () => ({ committed: '', prevRest: '', full: '' });
+const normalize = (t) => t.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
+
+// Whether `text` is the same utterance as `previous` (grown or lightly revised) rather than a new one.
+function continues(text, previous) {
+  const a = normalize(text);
+  const b = normalize(previous);
+  const n = Math.min(a.length, b.length, 40);
+  if (!n) return true;
+  let same = 0;
+  for (let i = 0; i < n; i++) if (a[i] === b[i]) same++;
+  return same >= n * 0.6;
+}
+
+// The recognizer moved on to a new utterance without (or before) finalizing the current one.
+// Keep what was heard so far; a late final result for it is reconciled in handleFinal.
+function closeUtterance(s) {
   const utt = s.utt;
+  let seg = null;
+  if (live?.srcEl.textContent.trim()) {
+    seg = live;
+    finalize(s, live.srcEl.textContent.trim());
+  } else if (live) {
+    live.el.remove();
+    live = null;
+  }
+  s.closed = { full: utt.full, committed: utt.committed, seg };
+  s.utt = newUtterance();
+}
+
+// Returns the part of the utterance text that hasn't been split off into segments yet.
+function stripCommitted(utt, text) {
   if (!utt.committed) return text;
   if (text.startsWith(utt.committed)) return text.slice(utt.committed.length);
   // The recognizer revised earlier words. Cut at the sentence boundary closest to where we cut before.
@@ -295,8 +325,10 @@ function findSplit(rest) {
 }
 
 function handleInterim(s, text) {
+  if (s.utt.full && !continues(text, s.utt.full)) closeUtterance(s);
   const utt = s.utt;
-  let rest = stripCommitted(s, text);
+  utt.full = text;
+  let rest = stripCommitted(utt, text);
   // Split off sentences that are complete and unchanged since the previous update.
   for (let cut; (cut = findSplit(rest)) && utt.prevRest.startsWith(rest.slice(0, cut));) {
     const sentence = rest.slice(0, cut);
@@ -343,8 +375,22 @@ function scheduleInterimTranslation(s) {
 }
 
 function handleFinal(s, text) {
-  const rest = stripCommitted(s, text).trim();
-  s.utt = { committed: '', prevRest: '' };
+  const utt = s.utt;
+  const isCurrent = utt.full && continues(text, utt.full);
+
+  if (!isCurrent && s.closed && continues(text, s.closed.full)) {
+    // Late final for an utterance that was already closed out: fix up its last segment.
+    const { seg } = s.closed;
+    const rest = stripCommitted(s.closed, text).trim();
+    s.closed = null;
+    if (rest && seg && rest !== seg.src) commit(s, seg, rest);
+    else if (rest && !seg) insertFinal(s, rest);
+    return;
+  }
+  if (!isCurrent && utt.full) return insertFinal(s, text); // unrelated to what is being spoken now
+
+  const rest = stripCommitted(utt, text).trim();
+  s.utt = newUtterance();
   if (rest) {
     if (!live) live = createSegment();
     finalize(s, rest);
@@ -357,16 +403,27 @@ function handleFinal(s, text) {
   }
 }
 
+// Adds a finished segment above the one currently being spoken.
+function insertFinal(s, text) {
+  const seg = createSegment();
+  if (live) els.log.insertBefore(seg.el, live.el);
+  commit(s, seg, text);
+}
+
 function finalize(s, text) {
   const seg = live;
   live = null;
   clearTimeout(s.interim.timer);
   s.interim.timer = null;
   s.interim.text = '';
+  commit(s, seg, text);
+}
+
+function commit(s, seg, text) {
   seg.el.classList.remove('live');
   seg.src = text;
   setText(seg, 'src', text);
-  segments.push(seg);
+  if (!segments.includes(seg)) segments.push(seg);
   translateFinal(s, seg);
 }
 
@@ -376,12 +433,14 @@ function recentHistory() {
 
 async function translateFinal(s, seg) {
   const history = recentHistory();
+  const rev = seg.rev = (seg.rev || 0) + 1; // a segment can be re-translated when its text is corrected
   for (let attempt = 0; ; attempt++) {
     try {
       const out = await s.translator.translate(seg.src, {
         history,
-        onDelta: (partial) => setText(seg, 'tgt', partial),
+        onDelta: (partial) => { if (seg.rev === rev) setText(seg, 'tgt', partial); },
       });
+      if (seg.rev !== rev) return;
       seg.tgt = out;
       setText(seg, 'tgt', out);
       return;
@@ -390,7 +449,7 @@ async function translateFinal(s, seg) {
         await new Promise((r) => setTimeout(r, 1500 * 2 ** attempt));
         continue;
       }
-      setText(seg, 'tgt', err.message, 'error');
+      if (seg.rev === rev) setText(seg, 'tgt', err.message, 'error');
       return;
     }
   }
