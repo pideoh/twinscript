@@ -26,6 +26,11 @@ const DEFAULTS = {
 const INTERIM_TRANSLATE_INTERVAL_MS = 1200;
 const INTERIM_COOLDOWN_MS = 60_000;
 const HISTORY_LINES = 3;
+// Continuous speech never "finalizes" on the server side, so finished sentences are
+// split off the growing interim text on the client.
+const MIN_SPLIT_CHARS = 10;   // shorter sentences are merged with the next one
+const MAX_LIVE_CHARS = 180;   // force a split at a clause boundary beyond this
+const SENTENCE_END = /(?:[。！？]+[」』）]*|[.!?]+["')\]]*(?=\s))\s*/g;
 const MOCK = new URLSearchParams(location.search).has('mock');
 
 const $ = (id) => document.getElementById(id);
@@ -187,7 +192,7 @@ async function start() {
   }
   const langA = LANGS.find((l) => l.code === settings.langA);
   const langB = LANGS.find((l) => l.code === settings.langB);
-  const s = { interim: { busy: false, lastAt: 0, pausedUntil: 0, timer: null, text: '' } };
+  const s = { utt: { committed: '', prevRest: '' }, interim: { busy: false, lastAt: 0, pausedUntil: 0, timer: null, text: '' } };
   session = s;
   setRunning(true);
   setStatus('connecting');
@@ -256,10 +261,56 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------- transcript + translation flow ----------
+// Returns the part of the utterance text that hasn't been split off into segments yet.
+function stripCommitted(s, text) {
+  const utt = s.utt;
+  if (!utt.committed) return text;
+  if (text.startsWith(utt.committed)) return text.slice(utt.committed.length);
+  // The recognizer revised earlier words. Cut at the sentence boundary closest to where we cut before.
+  let cut = Math.min(utt.committed.length, text.length);
+  let best = null;
+  for (const m of text.matchAll(SENTENCE_END)) {
+    const end = m.index + m[0].length;
+    if (Math.abs(end - cut) <= 40 && (best === null || Math.abs(end - cut) < Math.abs(best - cut))) best = end;
+  }
+  if (best !== null) cut = best;
+  utt.committed = text.slice(0, cut);
+  return text.slice(cut);
+}
+
+// Index at which `rest` can be split into a finished segment + remainder, or 0.
+function findSplit(rest) {
+  for (const m of rest.matchAll(SENTENCE_END)) {
+    const end = m.index + m[0].length;
+    if (end >= MIN_SPLIT_CHARS && rest.slice(end).trim()) return end;
+  }
+  if (rest.length > MAX_LIVE_CHARS) {
+    const head = rest.slice(0, MAX_LIVE_CHARS);
+    const clause = Math.max(head.lastIndexOf('、'), head.lastIndexOf('，'), head.lastIndexOf(', ') + 1, head.lastIndexOf('; ') + 1);
+    if (clause > MAX_LIVE_CHARS / 2) return clause + 1;
+    const space = head.lastIndexOf(' ');
+    return space > MAX_LIVE_CHARS / 2 ? space + 1 : MAX_LIVE_CHARS;
+  }
+  return 0;
+}
+
 function handleInterim(s, text) {
+  const utt = s.utt;
+  let rest = stripCommitted(s, text);
+  // Split off sentences that are complete and unchanged since the previous update.
+  for (let cut; (cut = findSplit(rest)) && utt.prevRest.startsWith(rest.slice(0, cut));) {
+    const sentence = rest.slice(0, cut);
+    utt.committed += sentence;
+    utt.prevRest = utt.prevRest.slice(cut);
+    rest = rest.slice(cut);
+    if (!live) live = createSegment();
+    finalize(s, sentence.trim());
+  }
+  utt.prevRest = rest;
+  if (!rest.trim()) return;
   if (!live) live = createSegment();
-  setText(live, 'src', text);
-  s.interim.text = text;
+  setText(live, 'src', rest.trim());
+  s.interim.text = rest.trim();
   scheduleInterimTranslation(s);
 }
 
@@ -292,8 +343,18 @@ function scheduleInterimTranslation(s) {
 }
 
 function handleFinal(s, text) {
-  if (!live) live = createSegment();
-  finalize(s, text);
+  const rest = stripCommitted(s, text).trim();
+  s.utt = { committed: '', prevRest: '' };
+  if (rest) {
+    if (!live) live = createSegment();
+    finalize(s, rest);
+  } else if (live) {
+    live.el.remove();
+    live = null;
+    clearTimeout(s.interim.timer);
+    s.interim.timer = null;
+    s.interim.text = '';
+  }
 }
 
 function finalize(s, text) {

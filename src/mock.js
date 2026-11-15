@@ -16,16 +16,16 @@ export class MockTranscriber {
   async start() {
     this.running = true;
     this.onState('listening');
-    for (let i = 0; this.running; i = (i + 1) % SCRIPT.length) {
-      const text = SCRIPT[i][0];
-      const step = Math.max(2, Math.ceil(text.length / 8));
-      for (let n = step; n < text.length && this.running; n += step) {
+    // One long utterance with no pause: interim text keeps growing, the final only comes at the end.
+    const text = SCRIPT.map(([src]) => src).join(' ');
+    while (this.running) {
+      for (let n = 6; n < text.length && this.running; n += 6) {
         this.onInterim(text.slice(0, n));
-        await sleep(180);
+        await sleep(150);
       }
       if (!this.running) return;
       this.onFinal(text);
-      await sleep(900);
+      await sleep(1200);
     }
   }
   stop() { this.running = false; }
@@ -34,8 +34,8 @@ export class MockTranscriber {
 
 export class MockTranslator {
   async translate(text, { onDelta } = {}) {
-    const hit = SCRIPT.find(([src]) => src === text);
-    const full = hit ? hit[1] : `… ${text.length} chars`;
+    const hits = SCRIPT.filter(([src]) => text.includes(src)).map(([, tgt]) => tgt);
+    const full = hits.length ? hits.join(' ') : '…';
     for (let n = 6; n < full.length; n += 6) {
       await sleep(40);
       onDelta?.(full.slice(0, n));
