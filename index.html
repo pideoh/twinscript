@@ -39,13 +39,22 @@
       </div>
     </header>
 
-    <main id="log" aria-live="polite">
-      <div id="empty" class="empty">
-        <p>言語を2つ選んで「翻訳開始」を押してください。</p>
-        <p class="sub">どちらの言語で話しても自動で判定し、もう一方の言語に翻訳します。</p>
-      </div>
-      <div id="anchor"></div>
-    </main>
+    <div class="log-wrap">
+      <main id="log" aria-live="polite">
+        <div id="empty" class="empty">
+          <p>言語を2つ選んで「翻訳開始」を押してください。</p>
+          <p class="sub">どちらの言語で話しても自動で判定し、もう一方の言語に翻訳します。</p>
+        </div>
+        <div id="anchor"></div>
+      </main>
+      <button id="jump" class="jump" hidden>最新へ ↓</button>
+    </div>
+
+    <section id="now" class="now" hidden aria-label="いま話している文">
+      <div class="now-head"><span class="dot on"></span><span>いま</span><span id="nowTime"></span></div>
+      <div id="nowSrc" class="now-src"></div>
+      <div id="nowTgt" class="now-tgt"></div>
+    </section>
 
     <div id="toast" class="toast" hidden></div>
 

@@ -36,7 +36,7 @@ const DEBUG = new URLSearchParams(location.search).has('debug'); // log raw reco
 const $ = (id) => document.getElementById(id);
 const els = Object.fromEntries([
   'langA', 'langB', 'swap', 'source', 'export', 'openSettings', 'menu', 'backdrop', 'newSession', 'sessionList',
-  'clock', 'exportDialog', 'exportFormat', 'exportContent', 'exportTranscript', 'recordings', 'record', 'log', 'empty', 'anchor', 'toast',
+  'clock', 'jump', 'now', 'nowTime', 'nowSrc', 'nowTgt', 'exportDialog', 'exportFormat', 'exportContent', 'exportTranscript', 'recordings', 'record', 'log', 'empty', 'anchor', 'toast',
   'dot', 'statusText', 'level', 'toggle', 'settings', 'apiKey', 'translateModel', 'interimTranslate', 'smart',
   'glossary', 'fontSize',
 ].map((id) => [id, $(id)]));
@@ -178,6 +178,7 @@ function showSession(sess) {
   try { localStorage.setItem('rt-current', sess.id); } catch { /* private mode */ }
   els.log.querySelectorAll('.seg').forEach((n) => n.remove());
   live = null;
+  syncNow();
   for (const seg of sess.segments) mountSegment(seg);
   els.empty.hidden = sess.segments.length > 0;
   if (LANGS.some((l) => l.code === sess.langA) && LANGS.some((l) => l.code === sess.langB) && sess.langA !== sess.langB) {
@@ -282,8 +283,25 @@ function setText(seg, part, text, cls) {
   const node = part === 'src' ? seg.srcEl : seg.tgtEl;
   node.textContent = text;
   if (part === 'tgt') node.className = `tgt${cls ? ` ${cls}` : ''}`;
+  if (seg === live) syncNow();
   keepBottom(wasNear);
+  updateJump();
 }
+
+// The sentence being spoken is shown in the fixed "now" zone rather than in the transcript.
+function syncNow() {
+  els.nowTime.textContent = live ? formatElapsed(live.elapsed) : '';
+  els.nowSrc.textContent = live?.srcEl.textContent ?? '';
+  els.nowTgt.textContent = live?.tgtEl.textContent ?? '';
+  els.nowTgt.classList.toggle('pending', !!live);
+}
+
+// Offer a way back to the latest sentence while the user has scrolled up to re-read.
+function updateJump() {
+  els.jump.hidden = nearBottom();
+}
+els.log.addEventListener('scroll', updateJump, { passive: true });
+els.jump.onclick = () => { els.log.scrollTop = els.log.scrollHeight; };
 
 // ---------- download ----------
 function download(blob, name) {
@@ -357,6 +375,8 @@ function setStatus(state) {
 function setRunning(running) {
   els.toggle.textContent = running ? '停止' : '翻訳開始';
   els.toggle.classList.toggle('stop', running);
+  document.body.classList.toggle('running', running);
+  els.now.hidden = !running;
   for (const el of [els.langA, els.langB, els.swap, els.source, els.openSettings, els.newSession]) el.disabled = running;
   if (!running) { setStatus('idle'); els.level.style.width = '0'; }
 }
@@ -451,6 +471,7 @@ function stop() {
   r.transcriber?.stop();
   r.tracker.flush(); // keep whatever was heard so far instead of dropping it
   if (live) { live.el.remove(); live = null; }
+  syncNow();
   clearTimeout(r.interim.timer);
   clearInterval(r.ticker);
   clearInterval(r.autosave);
@@ -491,6 +512,7 @@ function createTracker(r) {
       if (!text) {
         live?.el.remove();
         live = null;
+        syncNow();
         clearTimeout(r.interim.timer);
         r.interim.timer = null;
         r.interim.text = '';
@@ -536,6 +558,7 @@ function scheduleInterimTranslation(s) {
 function finalize(r, text) {
   const seg = live;
   live = null;
+  syncNow();
   clearTimeout(r.interim.timer);
   r.interim.timer = null;
   r.interim.text = '';

@@ -270,3 +270,38 @@ test('recording can be turned off', async () => {
   assert.equal(await page.locator('#recordings .rec').count(), 0);
   await close();
 });
+
+test('the sentence being spoken stays in the fixed zone and moves into the transcript when finished', async () => {
+  const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
+  await mockGemini(page, [[3, 'interim', 'Hello every'], [8, 'final', 'Hello everyone.'], [12, 'interim', 'Next']]);
+  assert.ok(await page.locator('#now').isHidden(), 'hidden while stopped');
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.getElementById('nowSrc').textContent === 'Hello every');
+  assert.ok(await page.locator('#now').isVisible());
+  assert.equal(await page.locator('.seg:visible').count(), 0, 'nothing in the transcript until the sentence is finished');
+
+  await page.waitForFunction(() => document.getElementById('nowSrc').textContent === 'Next');
+  assert.deepEqual(await page.locator('.seg:visible .src').allTextContents(), ['Hello everyone.']);
+  await page.click('#toggle');
+  assert.ok(await page.locator('#now').isHidden());
+  assert.deepEqual(await page.locator('.seg:visible .src').allTextContents(), ['Hello everyone.', 'Next']);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('scrolling up to re-read offers a button back to the latest sentence', async () => {
+  const { page, close } = await openApp('?mock=1');
+  await page.setViewportSize({ width: 900, height: 420 });
+  await page.click('#toggle');
+  await page.waitForFunction(() => {
+    const log = document.getElementById('log');
+    return log.scrollHeight > log.clientHeight + 200;
+  }, null, { timeout: 30_000 });
+  assert.ok(await page.locator('#jump').isHidden(), 'follows the latest sentence by default');
+  await page.evaluate(() => { document.getElementById('log').scrollTop = 0; });
+  await page.waitForSelector('#jump:not([hidden])');
+  await page.click('#jump');
+  await page.waitForSelector('#jump', { state: 'hidden' });
+  await page.click('#toggle');
+  await close();
+});

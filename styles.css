@@ -91,6 +91,7 @@ select {
 .icon-btn:hover { background: var(--bg); }
 :disabled { opacity: .5; cursor: not-allowed; }
 
+.log-wrap { flex: 1; min-height: 0; position: relative; display: flex; }
 #log {
   flex: 1; overflow-y: auto; padding: 12px;
   font-size: var(--fs); line-height: 1.55;
@@ -167,3 +168,31 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
 .recordings h3 { margin: 4px 0 0; font-size: 14px; }
 .recordings .rec { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .recordings .rec span { color: var(--muted); }
+
+/* The sentence being spoken stays in a fixed zone; the transcript above only holds finished ones. */
+.seg.live { display: none; }
+.now {
+  flex: none; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px;
+  min-height: 7.5em; max-height: 40vh; overflow: hidden; box-sizing: border-box;
+  padding: 12px 18px; background: var(--panel); border-top: 2px solid var(--accent);
+  font-size: var(--fs); line-height: 1.4;
+}
+.now[hidden] { display: none; }
+.now-head { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.now-head .dot { width: 8px; height: 8px; }
+.now-src { color: var(--muted); font-size: .9em; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 1.4em; }
+.now-tgt { color: var(--tgt); font-size: 1.35em; font-weight: 700; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 1.4em; }
+.now-tgt.pending { opacity: .75; }
+@media (max-width: 819px) { .now-tgt { font-size: 1.15em; } }
+
+/* While listening, older sentences recede so the latest one and the "now" zone stand out. */
+body.running .seg:not(:has(+ #anchor)) { background: none; border-color: transparent; padding-block: 4px; margin-bottom: 2px; }
+body.running .seg:not(:has(+ #anchor)) .src,
+body.running .seg:not(:has(+ #anchor)) .tgt { color: var(--muted); font-weight: 400; font-size: .92em; }
+
+.jump {
+  position: absolute; right: 16px; bottom: 12px; min-height: 44px; padding: 0 16px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--accent); border-radius: 999px;
+  cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.25);
+}
+.jump[hidden] { display: none; }
