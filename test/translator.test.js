@@ -1,0 +1,73 @@
+import { test, afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { GeminiTranslator, RateLimitError } from '../src/translator.js';
+
+const realFetch = globalThis.fetch;
+afterEach(() => { globalThis.fetch = realFetch; });
+
+const sse = (...texts) => texts
+  .map((t) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: t }] } }] })}\n\n`).join('');
+const make = () => new GeminiTranslator({ apiKey: 'KEY', model: 'm-1', langA: 'Japanese', langB: 'English', glossary: 'Acme = アクメ' });
+
+function stubFetch(...responses) {
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, headers: init.headers, body: JSON.parse(init.body) });
+    return responses.shift()();
+  };
+  return calls;
+}
+
+test('streams the translation and returns the full text', async () => {
+  const calls = stubFetch(() => new Response(sse('Hello, ', 'world. '), { status: 200 }));
+  const deltas = [];
+  const out = await make().translate('こんにちは、世界。', { onDelta: (t) => deltas.push(t) });
+  assert.equal(out, 'Hello, world.');
+  assert.deepEqual(deltas, ['Hello, ', 'Hello, world. ']);
+  assert.match(calls[0].url, /\/models\/m-1:streamGenerateContent\?alt=sse$/);
+  assert.equal(calls[0].headers['x-goog-api-key'], 'KEY');
+  assert.ok(!calls[0].url.includes('KEY'), 'the key must not be in the URL');
+});
+
+test('prompt carries both languages, the glossary, the text and earlier lines', async () => {
+  const calls = stubFetch(() => new Response(sse('ok'), { status: 200 }));
+  await make().translate('次の文', { history: [{ src: '前の文', tgt: 'Previous line' }] });
+  const { systemInstruction, contents } = calls[0].body;
+  const system = systemInstruction.parts[0].text;
+  assert.match(system, /Japanese/);
+  assert.match(system, /English/);
+  assert.match(system, /Acme = アクメ/);
+  const prompt = contents[0].parts[0].text;
+  assert.match(prompt, /<context>\n前の文\n=> Previous line\n<\/context>/);
+  assert.match(prompt, /<text>\n次の文\n<\/text>/);
+});
+
+test('thought parts are not shown', async () => {
+  const body = `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'thinking...', thought: true }, { text: 'Hi' }] } }] })}\n\n`;
+  stubFetch(() => new Response(body, { status: 200 }));
+  assert.equal(await make().translate('やあ'), 'Hi');
+});
+
+test('drops the thinking option for good when the model rejects it', async () => {
+  const calls = stubFetch(
+    () => new Response(JSON.stringify({ error: { message: 'Unknown field thinkingLevel in thinkingConfig' } }), { status: 400 }),
+    () => new Response(sse('Hi'), { status: 200 }),
+    () => new Response(sse('Bye'), { status: 200 }),
+  );
+  const tr = make();
+  assert.equal(await tr.translate('やあ'), 'Hi');
+  assert.equal(await tr.translate('またね'), 'Bye');
+  assert.ok(calls[0].body.generationConfig.thinkingConfig);
+  assert.equal(calls[1].body.generationConfig.thinkingConfig, undefined);
+  assert.equal(calls[2].body.generationConfig.thinkingConfig, undefined);
+});
+
+test('429 is reported as a rate limit', async () => {
+  stubFetch(() => new Response('{}', { status: 429 }));
+  await assert.rejects(make().translate('やあ'), RateLimitError);
+});
+
+test('other errors surface the API message', async () => {
+  stubFetch(() => new Response(JSON.stringify({ error: { message: 'API key not valid' } }), { status: 403 }));
+  await assert.rejects(make().translate('やあ'), /403.*API key not valid/);
+});

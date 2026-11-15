@@ -2,6 +2,7 @@ import { AudioCapture, canCaptureSystemAudio } from './audio.js';
 import { GeminiLiveTranscriber } from './transcriber.js';
 import { GeminiTranslator, RateLimitError } from './translator.js';
 import { MockTranscriber, MockTranslator } from './mock.js';
+import { UtteranceTracker } from './segmenter.js';
 
 const LANGS = [
   { code: 'ja-JP', label: '日本語', name: 'Japanese' },
@@ -26,11 +27,6 @@ const DEFAULTS = {
 const INTERIM_TRANSLATE_INTERVAL_MS = 1200;
 const INTERIM_COOLDOWN_MS = 60_000;
 const HISTORY_LINES = 3;
-// Continuous speech never "finalizes" on the server side, so finished sentences are
-// split off the growing interim text on the client.
-const MIN_SPLIT_CHARS = 10;   // shorter sentences are merged with the next one
-const MAX_LIVE_CHARS = 180;   // force a split at a clause boundary beyond this
-const SENTENCE_END = /(?:[。！？]+[」』）]*|[.!?]+["')\]]*(?=\s))\s*/g;
 const MOCK = new URLSearchParams(location.search).has('mock');
 const DEBUG = new URLSearchParams(location.search).has('debug'); // log raw recognizer output to the console
 
@@ -193,14 +189,15 @@ async function start() {
   }
   const langA = LANGS.find((l) => l.code === settings.langA);
   const langB = LANGS.find((l) => l.code === settings.langB);
-  const s = { utt: newUtterance(), closed: null, interim: { busy: false, lastAt: 0, pausedUntil: 0, timer: null, text: '' } };
+  const s = { interim: { busy: false, lastAt: 0, pausedUntil: 0, timer: null, text: '' } };
+  s.tracker = createTracker(s);
   session = s;
   setRunning(true);
   setStatus('connecting');
 
   const handlers = {
-    onInterim: (text) => { if (DEBUG) console.log('[interim]', text); if (session === s) handleInterim(s, text); },
-    onFinal: (text) => { if (DEBUG) console.log('[final]', text); if (session === s) handleFinal(s, text); },
+    onInterim: (text) => { if (DEBUG) console.log('[interim]', text); if (session === s) s.tracker.interim(text); },
+    onFinal: (text) => { if (DEBUG) console.log('[final]', text); if (session === s) s.tracker.final(text); },
     onState: (state) => session === s && setStatus(state),
     onError: (err) => { if (session === s) { toast(err.message, 10000); stop(); } },
   };
@@ -244,11 +241,8 @@ function stop() {
   clearTimeout(s.interim.timer);
   s.capture?.stop();
   s.transcriber?.stop();
-  if (live) {
-    // Keep whatever was heard so far instead of dropping it.
-    if (live.srcEl.textContent.trim()) finalize(s, live.srcEl.textContent.trim());
-    else { live.el.remove(); live = null; }
-  }
+  s.tracker.flush(); // keep whatever was heard so far instead of dropping it
+  if (live) { live.el.remove(); live = null; }
   wakeLock?.release().catch(() => {});
   wakeLock = null;
   setRunning(false);
@@ -262,88 +256,34 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------- transcript + translation flow ----------
-const newUtterance = () => ({ committed: '', prevRest: '', full: '' });
-const normalize = (t) => t.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
-
-// Whether `text` is the same utterance as `previous` (grown or lightly revised) rather than a new one.
-function continues(text, previous) {
-  const a = normalize(text);
-  const b = normalize(previous);
-  const n = Math.min(a.length, b.length, 40);
-  if (!n) return true;
-  let same = 0;
-  for (let i = 0; i < n; i++) if (a[i] === b[i]) same++;
-  return same >= n * 0.6;
-}
-
-// The recognizer moved on to a new utterance without (or before) finalizing the current one.
-// Keep what was heard so far; a late final result for it is reconciled in handleFinal.
-function closeUtterance(s) {
-  const utt = s.utt;
-  let seg = null;
-  if (live?.srcEl.textContent.trim()) {
-    seg = live;
-    finalize(s, live.srcEl.textContent.trim());
-  } else if (live) {
-    live.el.remove();
-    live = null;
-  }
-  s.closed = { full: utt.full, committed: utt.committed, seg };
-  s.utt = newUtterance();
-}
-
-// Returns the part of the utterance text that hasn't been split off into segments yet.
-function stripCommitted(utt, text) {
-  if (!utt.committed) return text;
-  if (text.startsWith(utt.committed)) return text.slice(utt.committed.length);
-  // The recognizer revised earlier words. Cut at the sentence boundary closest to where we cut before.
-  let cut = Math.min(utt.committed.length, text.length);
-  let best = null;
-  for (const m of text.matchAll(SENTENCE_END)) {
-    const end = m.index + m[0].length;
-    if (Math.abs(end - cut) <= 40 && (best === null || Math.abs(end - cut) < Math.abs(best - cut))) best = end;
-  }
-  if (best !== null) cut = best;
-  utt.committed = text.slice(0, cut);
-  return text.slice(cut);
-}
-
-// Index at which `rest` can be split into a finished segment + remainder, or 0.
-function findSplit(rest) {
-  for (const m of rest.matchAll(SENTENCE_END)) {
-    const end = m.index + m[0].length;
-    if (end >= MIN_SPLIT_CHARS && rest.slice(end).trim()) return end;
-  }
-  if (rest.length > MAX_LIVE_CHARS) {
-    const head = rest.slice(0, MAX_LIVE_CHARS);
-    const clause = Math.max(head.lastIndexOf('、'), head.lastIndexOf('，'), head.lastIndexOf(', ') + 1, head.lastIndexOf('; ') + 1);
-    if (clause > MAX_LIVE_CHARS / 2) return clause + 1;
-    const space = head.lastIndexOf(' ');
-    return space > MAX_LIVE_CHARS / 2 ? space + 1 : MAX_LIVE_CHARS;
-  }
-  return 0;
-}
-
-function handleInterim(s, text) {
-  if (s.utt.full && !continues(text, s.utt.full)) closeUtterance(s);
-  const utt = s.utt;
-  utt.full = text;
-  let rest = stripCommitted(utt, text);
-  // Split off sentences that are complete and unchanged since the previous update.
-  for (let cut; (cut = findSplit(rest)) && utt.prevRest.startsWith(rest.slice(0, cut));) {
-    const sentence = rest.slice(0, cut);
-    utt.committed += sentence;
-    utt.prevRest = utt.prevRest.slice(cut);
-    rest = rest.slice(cut);
-    if (!live) live = createSegment();
-    finalize(s, sentence.trim());
-  }
-  utt.prevRest = rest;
-  if (!rest.trim()) return;
-  if (!live) live = createSegment();
-  setText(live, 'src', rest.trim());
-  s.interim.text = rest.trim();
-  scheduleInterimTranslation(s);
+function createTracker(s) {
+  return new UtteranceTracker({
+    commit(text, aboveLive) {
+      if (aboveLive) {
+        const seg = createSegment();
+        if (live) els.log.insertBefore(seg.el, live.el);
+        commit(s, seg, text);
+        return seg;
+      }
+      if (!live) live = createSegment();
+      return finalize(s, text);
+    },
+    setLive(text) {
+      if (!text) {
+        live?.el.remove();
+        live = null;
+        clearTimeout(s.interim.timer);
+        s.interim.timer = null;
+        s.interim.text = '';
+        return;
+      }
+      if (!live) live = createSegment();
+      setText(live, 'src', text);
+      s.interim.text = text;
+      scheduleInterimTranslation(s);
+    },
+    correct: (seg, text) => commit(s, seg, text),
+  });
 }
 
 function scheduleInterimTranslation(s) {
@@ -374,42 +314,6 @@ function scheduleInterimTranslation(s) {
   }, wait);
 }
 
-function handleFinal(s, text) {
-  const utt = s.utt;
-  const isCurrent = utt.full && continues(text, utt.full);
-
-  if (!isCurrent && s.closed && continues(text, s.closed.full)) {
-    // Late final for an utterance that was already closed out: fix up its last segment.
-    const { seg } = s.closed;
-    const rest = stripCommitted(s.closed, text).trim();
-    s.closed = null;
-    if (rest && seg && rest !== seg.src) commit(s, seg, rest);
-    else if (rest && !seg) insertFinal(s, rest);
-    return;
-  }
-  if (!isCurrent && utt.full) return insertFinal(s, text); // unrelated to what is being spoken now
-
-  const rest = stripCommitted(utt, text).trim();
-  s.utt = newUtterance();
-  if (rest) {
-    if (!live) live = createSegment();
-    finalize(s, rest);
-  } else if (live) {
-    live.el.remove();
-    live = null;
-    clearTimeout(s.interim.timer);
-    s.interim.timer = null;
-    s.interim.text = '';
-  }
-}
-
-// Adds a finished segment above the one currently being spoken.
-function insertFinal(s, text) {
-  const seg = createSegment();
-  if (live) els.log.insertBefore(seg.el, live.el);
-  commit(s, seg, text);
-}
-
 function finalize(s, text) {
   const seg = live;
   live = null;
@@ -417,6 +321,7 @@ function finalize(s, text) {
   s.interim.timer = null;
   s.interim.text = '';
   commit(s, seg, text);
+  return seg;
 }
 
 function commit(s, seg, text) {
