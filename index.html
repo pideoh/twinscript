@@ -98,6 +98,7 @@
       <label>Gemini APIキー
         <input id="apiKey" type="password" autocomplete="off" placeholder="AIza...">
         <small><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> で無料で発行できます。キーはこの端末のブラウザ内にのみ保存されます。</small>
+        <small id="settingsRunning" hidden>翻訳中です。APIキー・翻訳モデル・整形・録音・用語集の変更は、次に開始したときから反映されます。</small>
       </label>
       <label>翻訳モデル
         <input id="translateModel" type="text" spellcheck="false">
@@ -105,6 +106,14 @@
       <label class="check"><input id="interimTranslate" type="checkbox"> 話している途中の文も翻訳する（リアルタイム重視）</label>
       <label class="check"><input id="smart" type="checkbox"> 文字起こしを整形する（フィラー除去。確定が少し遅くなることがあります）</label>
       <label class="check"><input id="record" type="checkbox"> 音声を録音して保存する（この端末のブラウザ内。1時間で約15MB）</label>
+      <label>下の欄に残す文数 <output id="captionItemsOut"></output>
+        <input id="captionItems" type="range" min="1" max="8" step="1">
+        <small>話している文を含む数です。増やすと読み返しやすくなり、欄は高くなります。</small>
+      </label>
+      <label>途中の文を翻訳し直す間隔 <output id="interimIntervalOut"></output>
+        <input id="interimInterval" type="range" min="0.5" max="5" step="0.1">
+        <small>短いほど訳が早く出ますが、文面が頻繁に変わり、APIの消費も増えます。</small>
+      </label>
       <label>用語集・会議の背景（翻訳に反映されます）
         <textarea id="glossary" rows="3" placeholder="例: 固有名詞、製品名、会議のテーマなど"></textarea>
       </label>

@@ -204,3 +204,7 @@ body.running #log .seg .tgt { color: var(--muted); font-weight: 400; font-size: 
   cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.25);
 }
 .jump[hidden] { display: none; }
+
+.settings output { color: var(--muted); font-variant-numeric: tabular-nums; }
+.settings input[type=range] { width: 100%; }
+dialog { max-height: 92vh; overflow-y: auto; }

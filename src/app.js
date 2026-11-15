@@ -26,11 +26,11 @@ const LANGS = [
 const DEFAULTS = {
   langA: 'ja-JP', langB: 'en-US', source: 'mic', apiKey: '',
   translateModel: 'gemini-3.5-flash-lite', interimTranslate: true, smart: false, record: true, glossary: '', fontSize: 18,
+  captionItems: 3,      // sentences kept in the caption zone, including the one being spoken
+  interimInterval: 1.2, // seconds between re-translations of the sentence being spoken
 };
-const INTERIM_TRANSLATE_INTERVAL_MS = 1200;
 const INTERIM_COOLDOWN_MS = 60_000;
 const HISTORY_LINES = 3;
-const CAPTION_ITEMS = 3; // sentences kept in the caption zone, including the one being spoken
 const MOCK = new URLSearchParams(location.search).has('mock');
 const DEBUG = new URLSearchParams(location.search).has('debug'); // log raw recognizer output to the console
 
@@ -39,7 +39,7 @@ const els = Object.fromEntries([
   'langA', 'langB', 'swap', 'source', 'export', 'openSettings', 'menu', 'backdrop', 'newSession', 'sessionList',
   'clock', 'jump', 'now', 'nowList', 'exportDialog', 'exportFormat', 'exportContent', 'exportTranscript', 'recordings', 'record', 'log', 'empty', 'anchor', 'toast',
   'dot', 'statusText', 'level', 'toggle', 'settings', 'apiKey', 'translateModel', 'interimTranslate', 'smart',
-  'glossary', 'fontSize',
+  'glossary', 'fontSize', 'captionItems', 'captionItemsOut', 'interimInterval', 'interimIntervalOut', 'settingsRunning',
 ].map((id) => [id, $(id)]));
 
 // ---------- settings ----------
@@ -98,9 +98,20 @@ function openSettings() {
   els.record.checked = settings.record;
   els.glossary.value = settings.glossary;
   els.fontSize.value = settings.fontSize;
+  els.captionItems.value = settings.captionItems;
+  els.interimInterval.value = settings.interimInterval;
+  showTuning();
+  els.settingsRunning.hidden = !run;
   els.settings.showModal();
 }
 els.fontSize.oninput = () => { settings.fontSize = Number(els.fontSize.value); applyFontSize(); };
+// These apply immediately, so they can be tuned while listening.
+function showTuning() {
+  els.captionItemsOut.textContent = `${els.captionItems.value} 文`;
+  els.interimIntervalOut.textContent = `${Number(els.interimInterval.value).toFixed(1)} 秒`;
+}
+els.captionItems.oninput = () => { settings.captionItems = Number(els.captionItems.value); showTuning(); trimCaptions(); };
+els.interimInterval.oninput = () => { settings.interimInterval = Number(els.interimInterval.value); showTuning(); };
 els.settings.addEventListener('close', () => {
   settings.apiKey = els.apiKey.value.trim();
   settings.translateModel = els.translateModel.value.trim() || DEFAULTS.translateModel;
@@ -109,6 +120,8 @@ els.settings.addEventListener('close', () => {
   settings.record = els.record.checked;
   settings.glossary = els.glossary.value.trim();
   settings.fontSize = Number(els.fontSize.value);
+  settings.captionItems = Number(els.captionItems.value);
+  settings.interimInterval = Number(els.interimInterval.value);
   saveSettings();
 });
 
@@ -281,7 +294,7 @@ function mountSegment(seg, isLive = false) {
 }
 
 // Moves the oldest sentences out of the caption zone into the transcript.
-function trimCaptions(keep = CAPTION_ITEMS) {
+function trimCaptions(keep = settings.captionItems) {
   const wasNear = nearBottom();
   while (els.nowList.children.length > keep) els.log.insertBefore(els.nowList.firstElementChild, els.anchor);
   keepBottom(wasNear);
@@ -382,7 +395,7 @@ function setRunning(running) {
   els.toggle.classList.toggle('stop', running);
   document.body.classList.toggle('running', running);
   els.now.hidden = !running;
-  for (const el of [els.langA, els.langB, els.swap, els.source, els.openSettings, els.newSession]) el.disabled = running;
+  for (const el of [els.langA, els.langB, els.swap, els.source, els.newSession]) el.disabled = running;
   if (!running) { setStatus('idle'); els.level.style.width = '0'; }
 }
 
@@ -536,7 +549,7 @@ function scheduleInterimTranslation(s) {
   if (!settings.interimTranslate || it.busy || it.timer || !live) return;
   const now = Date.now();
   if (now < it.pausedUntil) return;
-  const wait = Math.max(0, it.lastAt + INTERIM_TRANSLATE_INTERVAL_MS - now);
+  const wait = Math.max(0, it.lastAt + settings.interimInterval * 1000 - now);
   it.timer = setTimeout(async () => {
     it.timer = null;
     const seg = live;

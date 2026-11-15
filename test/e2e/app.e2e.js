@@ -342,3 +342,26 @@ test('scrolling up to re-read offers a button back to the latest sentence', asyn
   await page.click('#toggle');
   await close();
 });
+
+test('the number of sentences kept in the caption zone can be changed while listening', async () => {
+  const { page, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
+  await mockGemini(page, [[3, 'final', 'One.'], [5, 'final', 'Two.'], [7, 'final', 'Three.'], [9, 'interim', 'Four']]);
+  const zone = () => page.locator('#nowList .seg .src').allTextContents();
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.querySelector('#nowList .seg.live .src')?.textContent === 'Four');
+  assert.deepEqual(await zone(), ['Two.', 'Three.', 'Four']);
+
+  await page.click('#openSettings');
+  assert.ok(await page.locator('#settingsRunning').isVisible());
+  await page.locator('#captionItems').fill('1');
+  assert.equal(await page.textContent('#captionItemsOut'), '1 文');
+  assert.deepEqual(await zone(), ['Four'], 'applies immediately');
+  await page.locator('#interimInterval').fill('3');
+  assert.equal(await page.textContent('#interimIntervalOut'), '3.0 秒');
+  await page.click('#settings button[value=ok]');
+  await page.click('#toggle');
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('rt-settings')));
+  assert.equal(stored.captionItems, 1);
+  assert.equal(stored.interimInterval, 3);
+  await close();
+});
