@@ -1,0 +1,9 @@
+{
+  "name": "realtime-translate",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Real-time speech transcription and two-way translation for meetings (static web app / PWA)",
+  "scripts": {
+    "start": "python3 -m http.server 5173"
+  }
+}

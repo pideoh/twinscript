@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#1d4ed8"/>
+  <rect x="72" y="104" width="250" height="170" rx="36" fill="#fff"/>
+  <path d="M120 274v56l64-56z" fill="#fff"/>
+  <rect x="200" y="238" width="240" height="160" rx="36" fill="#93c5fd"/>
+  <path d="M392 398v52l-60-52z" fill="#93c5fd"/>
+  <text x="197" y="222" font-family="sans-serif" font-size="96" font-weight="700" text-anchor="middle" fill="#1d4ed8">あ</text>
+  <text x="320" y="352" font-family="sans-serif" font-size="96" font-weight="700" text-anchor="middle" fill="#0f172a">A</text>
+</svg>
