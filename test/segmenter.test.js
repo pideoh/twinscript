@@ -155,3 +155,41 @@ test('flush keeps the in-progress text', () => {
   s.tracker.flush();
   assert.equal(s.texts().length, 1);
 });
+
+// Regressions from real recognizer output: interim and final text for the same speech differ in
+// spacing, punctuation and individual words.
+test('a final that rewords the utterance does not repeat sentences already shown', () => {
+  const s = screen();
+  const a = 'ブルー バスターズ僕はアカリ。';
+  const b = '都会の片隅の土地に、父親の代から住んでいるのだが、そのすぐ隣がタワマンの建設予定地になった。';
+  s.feed([
+    ['i', `${a}都会の片隅`],
+    ['i', `${a}${b}隣家は`],
+    ['i', `${a}${b}隣家はさっさと土地を売ってどこかに引っ越してしまった。`],
+    ['f', 'ブルーバスターズ。僕はアカリ。都会の片隅の土地に、父の代から住んでいるのだが、そのすぐ隣がタワマンの建設予定地になった。リンカはさっさと土地を売って、どこかに引っ越してしまった。'],
+  ]);
+  assert.deepEqual(s.texts(), [
+    'ブルーバスターズ僕はアカリ。',
+    b,
+    'リンカはさっさと土地を売って、どこかに引っ越してしまった。',
+  ]);
+  assert.equal(s.view.live, '');
+});
+
+test('an interim that changes a word in the middle is the same utterance', () => {
+  const s = screen();
+  s.feed([
+    ['i', '気 に なっ た 僕 は タワマン を 手掛け て いる'],
+    ['i', '気 に なっ た 僕 は タマ マ を 手掛け て いる'],
+  ]);
+  assert.deepEqual(s.texts(), []);
+  assert.equal(s.view.live, '気になった僕はタママを手掛けている');
+  s.feed([['f', '気になった僕は、タワマンを手がけているチャンピオン不動産の営業担当に話をすることにしたのだが。']]);
+  assert.deepEqual(s.texts(), ['気になった僕は、タワマンを手がけているチャンピオン不動産の営業担当に話をすることにしたのだが。']);
+});
+
+test('spaces between Japanese characters are removed, other spaces are kept', () => {
+  const s = screen();
+  s.feed([['f', '期限切れ なので、 GPT 6 を 使い ます。 Thank you.']]);
+  assert.deepEqual(s.texts(), ['期限切れなので、 GPT 6 を使います。 Thank you.']);
+});

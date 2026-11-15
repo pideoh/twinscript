@@ -12,15 +12,33 @@ const SENTENCE_END = /(?:[。！？]+[」』）]*|[.!?]+["')\]]*(?=\s))\s*/g;
 const newUtterance = () => ({ committed: '', prevRest: '', full: '' });
 const normalize = (t) => t.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
 
-// Whether `text` is the same utterance as `previous` (grown or lightly revised) rather than a new one.
+// Interim results often come with a space between every Japanese word; drop those.
+const CJK = '\\u3000-\\u30ff\\u3400-\\u9fff\\uff00-\\uffef';
+const CJK_GAP = new RegExp(`(?<=[${CJK}])\\s+(?=[${CJK}])`, 'g');
+const tidy = (text) => text.replace(CJK_GAP, '');
+
+function lcsLength(a, b) {
+  let prev = new Array(b.length + 1).fill(0);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [0];
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], row[j - 1]);
+    }
+    prev = row;
+  }
+  return prev[b.length];
+}
+
+// Whether `text` is the same utterance as `previous` (grown or revised) rather than a new one.
+// The recognizer rewrites words, spacing and punctuation between updates, so the two are compared
+// by how much of their beginnings they share in order, not character by character.
 function continues(text, previous) {
   const a = normalize(text);
   const b = normalize(previous);
-  const n = Math.min(a.length, b.length, 40);
+  const n = Math.min(a.length, b.length, 60);
   if (!n) return true;
-  let same = 0;
-  for (let i = 0; i < n; i++) if (a[i] === b[i]) same++;
-  return same >= n * 0.6;
+  const span = Math.ceil(n * 1.3) + 4; // room for inserted or dropped characters
+  return lcsLength(a.slice(0, span), b.slice(0, span)) >= n * 0.6;
 }
 
 // Returns the part of the utterance text that hasn't been split off into segments yet.
@@ -67,7 +85,8 @@ export class UtteranceTracker {
     this.liveText = '';
   }
 
-  interim(text) {
+  interim(raw) {
+    const text = tidy(raw);
     if (this.utt.full && !continues(text, this.utt.full)) this.#closeUtterance();
     const utt = this.utt;
     utt.full = text;
@@ -86,7 +105,8 @@ export class UtteranceTracker {
     this.cb.setLive(this.liveText);
   }
 
-  final(text) {
+  final(raw) {
+    const text = tidy(raw);
     const utt = this.utt;
     const isCurrent = utt.full && continues(text, utt.full);
 
