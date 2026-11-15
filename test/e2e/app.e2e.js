@@ -271,21 +271,58 @@ test('recording can be turned off', async () => {
   await close();
 });
 
-test('the sentence being spoken stays in the fixed zone and moves into the transcript when finished', async () => {
+test('finished sentences stay in the caption zone while the next ones are spoken', async () => {
   const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
-  await mockGemini(page, [[3, 'interim', 'Hello every'], [8, 'final', 'Hello everyone.'], [12, 'interim', 'Next']]);
+  await mockGemini(page, [
+    [3, 'interim', 'One is'], [5, 'final', 'One is done.'], [7, 'final', 'Two is done.'],
+    [9, 'final', 'Three is done.'], [11, 'interim', 'Four'],
+  ]);
+  const zone = () => page.locator('#nowList .seg .src').allTextContents();
+  const history = () => page.locator('#log .seg .src').allTextContents();
   assert.ok(await page.locator('#now').isHidden(), 'hidden while stopped');
-  await page.click('#toggle');
-  await page.waitForFunction(() => document.getElementById('nowSrc').textContent === 'Hello every');
-  assert.ok(await page.locator('#now').isVisible());
-  assert.equal(await page.locator('.seg:visible').count(), 0, 'nothing in the transcript until the sentence is finished');
 
-  await page.waitForFunction(() => document.getElementById('nowSrc').textContent === 'Next');
-  assert.deepEqual(await page.locator('.seg:visible .src').allTextContents(), ['Hello everyone.']);
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.querySelector('#nowList .seg.live .src')?.textContent === 'One is');
+  assert.deepEqual(await history(), [], 'nothing moves into the transcript while it is being spoken');
+
+  await page.waitForFunction(() => document.querySelector('#nowList .seg.live .src')?.textContent === 'Four');
+  assert.deepEqual(await zone(), ['Two is done.', 'Three is done.', 'Four'], 'the two latest finished sentences stay');
+  assert.deepEqual(await history(), ['One is done.'], 'older ones move up into the transcript');
+  assert.equal(await page.locator('#nowList .seg .tgt').first().textContent(), '訳:Two is done.');
+
   await page.click('#toggle');
   assert.ok(await page.locator('#now').isHidden());
-  assert.deepEqual(await page.locator('.seg:visible .src').allTextContents(), ['Hello everyone.', 'Next']);
+  assert.deepEqual(await history(), ['One is done.', 'Two is done.', 'Three is done.', 'Four']);
   assert.deepEqual(errors, []);
+  await close();
+});
+
+test('the translation on screen is swapped once, not restarted, when the sentence is finished', async () => {
+  const { page, close } = await openApp('', { apiKey: 'test-key' });
+  let ws;
+  await page.routeWebSocket(/generativelanguage/, (socket) => {
+    ws = socket;
+    socket.onMessage((raw) => { if (JSON.parse(raw).setup) socket.send(JSON.stringify({ setupComplete: {} })); });
+  });
+  const send = (field, text) => ws.send(JSON.stringify({ serverContent: { [field]: { text } } }));
+  const sse = (t) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: t }] } }] })}\n\n`;
+  let release;
+  await page.route(/streamGenerateContent/, async (route) => {
+    const prompt = route.request().postDataJSON().contents[0].parts[0].text;
+    if (prompt.includes('It is raining today.')) await new Promise((r) => { release = r; }); // hold the final translation
+    route.fulfill({ status: 200, contentType: 'text/event-stream', body: sse(prompt.includes('today.') ? '今日は雨です。' : '雨が') });
+  });
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  send('interimInputTranscription', 'It is raining');
+  await page.waitForFunction(() => document.querySelector('.seg .tgt')?.textContent === '雨が');
+  send('inputTranscription', 'It is raining today.');
+  await page.waitForFunction(() => !document.querySelector('.seg.live'));
+  await page.waitForTimeout(300);
+  assert.equal(await page.textContent('.seg .tgt'), '雨が', 'the earlier translation stays while the final one is in flight');
+  release();
+  await page.waitForFunction(() => document.querySelector('.seg .tgt')?.textContent === '今日は雨です。');
+  await page.click('#toggle');
   await close();
 });
 

@@ -30,13 +30,14 @@ const DEFAULTS = {
 const INTERIM_TRANSLATE_INTERVAL_MS = 1200;
 const INTERIM_COOLDOWN_MS = 60_000;
 const HISTORY_LINES = 3;
+const CAPTION_ITEMS = 3; // sentences kept in the caption zone, including the one being spoken
 const MOCK = new URLSearchParams(location.search).has('mock');
 const DEBUG = new URLSearchParams(location.search).has('debug'); // log raw recognizer output to the console
 
 const $ = (id) => document.getElementById(id);
 const els = Object.fromEntries([
   'langA', 'langB', 'swap', 'source', 'export', 'openSettings', 'menu', 'backdrop', 'newSession', 'sessionList',
-  'clock', 'jump', 'now', 'nowTime', 'nowSrc', 'nowTgt', 'exportDialog', 'exportFormat', 'exportContent', 'exportTranscript', 'recordings', 'record', 'log', 'empty', 'anchor', 'toast',
+  'clock', 'jump', 'now', 'nowList', 'exportDialog', 'exportFormat', 'exportContent', 'exportTranscript', 'recordings', 'record', 'log', 'empty', 'anchor', 'toast',
   'dot', 'statusText', 'level', 'toggle', 'settings', 'apiKey', 'translateModel', 'interimTranslate', 'smart',
   'glossary', 'fontSize',
 ].map((id) => [id, $(id)]));
@@ -178,7 +179,6 @@ function showSession(sess) {
   try { localStorage.setItem('rt-current', sess.id); } catch { /* private mode */ }
   els.log.querySelectorAll('.seg').forEach((n) => n.remove());
   live = null;
-  syncNow();
   for (const seg of sess.segments) mountSegment(seg);
   els.empty.hidden = sess.segments.length > 0;
   if (LANGS.some((l) => l.code === sess.langA) && LANGS.some((l) => l.code === sess.langB) && sess.langA !== sess.langB) {
@@ -270,8 +270,22 @@ function mountSegment(seg, isLive = false) {
   tgtEl.textContent = seg.tgt;
   el.append(timeEl, srcEl, tgtEl);
   els.empty.hidden = true;
-  els.log.insertBefore(el, els.anchor);
-  return Object.assign(seg, { el, srcEl, tgtEl });
+  Object.assign(seg, { el, srcEl, tgtEl });
+  if (run) {
+    els.nowList.append(el);
+    trimCaptions();
+  } else {
+    els.log.insertBefore(el, els.anchor);
+  }
+  return seg;
+}
+
+// Moves the oldest sentences out of the caption zone into the transcript.
+function trimCaptions(keep = CAPTION_ITEMS) {
+  const wasNear = nearBottom();
+  while (els.nowList.children.length > keep) els.log.insertBefore(els.nowList.firstElementChild, els.anchor);
+  keepBottom(wasNear);
+  updateJump();
 }
 
 function createSegment() {
@@ -283,17 +297,8 @@ function setText(seg, part, text, cls) {
   const node = part === 'src' ? seg.srcEl : seg.tgtEl;
   node.textContent = text;
   if (part === 'tgt') node.className = `tgt${cls ? ` ${cls}` : ''}`;
-  if (seg === live) syncNow();
   keepBottom(wasNear);
   updateJump();
-}
-
-// The sentence being spoken is shown in the fixed "now" zone rather than in the transcript.
-function syncNow() {
-  els.nowTime.textContent = live ? formatElapsed(live.elapsed) : '';
-  els.nowSrc.textContent = live?.srcEl.textContent ?? '';
-  els.nowTgt.textContent = live?.tgtEl.textContent ?? '';
-  els.nowTgt.classList.toggle('pending', !!live);
 }
 
 // Offer a way back to the latest sentence while the user has scrolled up to re-read.
@@ -471,7 +476,7 @@ function stop() {
   r.transcriber?.stop();
   r.tracker.flush(); // keep whatever was heard so far instead of dropping it
   if (live) { live.el.remove(); live = null; }
-  syncNow();
+  trimCaptions(0);
   clearTimeout(r.interim.timer);
   clearInterval(r.ticker);
   clearInterval(r.autosave);
@@ -501,7 +506,7 @@ function createTracker(r) {
     commit(text, aboveLive) {
       if (aboveLive) {
         const seg = createSegment();
-        if (live) els.log.insertBefore(seg.el, live.el);
+        if (live) live.el.before(seg.el);
         commit(r, seg, text);
         return seg;
       }
@@ -512,7 +517,6 @@ function createTracker(r) {
       if (!text) {
         live?.el.remove();
         live = null;
-        syncNow();
         clearTimeout(r.interim.timer);
         r.interim.timer = null;
         r.interim.text = '';
@@ -558,7 +562,6 @@ function scheduleInterimTranslation(s) {
 function finalize(r, text) {
   const seg = live;
   live = null;
-  syncNow();
   clearTimeout(r.interim.timer);
   r.interim.timer = null;
   r.interim.text = '';
@@ -583,11 +586,14 @@ async function translateFinal(r, seg) {
   const history = recentHistory(r);
   const rev = seg.rev = (seg.rev || 0) + 1; // a segment can be re-translated when its text is corrected
   const shown = () => seg.rev === rev && seg.el.isConnected;
+  // If a translation of the in-progress text is already on screen, swap it once when the final one
+  // is complete rather than replacing it with a few words that grow again.
+  const swapWhenDone = !!seg.tgtEl.textContent;
   for (let attempt = 0; ; attempt++) {
     try {
       const out = await r.translator.translate(seg.src, {
         history,
-        onDelta: (partial) => { if (shown()) setText(seg, 'tgt', partial); },
+        onDelta: (partial) => { if (shown() && !swapWhenDone) setText(seg, 'tgt', partial); },
       });
       if (seg.rev !== rev) return;
       seg.tgt = out;

@@ -169,26 +169,34 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
 .recordings .rec { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .recordings .rec span { color: var(--muted); }
 
-/* The sentence being spoken stays in a fixed zone; the transcript above only holds finished ones. */
-.seg.live { display: none; }
+/* Caption zone: the sentence being spoken plus the ones just finished. A sentence stays here,
+   in place, while its translation completes and while the next sentences are spoken; only then
+   does it move up into the transcript. */
 .now {
-  flex: none; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px;
-  min-height: 7.5em; max-height: 40vh; overflow: hidden; box-sizing: border-box;
-  padding: 12px 18px; background: var(--panel); border-top: 2px solid var(--accent);
+  flex: none; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px;
+  min-height: 9em; max-height: 55vh; overflow: hidden; box-sizing: border-box;
+  padding: 10px 18px 12px; background: var(--panel); border-top: 2px solid var(--accent);
   font-size: var(--fs); line-height: 1.4;
 }
 .now[hidden] { display: none; }
-.now-head { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.now-head { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
 .now-head .dot { width: 8px; height: 8px; }
-.now-src { color: var(--muted); font-size: .9em; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 1.4em; }
-.now-tgt { color: var(--tgt); font-size: 1.35em; font-weight: 700; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 1.4em; }
-.now-tgt.pending { opacity: .75; }
-@media (max-width: 819px) { .now-tgt { font-size: 1.15em; } }
+.now-list { display: flex; flex-direction: column; gap: 12px; }
+.now .seg {
+  display: grid; grid-template-columns: 1fr; gap: 2px; max-width: none; margin: 0; padding: 0;
+  background: none; border: 0; border-radius: 0;
+}
+.now .seg .time { display: none; }
+.now .seg .src { color: var(--muted); font-size: .85em; }
+.now .seg .tgt { color: var(--tgt); font-size: 1.3em; font-weight: 700; min-height: 1.4em; }
+.now .seg .tgt.pending { opacity: .7; font-weight: 600; }
+.now .seg .tgt.error { font-size: .8em; font-weight: 400; }
+@media (max-width: 819px) { .now .seg .tgt { font-size: 1.15em; } }
 
-/* While listening, older sentences recede so the latest one and the "now" zone stand out. */
-body.running .seg:not(:has(+ #anchor)) { background: none; border-color: transparent; padding-block: 4px; margin-bottom: 2px; }
-body.running .seg:not(:has(+ #anchor)) .src,
-body.running .seg:not(:has(+ #anchor)) .tgt { color: var(--muted); font-weight: 400; font-size: .92em; }
+/* While listening, the transcript above recedes so the caption zone stands out. */
+body.running #log .seg { background: none; border-color: transparent; padding-block: 4px; margin-bottom: 2px; }
+body.running #log .seg .src,
+body.running #log .seg .tgt { color: var(--muted); font-weight: 400; font-size: .92em; }
 
 .jump {
   position: absolute; right: 16px; bottom: 12px; min-height: 44px; padding: 0 16px;
