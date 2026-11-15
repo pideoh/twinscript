@@ -54,9 +54,13 @@ export class AudioCapture {
         this.onLevel?.(e.data.rms);
         this.onChunk(toBase64(e.data.pcm));
       };
+      // Everything that is transcribed is also mixed into `this.stream` for recording.
+      const mix = this.ctx.createMediaStreamDestination();
+      this.stream = mix.stream;
       for (const stream of this.streams) {
-        const audioOnly = new MediaStream(stream.getAudioTracks());
-        this.ctx.createMediaStreamSource(audioOnly).connect(this.node);
+        const source = this.ctx.createMediaStreamSource(new MediaStream(stream.getAudioTracks()));
+        source.connect(this.node);
+        source.connect(mix);
       }
       // Keep the graph pulling without playing anything back.
       const mute = this.ctx.createGain();

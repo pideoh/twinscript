@@ -14,42 +14,75 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="bar">
-    <div class="langs">
-      <select id="langA" aria-label="言語1"></select>
-      <button id="swap" class="icon-btn" title="入れ替え" aria-label="言語を入れ替え">⇄</button>
-      <select id="langB" aria-label="言語2"></select>
-    </div>
-    <div class="tools">
-      <select id="source" aria-label="音声入力">
-        <option value="mic">マイク</option>
-        <option value="system">PC音声（タブ/画面共有）</option>
-        <option value="both">マイク＋PC音声</option>
-      </select>
-      <button id="export" class="icon-btn" title="テキストを保存" aria-label="テキストを保存">⤓</button>
-      <button id="clear" class="icon-btn" title="クリア" aria-label="クリア">✕</button>
-      <button id="openSettings" class="icon-btn" title="設定" aria-label="設定">⚙</button>
-    </div>
-  </header>
+  <aside id="sidebar" aria-label="セッション">
+    <button id="newSession" class="new-session">＋ 新しいセッション</button>
+    <nav id="sessionList"></nav>
+  </aside>
+  <div id="backdrop"></div>
 
-  <main id="log" aria-live="polite">
-    <div id="empty" class="empty">
-      <p>言語を2つ選んで「翻訳開始」を押してください。</p>
-      <p class="sub">どちらの言語で話しても自動で判定し、もう一方の言語に翻訳します。</p>
-    </div>
-    <div id="anchor"></div>
-  </main>
+  <div class="app">
+    <header class="bar">
+      <div class="langs">
+        <button id="menu" class="icon-btn" title="セッション一覧" aria-label="セッション一覧">☰</button>
+        <select id="langA" aria-label="言語1"></select>
+        <button id="swap" class="icon-btn" title="入れ替え" aria-label="言語を入れ替え">⇄</button>
+        <select id="langB" aria-label="言語2"></select>
+      </div>
+      <div class="tools">
+        <select id="source" aria-label="音声入力">
+          <option value="mic">マイク</option>
+          <option value="system">PC音声（タブ/画面共有）</option>
+          <option value="both">マイク＋PC音声</option>
+        </select>
+        <button id="export" class="icon-btn" title="ダウンロード" aria-label="ダウンロード">⤓</button>
+        <button id="openSettings" class="icon-btn" title="設定" aria-label="設定">⚙</button>
+      </div>
+    </header>
 
-  <div id="toast" class="toast" hidden></div>
+    <main id="log" aria-live="polite">
+      <div id="empty" class="empty">
+        <p>言語を2つ選んで「翻訳開始」を押してください。</p>
+        <p class="sub">どちらの言語で話しても自動で判定し、もう一方の言語に翻訳します。</p>
+      </div>
+      <div id="anchor"></div>
+    </main>
 
-  <footer class="dock">
-    <div class="status">
-      <span id="dot" class="dot"></span>
-      <span id="statusText">停止中</span>
-      <span class="meter"><span id="level"></span></span>
-    </div>
-    <button id="toggle" class="primary">翻訳開始</button>
-  </footer>
+    <div id="toast" class="toast" hidden></div>
+
+    <footer class="dock">
+      <div class="status">
+        <span id="dot" class="dot"></span>
+        <span id="statusText">停止中</span>
+        <span id="clock" class="clock">00:00:00</span>
+        <span class="meter"><span id="level"></span></span>
+      </div>
+      <button id="toggle" class="primary">翻訳開始</button>
+    </footer>
+  </div>
+
+  <dialog id="exportDialog">
+    <form method="dialog" class="settings">
+      <h2>ダウンロード</h2>
+      <label>文字起こしの形式
+        <select id="exportFormat">
+          <option value="txt">テキスト (.txt)</option>
+          <option value="md">Markdown の表 (.md)</option>
+          <option value="csv">CSV / Excel (.csv)</option>
+          <option value="srt">字幕 (.srt)</option>
+        </select>
+      </label>
+      <label>内容
+        <select id="exportContent">
+          <option value="both">原文と訳文</option>
+          <option value="src">原文のみ</option>
+          <option value="tgt">訳文のみ</option>
+        </select>
+      </label>
+      <div class="actions"><button type="button" id="exportTranscript" class="primary">文字起こしを保存</button></div>
+      <div id="recordings" class="recordings"></div>
+      <div class="actions"><button value="close" class="plain">閉じる</button></div>
+    </form>
+  </dialog>
 
   <dialog id="settings">
     <form method="dialog" class="settings">
@@ -63,6 +96,7 @@
       </label>
       <label class="check"><input id="interimTranslate" type="checkbox"> 話している途中の文も翻訳する（リアルタイム重視）</label>
       <label class="check"><input id="smart" type="checkbox"> 文字起こしを整形する（フィラー除去。確定が少し遅くなることがあります）</label>
+      <label class="check"><input id="record" type="checkbox"> 音声を録音して保存する（この端末のブラウザ内。1時間で約15MB）</label>
       <label>用語集・会議の背景（翻訳に反映されます）
         <textarea id="glossary" rows="3" placeholder="例: 固有名詞、製品名、会議のテーマなど"></textarea>
       </label>

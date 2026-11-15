@@ -26,13 +26,53 @@ html, body { height: 100%; }
 body {
   margin: 0;
   display: flex;
-  flex-direction: column;
   background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", sans-serif;
   -webkit-text-size-adjust: 100%;
 }
 select, button, input, textarea { font: inherit; color: inherit; }
+
+.app { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; }
+
+#sidebar {
+  width: 260px; flex: none; display: flex; flex-direction: column; gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top)) 10px 10px;
+  background: var(--panel); border-right: 1px solid var(--line);
+}
+.new-session {
+  background: none; border: 1px dashed var(--line); border-radius: 10px; padding: 10px; cursor: pointer; text-align: left;
+}
+.new-session:hover { background: var(--bg); }
+#sessionList { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.session {
+  display: flex; align-items: center; gap: 2px; border-radius: 10px; padding: 2px 4px 2px 0;
+}
+.session:hover, .session.current { background: var(--bg); }
+.session.current { outline: 1px solid var(--line); }
+.session .open {
+  flex: 1; min-width: 0; background: none; border: 0; text-align: left; padding: 8px 10px; cursor: pointer;
+  display: grid; gap: 2px;
+}
+.session .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+.session .when { color: var(--muted); font-size: 12px; }
+.session .act {
+  background: none; border: 0; color: var(--muted); cursor: pointer; padding: 6px; border-radius: 6px; flex: none; opacity: 0;
+}
+.session:hover .act, .session.current .act, .session .act:focus { opacity: 1; }
+.session .act:hover { color: var(--text); background: var(--line); }
+#backdrop { display: none; }
+#menu { display: none; }
+@media (max-width: 819px) {
+  #menu { display: block; }
+  #sidebar {
+    position: fixed; inset: 0 auto 0 0; z-index: 20; width: min(82vw, 300px);
+    transform: translateX(-100%); transition: transform .2s ease;
+  }
+  body.drawer #sidebar { transform: none; box-shadow: 0 0 40px rgba(0,0,0,.4); }
+  body.drawer #backdrop { display: block; position: fixed; inset: 0; z-index: 15; background: rgba(0,0,0,.45); }
+  .session .act { opacity: 1; }
+}
 
 .bar {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
@@ -60,18 +100,20 @@ select {
 .empty .sub { font-size: 14px; }
 
 .seg {
-  display: grid; grid-template-columns: 1fr; gap: 4px;
+  display: grid; grid-template-columns: 1fr; gap: 2px 4px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   padding: 10px 14px; margin: 0 auto 8px; max-width: 1100px;
 }
 .seg .src { color: var(--muted); font-size: .85em; white-space: pre-wrap; overflow-wrap: anywhere; }
 .seg .tgt { color: var(--tgt); font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 1em; }
+.seg .time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1.4; }
 .seg.live { border-style: dashed; }
 .seg.live .src { color: var(--text); opacity: .75; }
 .seg .tgt.pending { opacity: .5; font-weight: 500; }
 .seg .tgt.error { color: var(--danger); font-weight: 400; font-size: .8em; }
 @media (min-width: 820px) {
-  .seg { grid-template-columns: 1fr 1fr; gap: 20px; }
+  .seg { grid-template-columns: auto 1fr 1fr; gap: 16px; }
+  .seg .time { padding-top: .35em; }
   .seg .src { font-size: 1em; color: var(--text); }
 }
 #anchor { height: 1px; }
@@ -87,6 +129,7 @@ select {
 .dot.on { background: #16a34a; }
 .dot.busy { background: #f59e0b; animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: .3; } }
+.clock { font-variant-numeric: tabular-nums; }
 .meter { width: 60px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; flex: none; }
 #level { display: block; height: 100%; width: 0; background: #16a34a; transition: width .1s linear; }
 
@@ -117,3 +160,10 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
 .settings small { color: var(--muted); }
 .settings a { color: var(--accent); }
 .settings .actions { display: flex; justify-content: flex-end; }
+.settings select { width: 100%; }
+.plain { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 10px 20px; cursor: pointer; }
+.recordings { display: grid; gap: 8px; font-size: 14px; }
+.recordings:empty { display: none; }
+.recordings h3 { margin: 4px 0 0; font-size: 14px; }
+.recordings .rec { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.recordings .rec span { color: var(--muted); }
