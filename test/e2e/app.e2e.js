@@ -389,6 +389,12 @@ test('the caption zone can be moved into an always-on-top window and comes back 
   const inWindow = page.frameLocator('#fakePip');
   await inWindow.locator('#now').waitFor({ state: 'attached' });
   assert.equal(await page.locator('#now').count(), 0, 'the zone left the main page');
+  const fill = await page.evaluate(() => {
+    const frame = document.getElementById('fakePip');
+    const box = frame.contentDocument.getElementById('now').getBoundingClientRect();
+    return [Math.round(box.width) === frame.clientWidth, Math.round(box.height) === frame.clientHeight];
+  });
+  assert.deepEqual(fill, [true, true], 'the zone fills the whole window');
   assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'true');
 
   await page.click('#toggle');
@@ -401,6 +407,7 @@ test('the caption zone can be moved into an always-on-top window and comes back 
   assert.deepEqual(await page.locator('#now .seg .src').allTextContents(), ['Shown in the window.', 'Still talking']);
   assert.ok(await page.locator('#now').evaluate((n) => n.previousElementSibling.classList.contains('log-wrap')), 'back in its place under the transcript');
   assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'false');
+  assert.equal(await page.getAttribute('#now', 'style'), '', 'window-only layout is removed');
   await page.click('#toggle');
   assert.deepEqual(errors, []);
   await close();

@@ -342,13 +342,18 @@ els.pip.onclick = async () => {
   win.document.head.append(css);
   win.document.title = '字幕';
   win.document.body.className = 'pip';
+  // The layout that makes the zone fill the window is set inline, so it holds even if the
+  // stylesheet in the new window is slow to load or an older cached copy.
+  win.document.body.style.cssText = 'margin:0;display:block;height:100vh;background:var(--panel, #131c2e)';
+  els.now.style.cssText = 'display:flex;width:100%;height:100vh;min-height:0;max-height:none;border-top:0';
   applyFontSize();
   const home = document.createComment('caption zone');
   els.now.before(home);
   win.document.body.append(els.now);
   els.pip.setAttribute('aria-pressed', 'true');
   win.addEventListener('pagehide', () => {
-    home.replaceWith(els.now); // back to its place above the footer
+    els.now.style.cssText = '';
+    home.replaceWith(els.now); // back to its place under the transcript
     captionWindow = null;
     els.pip.setAttribute('aria-pressed', 'false');
   }, { once: true });
