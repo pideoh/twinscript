@@ -365,3 +365,43 @@ test('the number of sentences kept in the caption zone can be changed while list
   assert.equal(stored.interimInterval, 3);
   await close();
 });
+
+test('the caption zone can be moved into an always-on-top window and comes back when it closes', async () => {
+  const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
+  // Headless browsers cannot open a real picture-in-picture window; stand in with an iframe.
+  await page.evaluate(() => {
+    // The real property is read-only, so it has to be redefined rather than assigned.
+    Object.defineProperty(window, 'documentPictureInPicture', {
+      configurable: true,
+      value: {
+        requestWindow: async () => {
+          const frame = document.createElement('iframe');
+          frame.id = 'fakePip';
+          document.body.append(frame);
+          return frame.contentWindow;
+        },
+      },
+    });
+    document.getElementById('pip').hidden = false;
+  });
+  await mockGemini(page, [[3, 'final', 'Shown in the window.'], [6, 'interim', 'Still talking']]);
+  await page.click('#pip');
+  const inWindow = page.frameLocator('#fakePip');
+  await inWindow.locator('#now').waitFor({ state: 'attached' });
+  assert.equal(await page.locator('#now').count(), 0, 'the zone left the main page');
+  assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'true');
+
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.getElementById('fakePip').contentDocument
+    .querySelector('.seg.live .src')?.textContent === 'Still talking');
+  assert.deepEqual(await inWindow.locator('.seg .src').allTextContents(), ['Shown in the window.', 'Still talking']);
+  assert.equal(await inWindow.locator('.seg .tgt').first().textContent(), '訳:Shown in the window.');
+
+  await page.evaluate(() => document.getElementById('fakePip').contentWindow.dispatchEvent(new Event('pagehide')));
+  assert.deepEqual(await page.locator('#now .seg .src').allTextContents(), ['Shown in the window.', 'Still talking']);
+  assert.ok(await page.locator('#now').evaluate((n) => n.previousElementSibling.classList.contains('log-wrap')), 'back in its place under the transcript');
+  assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'false');
+  await page.click('#toggle');
+  assert.deepEqual(errors, []);
+  await close();
+});

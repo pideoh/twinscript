@@ -37,7 +37,7 @@ const DEBUG = new URLSearchParams(location.search).has('debug'); // log raw reco
 const $ = (id) => document.getElementById(id);
 const els = Object.fromEntries([
   'langA', 'langB', 'swap', 'source', 'export', 'openSettings', 'menu', 'backdrop', 'newSession', 'sessionList',
-  'clock', 'jump', 'now', 'nowList', 'exportDialog', 'exportFormat', 'exportContent', 'exportTranscript', 'recordings', 'record', 'log', 'empty', 'anchor', 'toast',
+  'clock', 'jump', 'now', 'nowList', 'pip', 'exportDialog', 'exportFormat', 'exportContent', 'exportTranscript', 'recordings', 'record', 'log', 'empty', 'anchor', 'toast',
   'dot', 'statusText', 'level', 'toggle', 'settings', 'apiKey', 'translateModel', 'interimTranslate', 'smart',
   'glossary', 'fontSize', 'captionItems', 'captionItemsOut', 'interimInterval', 'interimIntervalOut', 'settingsRunning',
 ].map((id) => [id, $(id)]));
@@ -50,6 +50,7 @@ function saveSettings() {
   try { localStorage.setItem('rt-settings', JSON.stringify(settings)); } catch { /* private mode */ }
 }
 const settings = loadSettings();
+let captionWindow = null; // always-on-top caption window, when open
 
 for (const sel of [els.langA, els.langB]) {
   for (const l of LANGS) sel.add(new Option(l.label, l.code));
@@ -65,6 +66,7 @@ applyFontSize();
 
 function applyFontSize() {
   document.documentElement.style.setProperty('--fs', `${settings.fontSize}px`);
+  captionWindow?.document.documentElement.style.setProperty('--fs', `${settings.fontSize}px`);
 }
 function onLangChange(changed, other) {
   if (changed.value === other.value) other.value = changed === els.langA ? settings.langB : settings.langA;
@@ -320,6 +322,37 @@ function updateJump() {
 }
 els.log.addEventListener('scroll', updateJump, { passive: true });
 els.jump.onclick = () => { els.log.scrollTop = els.log.scrollHeight; };
+
+// ---------- caption window ----------
+// Shows the caption zone in an always-on-top window (Document Picture-in-Picture; desktop Chrome
+// and Edge), so it can sit over a video call or slides.
+els.pip.hidden = !('documentPictureInPicture' in window);
+els.pip.onclick = async () => {
+  if (captionWindow) return captionWindow.close();
+  let win;
+  try {
+    win = await window.documentPictureInPicture.requestWindow({ width: 640, height: 220 });
+  } catch (err) {
+    return toast(`字幕ウィンドウを開けませんでした: ${err.message}`);
+  }
+  captionWindow = win;
+  const css = win.document.createElement('link');
+  css.rel = 'stylesheet';
+  css.href = new URL('styles.css', location.href).href;
+  win.document.head.append(css);
+  win.document.title = '字幕';
+  win.document.body.className = 'pip';
+  applyFontSize();
+  const home = document.createComment('caption zone');
+  els.now.before(home);
+  win.document.body.append(els.now);
+  els.pip.setAttribute('aria-pressed', 'true');
+  win.addEventListener('pagehide', () => {
+    home.replaceWith(els.now); // back to its place above the footer
+    captionWindow = null;
+    els.pip.setAttribute('aria-pressed', 'false');
+  }, { once: true });
+};
 
 // ---------- download ----------
 function download(blob, name) {

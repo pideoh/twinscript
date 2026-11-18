@@ -208,3 +208,12 @@ body.running #log .seg .tgt { color: var(--muted); font-weight: 400; font-size: 
 .settings output { color: var(--muted); font-variant-numeric: tabular-nums; }
 .settings input[type=range] { width: 100%; }
 dialog { max-height: 92vh; overflow-y: auto; }
+
+/* Caption zone moved into an always-on-top picture-in-picture window. */
+body.pip { display: block; height: 100vh; }
+body.pip .now, body.pip .now[hidden] {
+  display: flex; height: 100vh; min-height: 0; max-height: none; border-top: 0; padding: 10px 14px;
+}
+body.pip .now-list:empty::before { content: '翻訳を開始すると、ここに字幕が出ます'; color: var(--muted); font-size: 14px; }
+.icon-btn[aria-pressed=true] { border-color: var(--accent); color: var(--accent); }
+.icon-btn[hidden] { display: none; }
