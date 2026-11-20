@@ -21,7 +21,7 @@
 | `test/*.test.js` | 単体テスト（node:test、依存なし） |
 | `test/e2e/app.e2e.js` | Chrome＋偽マイク＋模擬エンドポイントの通しテスト |
 | `test/app/desktop.app.js` | デスクトップ版の起動確認（画面が要るので CI では動かさない） |
-| `.github/workflows/desktop.yml` | macOS / Windows の zip を作る（手動実行と `v*` タグ） |
+| `.github/workflows/release.yml`, `scripts/next-version.js` | `main` への反映時に zip をビルドし、次のバージョンを決めて GitHub Releases に公開 |
 
 ## コマンド
 
@@ -39,6 +39,22 @@
 - 実 API では未検証の前提がある（途中経過は発話全体の累積、確定は発話の切れ目で1回）。API の仕様に関わる変更は推測で書かず公式ドキュメントを確認する
 - マージ済みブランチに積まない。`main` から新しいブランチを切って PR を出す
 - UI 文言は日本語、コード・コメント・コミットメッセージは英語
+
+## リリース
+
+`main` にアプリ本体の変更（`app/` `src/` `icons/` `index.html` `styles.css` `manifest.webmanifest` `package.json`）が入ると、
+`.github/workflows/release.yml` が Mac / Windows の zip をビルドして GitHub Releases に公開する。
+バージョンは前回リリース以降のコミットから `scripts/next-version.js` が決める。コミットの件名はこの規則に合わせる。
+
+| 上がる桁 | 条件 | 例 |
+| --- | --- | --- |
+| メジャー | 本文に `BREAKING CHANGE`、または件名が `種類!:` | 保存形式を変えて既存の記録が読めなくなる |
+| マイナー | 件名が `Add` または `feat` で始まる | `Add an always-on-top caption window` |
+| パッチ | それ以外 | `Fix ...`、`Default ...`、文言の修正 |
+
+- 機能追加でない変更の件名を `Add` で始めない（`Add tests ...` は `Test ...` などにする）
+- `package.json` の `version` は手で上げない（ビルド時に上書きされる）
+- 手動で出すときは Actions の release を実行し、上げる桁を選ぶ
 
 ## トークン節約
 
