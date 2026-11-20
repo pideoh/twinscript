@@ -5,13 +5,14 @@ const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 export class RateLimitError extends Error {}
 
 export class GeminiTranslator {
-  constructor({ apiKey, model, langA, langB, glossary }) {
+  constructor({ apiKey, model, langA, langB, otherInto = langA, glossary }) {
     this.apiKey = apiKey;
     this.model = model;
     this.useThinkingConfig = true;
     this.system = [
       `You are a professional real-time interpreter in a meeting between ${langA} and ${langB} speakers.`,
       `The user message contains a speech transcript inside <text>. If it is in ${langA}, translate it into ${langB}; if it is in ${langB}, translate it into ${langA}.`,
+      `If it is in any other language, translate it into ${otherInto}.`,
       'Output only the translation: no quotes, labels, notes or explanations.',
       'The transcript comes from speech recognition and may contain errors or fillers; infer the intended meaning from context and translate it naturally and concisely.',
       'The text may be an unfinished sentence because the speaker is still talking; translate what is there without inventing a continuation.',

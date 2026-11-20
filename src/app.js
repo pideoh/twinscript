@@ -26,6 +26,7 @@ const LANGS = [
 const DEFAULTS = {
   langA: 'ja-JP', langB: 'en-US', source: 'mic', apiKey: '',
   translateModel: 'gemini-3.5-flash-lite', interimTranslate: true, smart: false, record: true, glossary: '', fontSize: 18,
+  otherInto: 'A',       // which of the two languages a third language is translated into
   captionItems: 3,      // sentences kept in the caption zone, including the one being spoken
   interimInterval: 1.5, // seconds between re-translations of the sentence being spoken
 };
@@ -39,7 +40,7 @@ const els = Object.fromEntries([
   'langA', 'langB', 'swap', 'source', 'export', 'openSettings', 'menu', 'backdrop', 'newSession', 'sessionList',
   'clock', 'jump', 'now', 'nowList', 'pip', 'exportDialog', 'exportFormat', 'exportContent', 'exportTranscript', 'recordings', 'record', 'log', 'empty', 'anchor', 'toast',
   'dot', 'statusText', 'level', 'toggle', 'settings', 'apiKey', 'translateModel', 'interimTranslate', 'smart',
-  'glossary', 'fontSize', 'captionItems', 'captionItemsOut', 'interimInterval', 'interimIntervalOut', 'settingsRunning',
+  'glossary', 'fontSize', 'otherInto', 'captionItems', 'captionItemsOut', 'interimInterval', 'interimIntervalOut', 'settingsRunning',
 ].map((id) => [id, $(id)]));
 
 // ---------- settings ----------
@@ -100,6 +101,9 @@ function openSettings() {
   els.record.checked = settings.record;
   els.glossary.value = settings.glossary;
   els.fontSize.value = settings.fontSize;
+  els.otherInto.options[0].text = `${langLabel(settings.langA)}（左の言語）`;
+  els.otherInto.options[1].text = `${langLabel(settings.langB)}（右の言語）`;
+  els.otherInto.value = settings.otherInto;
   els.captionItems.value = settings.captionItems;
   els.interimInterval.value = settings.interimInterval;
   showTuning();
@@ -122,6 +126,7 @@ els.settings.addEventListener('close', () => {
   settings.record = els.record.checked;
   settings.glossary = els.glossary.value.trim();
   settings.fontSize = Number(els.fontSize.value);
+  settings.otherInto = els.otherInto.value;
   settings.captionItems = Number(els.captionItems.value);
   settings.interimInterval = Number(els.interimInterval.value);
   saveSettings();
@@ -471,6 +476,7 @@ async function start() {
     r.translator = new GeminiTranslator({
       apiKey: settings.apiKey, model: settings.translateModel,
       langA: langA.name, langB: langB.name, glossary: settings.glossary,
+      otherInto: (settings.otherInto === 'B' ? langB : langA).name,
     });
     r.transcriber = new GeminiLiveTranscriber({
       apiKey: settings.apiKey, languageCodes: [langA.code, langB.code], smart: settings.smart, ...handlers,

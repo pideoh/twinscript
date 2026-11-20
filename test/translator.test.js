@@ -71,3 +71,14 @@ test('other errors surface the API message', async () => {
   stubFetch(() => new Response(JSON.stringify({ error: { message: 'API key not valid' } }), { status: 403 }));
   await assert.rejects(make().translate('やあ'), /403.*API key not valid/);
 });
+
+test('a third language goes to the first language unless told otherwise', async () => {
+  let calls = stubFetch(() => new Response(sse('ok'), { status: 200 }));
+  await make().translate('你好');
+  assert.match(calls[0].body.systemInstruction.parts[0].text, /any other language, translate it into Japanese\./);
+
+  calls = stubFetch(() => new Response(sse('ok'), { status: 200 }));
+  const tr = new GeminiTranslator({ apiKey: 'K', model: 'm', langA: 'Japanese', langB: 'English', otherInto: 'English' });
+  await tr.translate('你好');
+  assert.match(calls[0].body.systemInstruction.parts[0].text, /any other language, translate it into English\./);
+});
