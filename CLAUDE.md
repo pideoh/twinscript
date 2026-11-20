@@ -16,19 +16,26 @@
 | `src/store.js` | IndexedDB。`sessions`（文字起こし込み）と `audio`（録音チャンク） |
 | `src/exporter.js` | 文字起こしの書き出し（txt / md / csv / srt）。純粋関数 |
 | `src/mock.js` | `?mock=1` デモ用ダミー |
+| `app/main.js` | デスクトップ版（Electron）のメインプロセス。`app://rt/` で配信、PC音声、字幕オーバーレイ |
+| `app/policy.js` | デスクトップ版の規則（配信するファイル、遷移・window.open・権限の許可）。Electron 非依存 |
 | `test/*.test.js` | 単体テスト（node:test、依存なし） |
 | `test/e2e/app.e2e.js` | Chrome＋偽マイク＋模擬エンドポイントの通しテスト |
+| `test/app/desktop.app.js` | デスクトップ版の起動確認（画面が要るので CI では動かさない） |
+| `.github/workflows/desktop.yml` | macOS / Windows の zip を作る（手動実行と `v*` タグ） |
 
 ## コマンド
 
 - `npm test` — 単体テスト。ロジック変更後は必ず実行
 - `npm run test:e2e` — `src/app.js`・`src/audio.js`・HTML/CSS を触ったときだけ
 - `npm start` — http://localhost:5173 （`?mock=1` でキーなしデモ、`?debug=1` で認識結果の生ログ）
+- `npm run app` — デスクトップ版を起動。`npm run test:app` は `app/` か字幕ウィンドウを触ったときだけ
+- `npm run dist:mac` / `npm run dist:win` — `dist/` に zip を作る
 
 ## 作業ルール
 
 - 挙動を変えたらテストを同じコミットで追加・更新する。区切りの不具合は `test/segmenter.test.js` に再現ケースを足してから直す
-- 依存パッケージを増やさない（実行時依存ゼロ、devDependency は `playwright-core` のみ）
+- 依存パッケージを増やさない（実行時依存ゼロ、devDependency は `playwright-core`・`electron`・`electron-builder` のみ）
+- Web 版はブラウザでそのまま動くこと。デスクトップ版専用の処理は `app/` に置き、`src/` では Electron 判定での分岐に留める
 - 実 API では未検証の前提がある（途中経過は発話全体の累積、確定は発話の切れ目で1回）。API の仕様に関わる変更は推測で書かず公式ドキュメントを確認する
 - マージ済みブランチに積まない。`main` から新しいブランチを切って PR を出す
 - UI 文言は日本語、コード・コメント・コミットメッセージは英語

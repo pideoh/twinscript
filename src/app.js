@@ -329,14 +329,28 @@ els.log.addEventListener('scroll', updateJump, { passive: true });
 els.jump.onclick = () => { els.log.scrollTop = els.log.scrollHeight; };
 
 // ---------- caption window ----------
-// Shows the caption zone in an always-on-top window (Document Picture-in-Picture; desktop Chrome
-// and Edge), so it can sit over a video call or slides.
-els.pip.hidden = !('documentPictureInPicture' in window);
+// Shows the caption zone in an always-on-top window, so it can sit over a video call or slides:
+// Document Picture-in-Picture in desktop Chrome and Edge, or a transparent overlay window opened
+// by the desktop app (app/main.js makes the 'captions' window frameless and always on top).
+const IN_DESKTOP_APP = /\bElectron\//.test(navigator.userAgent);
+const CAPTION_WINDOW_NAME = 'captions'; // must match CAPTION_WINDOW in app/policy.js
+els.pip.hidden = !('documentPictureInPicture' in window) && !IN_DESKTOP_APP;
+
+async function openCaptionWindow() {
+  // Electron exposes documentPictureInPicture but requestWindow fails there, so check it first.
+  if (IN_DESKTOP_APP) {
+    const win = window.open('', CAPTION_WINDOW_NAME, 'width=720,height=220');
+    if (!win) throw new Error('ウィンドウがブロックされました');
+    return { win, overlay: true };
+  }
+  return { win: await window.documentPictureInPicture.requestWindow({ width: 640, height: 220 }), overlay: false };
+}
+
 els.pip.onclick = async () => {
   if (captionWindow) return captionWindow.close();
-  let win;
+  let win, overlay;
   try {
-    win = await window.documentPictureInPicture.requestWindow({ width: 640, height: 220 });
+    ({ win, overlay } = await openCaptionWindow());
   } catch (err) {
     return toast(`字幕ウィンドウを開けませんでした: ${err.message}`);
   }
@@ -346,17 +360,31 @@ els.pip.onclick = async () => {
   css.href = new URL('styles.css', location.href).href;
   win.document.head.append(css);
   win.document.title = '字幕';
-  win.document.body.className = 'pip';
+  win.document.body.className = overlay ? 'pip overlay' : 'pip';
   // The layout that makes the zone fill the window is set inline, so it holds even if the
   // stylesheet in the new window is slow to load or an older cached copy.
-  win.document.body.style.cssText = 'margin:0;display:block;height:100vh;background:var(--panel, #131c2e)';
+  win.document.body.style.cssText = overlay
+    ? 'margin:0;display:block;height:100vh;background:transparent;overflow:hidden'
+    : 'margin:0;display:block;height:100vh;background:var(--panel, #131c2e)';
   els.now.style.cssText = 'display:flex;width:100%;height:100vh;min-height:0;max-height:none;border-top:0';
   applyFontSize();
   const home = document.createComment('caption zone');
   els.now.before(home);
   win.document.body.append(els.now);
+  let closeBtn = null;
+  if (overlay) {
+    // The overlay has no title bar, so it needs its own way to close.
+    closeBtn = win.document.createElement('button');
+    closeBtn.className = 'overlay-close';
+    closeBtn.title = '字幕ウィンドウを閉じる';
+    closeBtn.setAttribute('aria-label', closeBtn.title);
+    closeBtn.textContent = '×';
+    closeBtn.onclick = () => win.close();
+    win.document.body.append(closeBtn);
+  }
   els.pip.setAttribute('aria-pressed', 'true');
   win.addEventListener('pagehide', () => {
+    closeBtn?.remove();
     els.now.style.cssText = '';
     home.replaceWith(els.now); // back to its place under the transcript
     captionWindow = null;
