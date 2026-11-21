@@ -1,7 +1,8 @@
 // Browser tests: API key prompt, demo mode, UI language, CSP, icons and banners.
-import { test } from 'node:test';
+
 import assert from 'node:assert/strict';
-import { setup, rows, saved, mockGemini } from './helpers.js';
+import { test } from 'node:test';
+import { mockGemini, rows, saved, setup } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -21,7 +22,9 @@ test('demo mode shows one long utterance as separate translated sentences', asyn
   const done = (await rows(page)).filter((r) => !r.live);
   assert.equal(done[0].src, 'それでは本日の定例会議を始めます。');
   assert.equal(done[1].src, 'まず先週の進捗について共有をお願いします。');
-  await page.waitForFunction(() => document.querySelector('.seg .tgt').textContent === "Let's begin today's regular meeting.");
+  await page.waitForFunction(
+    () => document.querySelector('.seg .tgt').textContent === "Let's begin today's regular meeting.",
+  );
   await page.click('#toggle');
   assert.equal(await page.textContent('#statusText'), '停止中');
   assert.deepEqual(errors, []);
@@ -53,9 +56,13 @@ test('PC audio that is playing raises no warning', async () => {
 test('icons are decorative Octicons and messages are inline banners with a variant', async () => {
   const { page, errors, close } = await openApp('?mock=1', { uiLang: 'en' });
   // Every icon-only button shows an SVG hidden from assistive tech and is named by its label.
-  const iconButtons = await page.locator('button.icon-btn').evaluateAll((bs) => bs.map((b) => ({
-    label: b.getAttribute('aria-label'), text: b.textContent.trim(), svg: b.querySelector('svg')?.getAttribute('aria-hidden'),
-  })));
+  const iconButtons = await page.locator('button.icon-btn').evaluateAll((bs) =>
+    bs.map((b) => ({
+      label: b.getAttribute('aria-label'),
+      text: b.textContent.trim(),
+      svg: b.querySelector('svg')?.getAttribute('aria-hidden'),
+    })),
+  );
   assert.ok(iconButtons.length >= 6);
   for (const b of iconButtons) assert.deepEqual([!!b.label, b.text, b.svg], [true, '', 'true'], JSON.stringify(b));
   assert.equal(await page.textContent('#newSession'), 'New session');
@@ -63,8 +70,13 @@ test('icons are decorative Octicons and messages are inline banners with a varia
   assert.equal(await page.getAttribute('#toast', 'data-variant'), 'info', 'the demo notice is informational');
   await page.click('#toggle');
   await page.waitForFunction(() => document.querySelectorAll('#sessionList .session').length === 1);
-  const actions = await page.locator('#sessionList .act').evaluateAll((bs) => bs.map((b) => [b.title, b.textContent, !!b.querySelector('svg')]));
-  assert.deepEqual(actions, [['Rename', '', true], ['Delete', '', true]]);
+  const actions = await page
+    .locator('#sessionList .act')
+    .evaluateAll((bs) => bs.map((b) => [b.title, b.textContent, !!b.querySelector('svg')]));
+  assert.deepEqual(actions, [
+    ['Rename', '', true],
+    ['Delete', '', true],
+  ]);
   await page.locator('#sessionList .open').click({ force: true });
   await page.waitForFunction(() => document.getElementById('toast').dataset.variant === 'warning');
   assert.equal(await page.textContent('#toast'), 'Stop translating before switching sessions');
@@ -134,7 +146,11 @@ test('changing the display language in settings updates the screen at once and i
 
   await page.click('#openSettings');
   await page.selectOption('#uiLang', 'zh-Hans');
-  assert.equal(await page.getAttribute('#sessionList .act >> nth=1', 'aria-label'), '删除', 'the session list is redrawn');
+  assert.equal(
+    await page.getAttribute('#sessionList .act >> nth=1', 'aria-label'),
+    '删除',
+    'the session list is redrawn',
+  );
   await page.click('#settings button[value=ok]');
 
   await page.reload();
@@ -149,21 +165,29 @@ test('changing the display language in settings updates the screen at once and i
 test('the content security policy blocks requests to anywhere but the Gemini API', async () => {
   const { page, errors, close } = await openApp('?mock=1');
   const outcome = await page.evaluate(async () => {
-    const tryFetch = (url) => fetch(url).then(() => 'allowed', () => 'blocked');
-    const tryScript = () => new Promise((resolve) => {
-      const el = document.createElement('script');
-      el.src = 'https://example.com/x.js';
-      el.onload = () => resolve('allowed');
-      el.onerror = () => resolve('blocked');
-      document.head.append(el);
-    });
+    const tryFetch = (url) =>
+      fetch(url).then(
+        () => 'allowed',
+        () => 'blocked',
+      );
+    const tryScript = () =>
+      new Promise((resolve) => {
+        const el = document.createElement('script');
+        el.src = 'https://example.com/x.js';
+        el.onload = () => resolve('allowed');
+        el.onerror = () => resolve('blocked');
+        document.head.append(el);
+      });
     const inline = document.createElement('script');
     inline.textContent = 'window.inlineRan = true';
     document.head.append(inline);
-    return { elsewhere: await tryFetch('https://example.com/collect'), script: await tryScript(), inline: !!window.inlineRan };
+    return {
+      elsewhere: await tryFetch('https://example.com/collect'),
+      script: await tryScript(),
+      inline: !!window.inlineRan,
+    };
   });
   assert.deepEqual(outcome, { elsewhere: 'blocked', script: 'blocked', inline: false });
   assert.ok(errors.filter((e) => /Content Security Policy/i.test(e)).length >= 3, 'each attempt is reported');
   await close();
 });
-

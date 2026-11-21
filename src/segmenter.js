@@ -5,8 +5,8 @@
 // so finished sentences are split off the interim text here. Final results may also be
 // missing or arrive after the next utterance has started; neither may lose text.
 
-const MIN_SPLIT_CHARS = 10;   // shorter sentences are merged with the next one
-const MAX_LIVE_CHARS = 180;   // force a split at a clause boundary beyond this
+const MIN_SPLIT_CHARS = 10; // shorter sentences are merged with the next one
+const MAX_LIVE_CHARS = 180; // force a split at a clause boundary beyond this
 const SENTENCE_END = /(?:[。！？]+[」』）]*|[.!?]+["')\]]*(?=\s))\s*/g;
 
 const newUtterance = () => ({ committed: '', prevRest: '', full: '' });
@@ -65,7 +65,12 @@ function findSplit(rest) {
   }
   if (rest.length > MAX_LIVE_CHARS) {
     const head = rest.slice(0, MAX_LIVE_CHARS);
-    const clause = Math.max(head.lastIndexOf('、'), head.lastIndexOf('，'), head.lastIndexOf(', ') + 1, head.lastIndexOf('; ') + 1);
+    const clause = Math.max(
+      head.lastIndexOf('、'),
+      head.lastIndexOf('，'),
+      head.lastIndexOf(', ') + 1,
+      head.lastIndexOf('; ') + 1,
+    );
     if (clause > MAX_LIVE_CHARS / 2) return clause + 1;
     const space = head.lastIndexOf(' ');
     return space > MAX_LIVE_CHARS / 2 ? space + 1 : MAX_LIVE_CHARS;
@@ -92,7 +97,9 @@ export class UtteranceTracker {
     utt.full = text;
     let rest = stripCommitted(utt, text);
     // Split off sentences that are complete and unchanged since the previous update.
-    for (let cut; (cut = findSplit(rest)) && utt.prevRest.startsWith(rest.slice(0, cut));) {
+    for (;;) {
+      const cut = findSplit(rest);
+      if (!cut || !utt.prevRest.startsWith(rest.slice(0, cut))) break;
       const sentence = rest.slice(0, cut);
       utt.committed += sentence;
       utt.prevRest = utt.prevRest.slice(cut);

@@ -1,14 +1,14 @@
 import { AudioCapture, canCaptureSystemAudio } from './audio.js';
-import { GeminiLiveTranscriber } from './transcriber.js';
-import { GeminiTranslator, RateLimitError } from './translator.js';
+import { buildTranscript, formatDateTime, formatElapsed, safeFileName } from './exporter.js';
+import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './i18n.js';
+import { octicon } from './icons.js';
+import { MessageError } from './message-error.js';
 import { MockTranscriber, MockTranslator } from './mock.js';
+import { canRecord, Recorder } from './recorder.js';
 import { UtteranceTracker } from './segmenter.js';
 import { store } from './store.js';
-import { Recorder, canRecord } from './recorder.js';
-import { buildTranscript, formatElapsed, formatDateTime, safeFileName } from './exporter.js';
-import { t, setLocale, getLocale, resolveLocale, applyTranslations, availableLocales } from './i18n.js';
-import { MessageError } from './message-error.js';
-import { octicon } from './icons.js';
+import { GeminiLiveTranscriber } from './transcriber.js';
+import { GeminiTranslator, RateLimitError } from './translator.js';
 
 // code: what the recognizer is told; display: the tag whose name is shown in the UI language
 // (no region, but the script for Chinese); name: what the translation prompt says.
@@ -29,10 +29,19 @@ const LANGS = [
   { code: 'hi-IN', display: 'hi', name: 'Hindi' },
 ];
 const DEFAULTS = {
-  langA: 'ja-JP', langB: 'en-US', source: 'mic', apiKey: '', uiLang: 'auto',
-  translateModel: 'gemini-3.5-flash-lite', interimTranslate: true, smart: false, record: true, glossary: '', fontSize: 18,
-  otherInto: 'A',       // which of the two languages a third language is translated into
-  captionItems: 3,      // sentences kept in the caption zone, including the one being spoken
+  langA: 'ja-JP',
+  langB: 'en-US',
+  source: 'mic',
+  apiKey: '',
+  uiLang: 'auto',
+  translateModel: 'gemini-3.5-flash-lite',
+  interimTranslate: true,
+  smart: false,
+  record: true,
+  glossary: '',
+  fontSize: 18,
+  otherInto: 'A', // which of the two languages a third language is translated into
+  captionItems: 3, // sentences kept in the caption zone, including the one being spoken
   interimInterval: 1.5, // seconds between re-translations of the sentence being spoken
 };
 const INTERIM_COOLDOWN_MS = 60_000;
@@ -42,35 +51,92 @@ const MOCK = new URLSearchParams(location.search).has('mock');
 const DEBUG = new URLSearchParams(location.search).has('debug'); // log raw recognizer output to the console
 
 const $ = (id) => document.getElementById(id);
-const els = Object.fromEntries([
-  'langA', 'langB', 'swap', 'source', 'export', 'openSettings', 'menu', 'backdrop', 'newSession', 'sessionList',
-  'clock', 'jump', 'now', 'nowList', 'pip', 'exportDialog', 'exportFormat', 'exportContent', 'exportTranscript', 'recordings', 'record', 'log', 'empty', 'anchor', 'toast',
-  'dot', 'statusText', 'level', 'toggle', 'settings', 'apiKey', 'translateModel', 'interimTranslate', 'smart',
-  'glossary', 'fontSize', 'otherInto', 'captionItems', 'captionItemsOut', 'interimInterval', 'interimIntervalOut', 'settingsRunning', 'uiLang',
-].map((id) => [id, $(id)]));
+const els = Object.fromEntries(
+  [
+    'langA',
+    'langB',
+    'swap',
+    'source',
+    'export',
+    'openSettings',
+    'menu',
+    'backdrop',
+    'newSession',
+    'sessionList',
+    'clock',
+    'jump',
+    'now',
+    'nowList',
+    'pip',
+    'exportDialog',
+    'exportFormat',
+    'exportContent',
+    'exportTranscript',
+    'recordings',
+    'record',
+    'log',
+    'empty',
+    'anchor',
+    'toast',
+    'dot',
+    'statusText',
+    'level',
+    'toggle',
+    'settings',
+    'apiKey',
+    'translateModel',
+    'interimTranslate',
+    'smart',
+    'glossary',
+    'fontSize',
+    'otherInto',
+    'captionItems',
+    'captionItemsOut',
+    'interimInterval',
+    'interimIntervalOut',
+    'settingsRunning',
+    'uiLang',
+  ].map((id) => [id, $(id)]),
+);
 
 // ---------- settings ----------
 function loadSettings() {
-  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('rt-settings') || '{}') }; } catch { return { ...DEFAULTS }; }
+  try {
+    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('rt-settings') || '{}') };
+  } catch {
+    return { ...DEFAULTS };
+  }
 }
 function saveSettings() {
-  try { localStorage.setItem('rt-settings', JSON.stringify(settings)); } catch { /* private mode */ }
+  try {
+    localStorage.setItem('rt-settings', JSON.stringify(settings));
+  } catch {
+    /* private mode */
+  }
 }
 const settings = loadSettings();
 let captionWindow = null; // always-on-top caption window, when open
-let languageNames = null;  // Intl.DisplayNames for the UI language
+let languageNames = null; // Intl.DisplayNames for the UI language
 
 // ---------- UI language ----------
 function applyLocale() {
   setLocale(resolveLocale(settings.uiLang, navigator.languages));
-  try { languageNames = new Intl.DisplayNames([getLocale()], { type: 'language' }); } catch { languageNames = null; }
+  try {
+    languageNames = new Intl.DisplayNames([getLocale()], { type: 'language' });
+  } catch {
+    languageNames = null;
+  }
   applyTranslations(document);
   els.nowList.dataset.empty = t('now.empty');
 }
 const langLabel = (code) => {
   const l = LANGS.find((x) => x.code === code);
   if (!l) return code;
-  try { return languageNames?.of(l.display) ?? l.name; } catch { return l.name; }
+  try {
+    return languageNames?.of(l.display) ?? l.name;
+  } catch {
+    return l.name;
+  }
 };
 // Re-renders everything on screen that is not static markup.
 function relocalize() {
@@ -86,7 +152,10 @@ function relocalize() {
     applyTranslations(captionWindow.document); // the caption zone lives there while it is open
     captionWindow.document.title = t('caption.title');
     const close = captionWindow.document.querySelector('.overlay-close');
-    if (close) { close.title = t('caption.close'); close.setAttribute('aria-label', close.title); }
+    if (close) {
+      close.title = t('caption.close');
+      close.setAttribute('aria-label', close.title);
+    }
   }
 }
 applyLocale();
@@ -98,7 +167,9 @@ els.uiLang.onchange = () => {
   saveSettings();
   relocalize();
 };
-window.addEventListener('languagechange', () => { if (settings.uiLang === 'auto') relocalize(); });
+window.addEventListener('languagechange', () => {
+  if (settings.uiLang === 'auto') relocalize();
+});
 
 for (const sel of [els.langA, els.langB]) {
   for (const l of LANGS) sel.add(new Option(langLabel(l.code), l.code));
@@ -106,7 +177,7 @@ for (const sel of [els.langA, els.langB]) {
 els.langA.value = settings.langA;
 els.langB.value = settings.langB;
 if (!canCaptureSystemAudio()) {
-  els.source.querySelectorAll('option:not([value=mic])').forEach((o) => o.remove());
+  for (const option of els.source.querySelectorAll('option:not([value=mic])')) option.remove();
   settings.source = 'mic';
 }
 els.source.value = settings.source;
@@ -137,7 +208,10 @@ els.swap.onclick = () => {
   [els.langA.value, els.langB.value] = [els.langB.value, els.langA.value];
   langsChanged();
 };
-els.source.onchange = () => { settings.source = els.source.value; saveSettings(); };
+els.source.onchange = () => {
+  settings.source = els.source.value;
+  saveSettings();
+};
 
 els.openSettings.onclick = openSettings;
 function openSettings() {
@@ -161,16 +235,28 @@ function fillOtherInto() {
   els.otherInto.options[0].text = t('settings.otherInto.left', { lang: langLabel(settings.langA) });
   els.otherInto.options[1].text = t('settings.otherInto.right', { lang: langLabel(settings.langB) });
 }
-els.fontSize.oninput = () => { settings.fontSize = Number(els.fontSize.value); applyFontSize(); };
+els.fontSize.oninput = () => {
+  settings.fontSize = Number(els.fontSize.value);
+  applyFontSize();
+};
 // These apply immediately, so they can be tuned while listening.
 function showTuning() {
   const n = Number(els.captionItems.value);
   const form = new Intl.PluralRules(getLocale()).select(n) === 'one' ? 'one' : 'other';
   els.captionItemsOut.textContent = t(`settings.captionItems.${form}`, { n });
-  els.interimIntervalOut.textContent = t('settings.interimInterval.value', { s: Number(els.interimInterval.value).toFixed(1) });
+  els.interimIntervalOut.textContent = t('settings.interimInterval.value', {
+    s: Number(els.interimInterval.value).toFixed(1),
+  });
 }
-els.captionItems.oninput = () => { settings.captionItems = Number(els.captionItems.value); showTuning(); trimCaptions(); };
-els.interimInterval.oninput = () => { settings.interimInterval = Number(els.interimInterval.value); showTuning(); };
+els.captionItems.oninput = () => {
+  settings.captionItems = Number(els.captionItems.value);
+  showTuning();
+  trimCaptions();
+};
+els.interimInterval.oninput = () => {
+  settings.interimInterval = Number(els.interimInterval.value);
+  showTuning();
+};
 els.settings.addEventListener('close', () => {
   settings.apiKey = els.apiKey.value.trim();
   settings.translateModel = els.translateModel.value.trim() || DEFAULTS.translateModel;
@@ -188,10 +274,10 @@ els.settings.addEventListener('close', () => {
 // ---------- sessions (saved conversations) ----------
 // { id, title, customTitle, createdAt, updatedAt, langA, langB, activeMs,
 //   segments: [{ id, at, elapsed, src, tgt }], recordings: [{ id, startedAt, elapsedStart, durationMs, mime }] }
-let sessions = [];   // saved sessions, newest first
-let current = null;  // the session on screen
-let run = null;      // the live capture/translation in progress, if any
-let live = null;     // segment currently being spoken
+let sessions = []; // saved sessions, newest first
+let current = null; // the session on screen
+let run = null; // the live capture/translation in progress, if any
+let live = null; // segment currently being spoken
 let toastTimer;
 const dirty = new Set();
 let saveTimer;
@@ -199,7 +285,7 @@ let saveTimer;
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const isEmpty = (sess) => !sess.segments.length && !sess.recordings.length;
 // Errors from audio.js, transcriber.js and translator.js carry a message key.
-const errorText = (err) => (err?.key ? t(err.key, err.params) : err?.message ?? String(err));
+const errorText = (err) => (err?.key ? t(err.key, err.params) : (err?.message ?? String(err)));
 
 // Shown as an inline banner above the transcript. variant: 'info', 'warning' or 'critical'.
 function toast(message, ms = 6000, variant = 'info') {
@@ -207,14 +293,24 @@ function toast(message, ms = 6000, variant = 'info') {
   els.toast.dataset.variant = variant;
   els.toast.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { els.toast.hidden = true; }, ms);
+  toastTimer = setTimeout(() => {
+    els.toast.hidden = true;
+  }, ms);
 }
 
 function blankSession() {
   const now = Date.now();
   return {
-    id: uid(), title: '', customTitle: false, createdAt: now, updatedAt: now,
-    langA: settings.langA, langB: settings.langB, activeMs: 0, segments: [], recordings: [],
+    id: uid(),
+    title: '',
+    customTitle: false,
+    createdAt: now,
+    updatedAt: now,
+    langA: settings.langA,
+    langB: settings.langB,
+    activeMs: 0,
+    segments: [],
+    recordings: [],
   };
 }
 
@@ -243,7 +339,9 @@ function flushSaves() {
       sessions.unshift(sess);
       store.requestPersistence();
     }
-    store.saveSession(serialize(sess)).catch((err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'));
+    store
+      .saveSession(serialize(sess))
+      .catch((err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'));
   }
   dirty.clear();
   renderSidebar();
@@ -252,12 +350,20 @@ window.addEventListener('pagehide', flushSaves);
 
 function showSession(sess) {
   current = sess;
-  try { localStorage.setItem('rt-current', sess.id); } catch { /* private mode */ }
-  els.log.querySelectorAll('.seg').forEach((n) => n.remove());
+  try {
+    localStorage.setItem('rt-current', sess.id);
+  } catch {
+    /* private mode */
+  }
+  for (const node of els.log.querySelectorAll('.seg')) node.remove();
   live = null;
   for (const seg of sess.segments) mountSegment(seg);
   els.empty.hidden = sess.segments.length > 0;
-  if (LANGS.some((l) => l.code === sess.langA) && LANGS.some((l) => l.code === sess.langB) && sess.langA !== sess.langB) {
+  if (
+    LANGS.some((l) => l.code === sess.langA) &&
+    LANGS.some((l) => l.code === sess.langB) &&
+    sess.langA !== sess.langB
+  ) {
     els.langA.value = settings.langA = sess.langA;
     els.langB.value = settings.langB = sess.langB;
     saveSettings();
@@ -269,32 +375,43 @@ function showSession(sess) {
 }
 
 function renderSidebar() {
-  els.sessionList.replaceChildren(...sessions.map((sess) => {
-    const row = document.createElement('div');
-    row.className = `session${sess === current ? ' current' : ''}`;
-    const open = document.createElement('button');
-    open.className = 'open';
-    if (sess === current) open.setAttribute('aria-current', 'true');
-    const name = document.createElement('span');
-    name.className = 'name';
-    name.textContent = sess.title;
-    const when = document.createElement('span');
-    when.className = 'when';
-    when.textContent = t('session.when', { date: formatDateTime(sess.createdAt), duration: formatElapsed(sess.activeMs) });
-    open.append(name, when);
-    open.onclick = () => { if (canSwitch()) showSession(sess); };
-    const action = (icon, title, fn) => {
-      const b = document.createElement('button');
-      b.className = 'act icon-btn';
-      b.append(octicon(icon));
-      b.title = title;
-      b.setAttribute('aria-label', title);
-      b.onclick = fn;
-      return b;
-    };
-    row.append(open, action('pencil', t('session.rename'), () => renameSession(sess)), action('trash', t('session.delete'), () => deleteSession(sess)));
-    return row;
-  }));
+  els.sessionList.replaceChildren(
+    ...sessions.map((sess) => {
+      const row = document.createElement('div');
+      row.className = `session${sess === current ? ' current' : ''}`;
+      const open = document.createElement('button');
+      open.className = 'open';
+      if (sess === current) open.setAttribute('aria-current', 'true');
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = sess.title;
+      const when = document.createElement('span');
+      when.className = 'when';
+      when.textContent = t('session.when', {
+        date: formatDateTime(sess.createdAt),
+        duration: formatElapsed(sess.activeMs),
+      });
+      open.append(name, when);
+      open.onclick = () => {
+        if (canSwitch()) showSession(sess);
+      };
+      const action = (icon, title, fn) => {
+        const b = document.createElement('button');
+        b.className = 'act icon-btn';
+        b.append(octicon(icon));
+        b.title = title;
+        b.setAttribute('aria-label', title);
+        b.onclick = fn;
+        return b;
+      };
+      row.append(
+        open,
+        action('pencil', t('session.rename'), () => renameSession(sess)),
+        action('trash', t('session.delete'), () => deleteSession(sess)),
+      );
+      return row;
+    }),
+  );
 }
 
 function canSwitch() {
@@ -315,12 +432,16 @@ async function deleteSession(sess) {
   if (!confirm(t('session.deleteConfirm', { title: sess.title }))) return;
   dirty.delete(sess);
   sessions = sessions.filter((x) => x !== sess);
-  await store.deleteSession(sess.id).catch((err) => toast(t('toast.deleteFailed', { message: err.message }), 6000, 'critical'));
+  await store
+    .deleteSession(sess.id)
+    .catch((err) => toast(t('toast.deleteFailed', { message: err.message }), 6000, 'critical'));
   if (sess === current) showSession(sessions[0] ?? blankSession());
   else renderSidebar();
 }
 
-els.newSession.onclick = () => { if (canSwitch()) showSession(blankSession()); };
+els.newSession.onclick = () => {
+  if (canSwitch()) showSession(blankSession());
+};
 els.menu.onclick = () => document.body.classList.toggle('drawer');
 els.backdrop.onclick = () => document.body.classList.remove('drawer');
 
@@ -383,7 +504,9 @@ function updateJump() {
   els.jump.hidden = nearBottom();
 }
 els.log.addEventListener('scroll', updateJump, { passive: true });
-els.jump.onclick = () => { els.log.scrollTop = els.log.scrollHeight; };
+els.jump.onclick = () => {
+  els.log.scrollTop = els.log.scrollHeight;
+};
 
 // ---------- caption window ----------
 // Shows the caption zone in an always-on-top window, so it can sit over a video call or slides:
@@ -440,13 +563,17 @@ els.pip.onclick = async () => {
     win.document.body.append(closeBtn);
   }
   els.pip.setAttribute('aria-pressed', 'true');
-  win.addEventListener('pagehide', () => {
-    closeBtn?.remove();
-    els.now.style.cssText = '';
-    home.replaceWith(els.now); // back to its place under the transcript
-    captionWindow = null;
-    els.pip.setAttribute('aria-pressed', 'false');
-  }, { once: true });
+  win.addEventListener(
+    'pagehide',
+    () => {
+      closeBtn?.remove();
+      els.now.style.cssText = '';
+      home.replaceWith(els.now); // back to its place under the transcript
+      captionWindow = null;
+      els.pip.setAttribute('aria-pressed', 'false');
+    },
+    { once: true },
+  );
 };
 
 // ---------- download ----------
@@ -495,9 +622,15 @@ els.export.onclick = () => {
 els.exportTranscript.onclick = () => {
   if (!current.segments.length) return toast(t('toast.noTranscript'));
   const { text, ext, mime } = buildTranscript(serialize(current), {
-    format: els.exportFormat.value, content: els.exportContent.value, langLabel,
-    labels: Object.fromEntries(['title', 'date', 'languages', 'duration', 'time', 'source', 'translation', 'separator']
-      .map((k) => [k, t(`file.${k}`)])),
+    format: els.exportFormat.value,
+    content: els.exportContent.value,
+    langLabel,
+    labels: Object.fromEntries(
+      ['title', 'date', 'languages', 'duration', 'time', 'source', 'translation', 'separator'].map((k) => [
+        k,
+        t(`file.${k}`),
+      ]),
+    ),
   });
   download(new Blob([text], { type: `${mime};charset=utf-8` }), `${safeFileName(current.title)}.${ext}`);
 };
@@ -524,7 +657,10 @@ function setRunning(running) {
   document.body.classList.toggle('running', running);
   els.now.hidden = !running;
   for (const el of [els.langA, els.langB, els.swap, els.source, els.newSession]) el.disabled = running;
-  if (!running) { setStatus('idle'); els.level.style.width = '0'; }
+  if (!running) {
+    setStatus('idle');
+    els.level.style.width = '0';
+  }
 }
 
 els.toggle.onclick = () => (run ? stop() : start());
@@ -540,7 +676,9 @@ async function start() {
   sess.langA = langA.code;
   sess.langB = langB.code;
   const r = {
-    session: sess, baseMs: sess.activeMs, startedAt: 0,
+    session: sess,
+    baseMs: sess.activeMs,
+    startedAt: 0,
     interim: { busy: false, lastAt: 0, pausedUntil: 0, timer: null, text: '' },
   };
   r.tracker = createTracker(r);
@@ -549,22 +687,39 @@ async function start() {
   setStatus('connecting');
 
   const handlers = {
-    onInterim: (text) => { if (DEBUG) console.log('[interim]', text); if (run === r) r.tracker.interim(text); },
-    onFinal: (text) => { if (DEBUG) console.log('[final]', text); if (run === r) r.tracker.final(text); },
+    onInterim: (text) => {
+      if (DEBUG) console.log('[interim]', text);
+      if (run === r) r.tracker.interim(text);
+    },
+    onFinal: (text) => {
+      if (DEBUG) console.log('[final]', text);
+      if (run === r) r.tracker.final(text);
+    },
     onState: (state) => run === r && setStatus(state),
-    onError: (err) => { if (run === r) { toast(errorText(err), 10000, 'critical'); stop(); } },
+    onError: (err) => {
+      if (run === r) {
+        toast(errorText(err), 10000, 'critical');
+        stop();
+      }
+    },
   };
   if (MOCK) {
     r.translator = new MockTranslator();
     r.transcriber = new MockTranscriber(handlers);
   } else {
     r.translator = new GeminiTranslator({
-      apiKey: settings.apiKey, model: settings.translateModel,
-      langA: langA.name, langB: langB.name, glossary: settings.glossary,
+      apiKey: settings.apiKey,
+      model: settings.translateModel,
+      langA: langA.name,
+      langB: langB.name,
+      glossary: settings.glossary,
       otherInto: (settings.otherInto === 'B' ? langB : langA).name,
     });
     r.transcriber = new GeminiLiveTranscriber({
-      apiKey: settings.apiKey, languageCodes: [langA.code, langB.code], smart: settings.smart, ...handlers,
+      apiKey: settings.apiKey,
+      languageCodes: [langA.code, langB.code],
+      smart: settings.smart,
+      ...handlers,
     });
   }
 
@@ -572,8 +727,15 @@ async function start() {
     if (!MOCK) {
       r.capture = new AudioCapture({
         onChunk: (b64) => r.transcriber.sendAudio(b64),
-        onLevel: (rms) => { els.level.style.width = `${Math.min(100, rms * 400)}%`; },
-        onEnded: (err) => { if (run === r) { toast(err ? errorText(err) : t('toast.audioEnded'), err ? 20000 : 6000, err ? 'critical' : 'info'); stop(); } },
+        onLevel: (rms) => {
+          els.level.style.width = `${Math.min(100, rms * 400)}%`;
+        },
+        onEnded: (err) => {
+          if (run === r) {
+            toast(err ? errorText(err) : t('toast.audioEnded'), err ? 20000 : 6000, err ? 'critical' : 'info');
+            stop();
+          }
+        },
       });
       await r.capture.start(settings.source);
       if (run !== r) return r.capture.stop(); // stopped while the permission prompt was open
@@ -581,7 +743,9 @@ async function start() {
     r.startedAt = Date.now();
     if (!MOCK && settings.record && canRecord()) startRecording(r);
     r.transcriber.start();
-    r.ticker = setInterval(() => { els.clock.textContent = formatElapsed(elapsedNow()); }, 500);
+    r.ticker = setInterval(() => {
+      els.clock.textContent = formatElapsed(elapsedNow());
+    }, 500);
     if (r.capture && r.capture.systemLevel() !== null) watchSystemAudio(r);
     r.autosave = setInterval(() => markDirty(sess), 5000); // keeps elapsed time and recording length current
     requestWakeLock();
@@ -631,7 +795,10 @@ function stop() {
   if (!r) return;
   r.transcriber?.stop();
   r.tracker.flush(); // keep whatever was heard so far instead of dropping it
-  if (live) { live.el.remove(); live = null; }
+  if (live) {
+    live.el.remove();
+    live = null;
+  }
   trimCaptions(0);
   clearTimeout(r.interim.timer);
   clearInterval(r.ticker);
@@ -642,7 +809,8 @@ function stop() {
   run = null;
   // Let the recorder hand over its last chunk before the audio graph is torn down.
   const release = () => r.capture?.stop();
-  if (r.recorder) r.recorder.stop().then(release, release); else release();
+  if (r.recorder) r.recorder.stop().then(release, release);
+  else release();
   wakeLock?.release().catch(() => {});
   wakeLock = null;
   setRunning(false);
@@ -651,7 +819,11 @@ function stop() {
 }
 
 async function requestWakeLock() {
-  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* unsupported or denied */ }
+  try {
+    wakeLock = await navigator.wakeLock?.request('screen');
+  } catch {
+    /* unsupported or denied */
+  }
 }
 document.addEventListener('visibilitychange', () => {
   if (run && document.visibilityState === 'visible') requestWakeLock();
@@ -736,12 +908,16 @@ function commit(r, seg, text) {
 }
 
 function recentHistory(r) {
-  return r.session.segments.filter((x) => x.tgt).slice(-HISTORY_LINES).map(({ src, tgt }) => ({ src, tgt }));
+  return r.session.segments
+    .filter((x) => x.tgt)
+    .slice(-HISTORY_LINES)
+    .map(({ src, tgt }) => ({ src, tgt }));
 }
 
 async function translateFinal(r, seg) {
   const history = recentHistory(r);
-  const rev = seg.rev = (seg.rev || 0) + 1; // a segment can be re-translated when its text is corrected
+  seg.rev = (seg.rev || 0) + 1; // a segment can be re-translated when its text is corrected
+  const rev = seg.rev;
   const shown = () => seg.rev === rev && seg.el.isConnected;
   // If a translation of the in-progress text is already on screen, swap it once when the final one
   // is complete rather than replacing it with a few words that grow again.
@@ -750,7 +926,9 @@ async function translateFinal(r, seg) {
     try {
       const out = await r.translator.translate(seg.src, {
         history,
-        onDelta: (partial) => { if (shown() && !swapWhenDone) setText(seg, 'tgt', partial); },
+        onDelta: (partial) => {
+          if (shown() && !swapWhenDone) setText(seg, 'tgt', partial);
+        },
       });
       if (seg.rev !== rev) return;
       seg.tgt = out;
@@ -777,6 +955,10 @@ try {
   toast(t('toast.storageUnavailable'), 6000, 'warning');
 }
 let lastId = null;
-try { lastId = localStorage.getItem('rt-current'); } catch { /* private mode */ }
+try {
+  lastId = localStorage.getItem('rt-current');
+} catch {
+  /* private mode */
+}
 showSession(sessions.find((x) => x.id === lastId) ?? blankSession());
 if (MOCK) toast(t('toast.demo'), 4000);

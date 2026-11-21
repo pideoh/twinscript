@@ -77,7 +77,8 @@ export default {
   'settings.apiKey': 'Gemini APIキー',
   'settings.apiKey.helpBefore': '',
   'settings.apiKey.helpAfter': ' で無料で発行できます。キーはこの端末にのみ保存されます。',
-  'settings.running': '翻訳中です。APIキー・翻訳モデル・整形・録音・用語集・訳し先の変更は、次に開始したときから反映されます。',
+  'settings.running':
+    '翻訳中です。APIキー・翻訳モデル・整形・録音・用語集・訳し先の変更は、次に開始したときから反映されます。',
   'settings.model': '翻訳モデル',
   'settings.interim': '話している途中の文も翻訳する（リアルタイム重視）',
   'settings.smart': '文字起こしを整形する（フィラー除去。確定が少し遅くなることがあります）',
@@ -111,8 +112,10 @@ export default {
   'toast.apiKeyFirst': '最初に Gemini APIキーを設定してください',
   'toast.audioEnded': '音声入力が終了しました',
   'toast.permissionNeeded': 'マイク/画面共有の許可が必要です。ブラウザの設定を確認してください。',
-  'toast.systemAudioSilentMac': 'PC音声が届いていません。音を再生しても反応しない場合は、システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Twinscript を許可し、アプリを開き直してください。',
-  'toast.systemAudioSilent': 'PC音声が届いていません。音を再生しても反応しない場合は、共有するときに音声の共有をオンにしたか確認してください。',
+  'toast.systemAudioSilentMac':
+    'PC音声が届いていません。音を再生しても反応しない場合は、システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Twinscript を許可し、アプリを開き直してください。',
+  'toast.systemAudioSilent':
+    'PC音声が届いていません。音を再生しても反応しない場合は、共有するときに音声の共有をオンにしたか確認してください。',
   'toast.recordSaveFailed': '録音を保存できませんでした（空き容量を確認してください）',
   'toast.recordUnsupported': 'このブラウザでは録音できないため、文字起こしのみ行います',
   'toast.rateLimited': 'レート制限のため、途中経過の翻訳を1分間停止します（確定文の翻訳は継続）',
@@ -121,8 +124,10 @@ export default {
 
   // errors reported by audio.js, transcriber.js and translator.js
   'error.windowBlocked': 'ウィンドウがブロックされました',
-  'error.noSharedAudio': '共有した画面/タブに音声が含まれていません。共有ダイアログで「音声も共有」をオンにしてください。',
-  'error.systemAudioPermission': 'PC音声を取り込む許可がありません。システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Twinscript を許可し、アプリを開き直してください。',
+  'error.noSharedAudio':
+    '共有した画面/タブに音声が含まれていません。共有ダイアログで「音声も共有」をオンにしてください。',
+  'error.systemAudioPermission':
+    'PC音声を取り込む許可がありません。システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Twinscript を許可し、アプリを開き直してください。',
   'error.systemAudioFailed': 'PC音声を取り込めませんでした。',
   'error.connectFailed': '接続できませんでした: {reason}',
   'error.disconnected': '接続が切れました: {reason}',

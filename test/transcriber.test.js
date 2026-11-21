@@ -1,5 +1,5 @@
-import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { beforeEach, test } from 'node:test';
 import { GeminiLiveTranscriber } from '../src/transcriber.js';
 
 class FakeWebSocket {
@@ -11,16 +11,28 @@ class FakeWebSocket {
     this.sent = [];
     FakeWebSocket.instances.push(this);
   }
-  send(data) { this.sent.push(JSON.parse(data)); }
-  close() { this.readyState = 3; }
+  send(data) {
+    this.sent.push(JSON.parse(data));
+  }
+  close() {
+    this.readyState = 3;
+  }
   // --- test helpers ---
-  open() { this.readyState = 1; this.onopen(); }
+  open() {
+    this.readyState = 1;
+    this.onopen();
+  }
   receive(msg, binary = false) {
     const text = JSON.stringify(msg);
     this.onmessage({ data: binary ? new TextEncoder().encode(text).buffer : text });
   }
-  drop(reason = '', code = 1006) { this.readyState = 3; this.onclose({ reason, code }); }
-  audio() { return this.sent.filter((m) => m.realtimeInput?.audio).map((m) => m.realtimeInput.audio.data); }
+  drop(reason = '', code = 1006) {
+    this.readyState = 3;
+    this.onclose({ reason, code });
+  }
+  audio() {
+    return this.sent.filter((m) => m.realtimeInput?.audio).map((m) => m.realtimeInput.audio.data);
+  }
 }
 globalThis.WebSocket = FakeWebSocket;
 
@@ -28,15 +40,21 @@ function setup(t, options = {}) {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   const log = { interim: [], final: [], state: [], errors: [] };
   const tr = new GeminiLiveTranscriber({
-    apiKey: 'KEY', languageCodes: ['ja-JP', 'en-US'], smart: false,
-    onInterim: (x) => log.interim.push(x), onFinal: (x) => log.final.push(x),
-    onState: (x) => log.state.push(x), onError: (e) => log.errors.push(e),
+    apiKey: 'KEY',
+    languageCodes: ['ja-JP', 'en-US'],
+    smart: false,
+    onInterim: (x) => log.interim.push(x),
+    onFinal: (x) => log.final.push(x),
+    onState: (x) => log.state.push(x),
+    onError: (e) => log.errors.push(e),
     ...options,
   });
   tr.start();
   return { tr, log, sockets: FakeWebSocket.instances, tick: (ms) => t.mock.timers.tick(ms) };
 }
-beforeEach(() => { FakeWebSocket.instances = []; });
+beforeEach(() => {
+  FakeWebSocket.instances = [];
+});
 
 test('sends the setup message and waits for setupComplete before streaming audio', (t) => {
   const { tr, log, sockets } = setup(t);

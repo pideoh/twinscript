@@ -35,6 +35,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 
 ## Commands
 
+- `npm run lint`: Biome checks formatting and lint rules; `npm run format` applies the fixes. Run before committing.
 - `npm test`: unit tests. Run after every logic change.
 - `npm run test:e2e`: only when `src/app.js`, `src/audio.js`, HTML or CSS changed.
 - `npm start`: http://localhost:5173 (`?mock=1` for a demo without a key, `?debug=1` to log raw recognizer output).
@@ -44,7 +45,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 ## Rules
 
 - Add or update tests in the same commit as a behavior change. For a segmentation bug, add the failing case to `test/segmenter.test.js` before fixing it.
-- No new dependencies: zero at runtime; dev dependencies are `playwright-core`, `electron` and `electron-builder` only.
+- No new dependencies: zero at runtime; dev dependencies are `playwright-core`, `electron`, `electron-builder` and `@biomejs/biome` only.
 - The interface must keep running in a plain browser (development and the browser tests rely on it). Desktop-only code lives in `app/`; `src/` only branches on detecting Electron.
 - Some assumptions about the Gemini Live API are unverified against the real service (interim text is the whole utterance so far; one final result per utterance). Check the official documentation instead of guessing when a change depends on API behavior.
 - User-visible text goes through i18n (`t()` or `data-i18n*`; modules without UI throw `MessageError` with a message key). Add every new key to all files in `src/locales/` with the same placeholders; `test/i18n.test.js` checks this.

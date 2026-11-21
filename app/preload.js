@@ -15,7 +15,11 @@ if (process.platform === 'darwin') {
   contextBridge.exposeInMainWorld('nativeSystemAudio', {
     start: () => ipcRenderer.invoke('system-audio:start'),
     stop: () => ipcRenderer.invoke('system-audio:stop'),
-    onData: (cb) => { onData = typeof cb === 'function' ? cb : null; },
-    onEnd: (cb) => { onEnd = typeof cb === 'function' ? cb : null; },
+    onData: (cb) => {
+      onData = typeof cb === 'function' ? cb : null;
+    },
+    onEnd: (cb) => {
+      onEnd = typeof cb === 'function' ? cb : null;
+    },
   });
 }

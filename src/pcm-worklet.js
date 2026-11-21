@@ -20,7 +20,7 @@ class PcmProcessor extends AudioWorkletProcessor {
 
   process(inputs) {
     const ch = inputs[0];
-    if (!ch || !ch.length) return true;
+    if (!ch?.length) return true;
     const len = ch[0].length;
     for (let i = 0; i < len; i++) {
       let s = 0;
@@ -72,7 +72,10 @@ class PcmFeeder extends AudioWorkletProcessor {
     let src = samples;
     if (src.length > this.max) src = src.subarray(src.length - this.max);
     const over = this.size + src.length - this.max;
-    if (over > 0) { this.read = (this.read + over) % FEED_CAPACITY; this.size -= over; }
+    if (over > 0) {
+      this.read = (this.read + over) % FEED_CAPACITY;
+      this.size -= over;
+    }
     let write = (this.read + this.size) % FEED_CAPACITY;
     for (let i = 0; i < src.length; i++) {
       this.ring[write] = src[i];
@@ -111,7 +114,10 @@ class AutoGainProcessor extends AudioWorkletProcessor {
   process(inputs, outputs) {
     const input = inputs[0];
     const out = outputs[0][0];
-    if (!input.length) { out.fill(0); return true; }
+    if (!input.length) {
+      out.fill(0);
+      return true;
+    }
     if (this.mono.length !== out.length) this.mono = new Float32Array(out.length);
     for (let i = 0; i < out.length; i++) {
       let sum = 0;
