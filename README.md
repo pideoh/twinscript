@@ -85,9 +85,10 @@ macOS 12 以前では PC音声は使えず、13〜14.1 では動作を確認し�
 
 署名・公証をしていないため、初回だけ OS の警告を回避する必要があります。
 
-- macOS: zip を展開して「Realtime Translate.app」をアプリケーションフォルダに移し、右クリック →「開く」。
-  「開けません」と出る場合は、システム設定 → プライバシーとセキュリティ の下にある「このまま開く」を押します。
-  それでも「壊れている」と出る場合はターミナルで `xattr -dr com.apple.quarantine "/Applications/Realtime Translate.app"` を実行します
+- macOS: zip を展開して「Realtime Translate.app」をアプリケーションフォルダに移して開きます。
+  初回は「"Realtime Translate" Not Opened（開けませんでした）」と表示されます。ゴミ箱には入れず「完了（Done）」を押し、
+  システム設定 → プライバシーとセキュリティ を下までスクロールして「このまま開く（Open Anyway）」を押すと、次から普通に開けます。
+  ターミナルで `xattr -dr com.apple.quarantine "/Applications/Realtime Translate.app"` を実行しても同じです
 - Windows: zip を右クリック →「すべて展開」し、フォルダ内の「Realtime Translate.exe」を実行します。
   「Windows によって PC が保護されました」と出たら「詳細情報」→「実行」を押します
 
