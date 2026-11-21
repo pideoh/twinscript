@@ -6,25 +6,29 @@ import { UtteranceTracker } from './segmenter.js';
 import { store } from './store.js';
 import { Recorder, canRecord } from './recorder.js';
 import { buildTranscript, formatElapsed, formatDateTime, safeFileName } from './exporter.js';
+import { t, setLocale, getLocale, resolveLocale, applyTranslations, availableLocales } from './i18n.js';
+import { MessageError } from './message-error.js';
 
+// code: what the recognizer is told; display: the tag whose name is shown in the UI language
+// (no region, but the script for Chinese); name: what the translation prompt says.
 const LANGS = [
-  { code: 'ja-JP', label: '日本語', name: 'Japanese' },
-  { code: 'en-US', label: '英語', name: 'English' },
-  { code: 'cmn-Hans-CN', label: '中国語（簡体）', name: 'Simplified Chinese' },
-  { code: 'cmn-Hant-TW', label: '中国語（繁体）', name: 'Traditional Chinese' },
-  { code: 'ko-KR', label: '韓国語', name: 'Korean' },
-  { code: 'es-ES', label: 'スペイン語', name: 'Spanish' },
-  { code: 'fr-FR', label: 'フランス語', name: 'French' },
-  { code: 'de-DE', label: 'ドイツ語', name: 'German' },
-  { code: 'it-IT', label: 'イタリア語', name: 'Italian' },
-  { code: 'pt-BR', label: 'ポルトガル語', name: 'Portuguese' },
-  { code: 'vi-VN', label: 'ベトナム語', name: 'Vietnamese' },
-  { code: 'th-TH', label: 'タイ語', name: 'Thai' },
-  { code: 'id-ID', label: 'インドネシア語', name: 'Indonesian' },
-  { code: 'hi-IN', label: 'ヒンディー語', name: 'Hindi' },
+  { code: 'ja-JP', display: 'ja', name: 'Japanese' },
+  { code: 'en-US', display: 'en', name: 'English' },
+  { code: 'cmn-Hans-CN', display: 'zh-Hans', name: 'Simplified Chinese' },
+  { code: 'cmn-Hant-TW', display: 'zh-Hant', name: 'Traditional Chinese' },
+  { code: 'ko-KR', display: 'ko', name: 'Korean' },
+  { code: 'es-ES', display: 'es', name: 'Spanish' },
+  { code: 'fr-FR', display: 'fr', name: 'French' },
+  { code: 'de-DE', display: 'de', name: 'German' },
+  { code: 'it-IT', display: 'it', name: 'Italian' },
+  { code: 'pt-BR', display: 'pt', name: 'Portuguese' },
+  { code: 'vi-VN', display: 'vi', name: 'Vietnamese' },
+  { code: 'th-TH', display: 'th', name: 'Thai' },
+  { code: 'id-ID', display: 'id', name: 'Indonesian' },
+  { code: 'hi-IN', display: 'hi', name: 'Hindi' },
 ];
 const DEFAULTS = {
-  langA: 'ja-JP', langB: 'en-US', source: 'mic', apiKey: '',
+  langA: 'ja-JP', langB: 'en-US', source: 'mic', apiKey: '', uiLang: 'auto',
   translateModel: 'gemini-3.5-flash-lite', interimTranslate: true, smart: false, record: true, glossary: '', fontSize: 18,
   otherInto: 'A',       // which of the two languages a third language is translated into
   captionItems: 3,      // sentences kept in the caption zone, including the one being spoken
@@ -41,7 +45,7 @@ const els = Object.fromEntries([
   'langA', 'langB', 'swap', 'source', 'export', 'openSettings', 'menu', 'backdrop', 'newSession', 'sessionList',
   'clock', 'jump', 'now', 'nowList', 'pip', 'exportDialog', 'exportFormat', 'exportContent', 'exportTranscript', 'recordings', 'record', 'log', 'empty', 'anchor', 'toast',
   'dot', 'statusText', 'level', 'toggle', 'settings', 'apiKey', 'translateModel', 'interimTranslate', 'smart',
-  'glossary', 'fontSize', 'otherInto', 'captionItems', 'captionItemsOut', 'interimInterval', 'interimIntervalOut', 'settingsRunning',
+  'glossary', 'fontSize', 'otherInto', 'captionItems', 'captionItemsOut', 'interimInterval', 'interimIntervalOut', 'settingsRunning', 'uiLang',
 ].map((id) => [id, $(id)]));
 
 // ---------- settings ----------
@@ -53,9 +57,50 @@ function saveSettings() {
 }
 const settings = loadSettings();
 let captionWindow = null; // always-on-top caption window, when open
+let languageNames = null;  // Intl.DisplayNames for the UI language
+
+// ---------- UI language ----------
+function applyLocale() {
+  setLocale(resolveLocale(settings.uiLang, navigator.languages));
+  try { languageNames = new Intl.DisplayNames([getLocale()], { type: 'language' }); } catch { languageNames = null; }
+  applyTranslations(document);
+  els.nowList.dataset.empty = t('now.empty');
+}
+const langLabel = (code) => {
+  const l = LANGS.find((x) => x.code === code);
+  if (!l) return code;
+  try { return languageNames?.of(l.display) ?? l.name; } catch { return l.name; }
+};
+// Re-renders everything on screen that is not static markup.
+function relocalize() {
+  applyLocale();
+  for (const sel of [els.langA, els.langB]) for (const o of sel.options) o.text = langLabel(o.value);
+  els.uiLang.options[0].text = t('settings.uiLang.auto');
+  fillOtherInto();
+  showTuning();
+  setStatus(statusState);
+  els.toggle.textContent = t(run ? 'toggle.stop' : 'toggle.start');
+  renderSidebar();
+  if (captionWindow) {
+    applyTranslations(captionWindow.document); // the caption zone lives there while it is open
+    captionWindow.document.title = t('caption.title');
+    const close = captionWindow.document.querySelector('.overlay-close');
+    if (close) { close.title = t('caption.close'); close.setAttribute('aria-label', close.title); }
+  }
+}
+applyLocale();
+els.uiLang.add(new Option(t('settings.uiLang.auto'), 'auto'));
+for (const l of availableLocales()) els.uiLang.add(new Option(l.name, l.id));
+if (!availableLocales().some((l) => l.id === settings.uiLang)) settings.uiLang = 'auto';
+els.uiLang.onchange = () => {
+  settings.uiLang = els.uiLang.value;
+  saveSettings();
+  relocalize();
+};
+window.addEventListener('languagechange', () => { if (settings.uiLang === 'auto') relocalize(); });
 
 for (const sel of [els.langA, els.langB]) {
-  for (const l of LANGS) sel.add(new Option(l.label, l.code));
+  for (const l of LANGS) sel.add(new Option(langLabel(l.code), l.code));
 }
 els.langA.value = settings.langA;
 els.langB.value = settings.langB;
@@ -102,8 +147,8 @@ function openSettings() {
   els.record.checked = settings.record;
   els.glossary.value = settings.glossary;
   els.fontSize.value = settings.fontSize;
-  els.otherInto.options[0].text = `${langLabel(settings.langA)}（左の言語）`;
-  els.otherInto.options[1].text = `${langLabel(settings.langB)}（右の言語）`;
+  els.uiLang.value = settings.uiLang;
+  fillOtherInto();
   els.otherInto.value = settings.otherInto;
   els.captionItems.value = settings.captionItems;
   els.interimInterval.value = settings.interimInterval;
@@ -111,11 +156,17 @@ function openSettings() {
   els.settingsRunning.hidden = !run;
   els.settings.showModal();
 }
+function fillOtherInto() {
+  els.otherInto.options[0].text = t('settings.otherInto.left', { lang: langLabel(settings.langA) });
+  els.otherInto.options[1].text = t('settings.otherInto.right', { lang: langLabel(settings.langB) });
+}
 els.fontSize.oninput = () => { settings.fontSize = Number(els.fontSize.value); applyFontSize(); };
 // These apply immediately, so they can be tuned while listening.
 function showTuning() {
-  els.captionItemsOut.textContent = `${els.captionItems.value} 文`;
-  els.interimIntervalOut.textContent = `${Number(els.interimInterval.value).toFixed(1)} 秒`;
+  const n = Number(els.captionItems.value);
+  const form = new Intl.PluralRules(getLocale()).select(n) === 'one' ? 'one' : 'other';
+  els.captionItemsOut.textContent = t(`settings.captionItems.${form}`, { n });
+  els.interimIntervalOut.textContent = t('settings.interimInterval.value', { s: Number(els.interimInterval.value).toFixed(1) });
 }
 els.captionItems.oninput = () => { settings.captionItems = Number(els.captionItems.value); showTuning(); trimCaptions(); };
 els.interimInterval.oninput = () => { settings.interimInterval = Number(els.interimInterval.value); showTuning(); };
@@ -146,7 +197,8 @@ let saveTimer;
 
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const isEmpty = (sess) => !sess.segments.length && !sess.recordings.length;
-const langLabel = (code) => LANGS.find((l) => l.code === code)?.label ?? code;
+// Errors from audio.js, transcriber.js and translator.js carry a message key.
+const errorText = (err) => (err?.key ? t(err.key, err.params) : err?.message ?? String(err));
 
 function toast(message, ms = 6000) {
   els.toast.textContent = message;
@@ -188,7 +240,7 @@ function flushSaves() {
       sessions.unshift(sess);
       store.requestPersistence();
     }
-    store.saveSession(serialize(sess)).catch((err) => toast(`保存に失敗しました: ${err.message}`));
+    store.saveSession(serialize(sess)).catch((err) => toast(t('toast.saveFailed', { message: err.message })));
   }
   dirty.clear();
   renderSidebar();
@@ -224,7 +276,7 @@ function renderSidebar() {
     name.textContent = sess.title;
     const when = document.createElement('span');
     when.className = 'when';
-    when.textContent = `${formatDateTime(sess.createdAt)} ・ ${formatElapsed(sess.activeMs)}`;
+    when.textContent = t('session.when', { date: formatDateTime(sess.createdAt), duration: formatElapsed(sess.activeMs) });
     open.append(name, when);
     open.onclick = () => { if (canSwitch()) showSession(sess); };
     const action = (label, title, fn) => {
@@ -236,18 +288,18 @@ function renderSidebar() {
       b.onclick = fn;
       return b;
     };
-    row.append(open, action('✎', '名前を変更', () => renameSession(sess)), action('✕', '削除', () => deleteSession(sess)));
+    row.append(open, action('✎', t('session.rename'), () => renameSession(sess)), action('✕', t('session.delete'), () => deleteSession(sess)));
     return row;
   }));
 }
 
 function canSwitch() {
-  if (run) toast('翻訳を停止してから切り替えてください');
+  if (run) toast(t('toast.stopToSwitch'));
   return !run;
 }
 
 function renameSession(sess) {
-  const title = prompt('セッション名', sess.title)?.trim();
+  const title = prompt(t('session.renamePrompt'), sess.title)?.trim();
   if (!title) return;
   sess.title = title;
   sess.customTitle = true;
@@ -255,11 +307,11 @@ function renameSession(sess) {
 }
 
 async function deleteSession(sess) {
-  if (run?.session === sess) return toast('翻訳を停止してから削除してください');
-  if (!confirm(`「${sess.title}」を削除しますか？文字起こしと録音が消えます。`)) return;
+  if (run?.session === sess) return toast(t('toast.stopToDelete'));
+  if (!confirm(t('session.deleteConfirm', { title: sess.title }))) return;
   dirty.delete(sess);
   sessions = sessions.filter((x) => x !== sess);
-  await store.deleteSession(sess.id).catch((err) => toast(`削除に失敗しました: ${err.message}`));
+  await store.deleteSession(sess.id).catch((err) => toast(t('toast.deleteFailed', { message: err.message })));
   if (sess === current) showSession(sessions[0] ?? blankSession());
   else renderSidebar();
 }
@@ -341,7 +393,7 @@ async function openCaptionWindow() {
   // Electron exposes documentPictureInPicture but requestWindow fails there, so check it first.
   if (IN_DESKTOP_APP) {
     const win = window.open('', CAPTION_WINDOW_NAME, 'width=720,height=220');
-    if (!win) throw new Error('ウィンドウがブロックされました');
+    if (!win) throw new MessageError('error.windowBlocked');
     return { win, overlay: true };
   }
   return { win: await window.documentPictureInPicture.requestWindow({ width: 640, height: 220 }), overlay: false };
@@ -353,14 +405,14 @@ els.pip.onclick = async () => {
   try {
     ({ win, overlay } = await openCaptionWindow());
   } catch (err) {
-    return toast(`字幕ウィンドウを開けませんでした: ${err.message}`);
+    return toast(t('toast.captionWindowFailed', { message: errorText(err) }));
   }
   captionWindow = win;
   const css = win.document.createElement('link');
   css.rel = 'stylesheet';
   css.href = new URL('styles.css', location.href).href;
   win.document.head.append(css);
-  win.document.title = '字幕';
+  win.document.title = t('caption.title');
   win.document.body.className = overlay ? 'pip overlay' : 'pip';
   // The layout that makes the zone fill the window is set inline, so it holds even if the
   // stylesheet in the new window is slow to load or an older cached copy.
@@ -377,7 +429,7 @@ els.pip.onclick = async () => {
     // The overlay has no title bar, so it needs its own way to close.
     closeBtn = win.document.createElement('button');
     closeBtn.className = 'overlay-close';
-    closeBtn.title = '字幕ウィンドウを閉じる';
+    closeBtn.title = t('caption.close');
     closeBtn.setAttribute('aria-label', closeBtn.title);
     closeBtn.textContent = '×';
     closeBtn.onclick = () => win.close();
@@ -403,22 +455,22 @@ function download(blob, name) {
 }
 
 els.export.onclick = () => {
-  if (isEmpty(current)) return toast('保存する内容がありません');
+  if (isEmpty(current)) return toast(t('toast.nothingToSave'));
   flushSaves(); // so the title and recording lengths are up to date
   const sess = current;
   const rows = sess.recordings.map((rec, i) => {
     const row = document.createElement('div');
     row.className = 'rec';
     const info = document.createElement('span');
-    const length = run?.recording === rec ? '録音中' : formatElapsed(rec.durationMs);
-    info.textContent = `録音 ${i + 1} ・ ${formatDateTime(rec.startedAt)} ・ ${length}`;
+    const length = run?.recording === rec ? t('export.recordingNow') : formatElapsed(rec.durationMs);
+    info.textContent = t('export.recording', { n: i + 1, date: formatDateTime(rec.startedAt), length });
     const save = document.createElement('button');
     save.type = 'button';
     save.className = 'plain';
-    save.textContent = '保存';
+    save.textContent = t('export.save');
     save.onclick = async () => {
       const chunks = await store.getAudioChunks(sess.id, rec.id).catch(() => []);
-      if (!chunks.length) return toast('この録音のデータが見つかりません');
+      if (!chunks.length) return toast(t('toast.recordingMissing'));
       const ext = rec.mime.includes('mp4') ? 'm4a' : 'webm';
       download(new Blob(chunks, { type: rec.mime }), `${safeFileName(sess.title)}-${i + 1}.${ext}`);
     };
@@ -427,7 +479,7 @@ els.export.onclick = () => {
   });
   if (rows.length) {
     const heading = document.createElement('h3');
-    heading.textContent = '録音';
+    heading.textContent = t('export.recordings');
     rows.unshift(heading);
   }
   els.recordings.replaceChildren(...rows);
@@ -435,9 +487,11 @@ els.export.onclick = () => {
 };
 
 els.exportTranscript.onclick = () => {
-  if (!current.segments.length) return toast('文字起こしがまだありません');
+  if (!current.segments.length) return toast(t('toast.noTranscript'));
   const { text, ext, mime } = buildTranscript(serialize(current), {
     format: els.exportFormat.value, content: els.exportContent.value, langLabel,
+    labels: Object.fromEntries(['title', 'date', 'languages', 'duration', 'time', 'source', 'translation', 'separator']
+      .map((k) => [k, t(`file.${k}`)])),
   });
   download(new Blob([text], { type: `${mime};charset=utf-8` }), `${safeFileName(current.title)}.${ext}`);
 };
@@ -450,20 +504,16 @@ function elapsedNow() {
   return run?.startedAt ? run.baseMs + Date.now() - run.startedAt : current.activeMs;
 }
 
+let statusState = 'idle';
 function setStatus(state) {
-  const map = {
-    idle: ['', '停止中'],
-    connecting: ['busy', '接続中…'],
-    listening: ['on', '聞き取り中'],
-    reconnecting: ['busy', '再接続中…'],
-  };
-  const [cls, text] = map[state];
-  els.dot.className = `dot ${cls}`;
-  els.statusText.textContent = text;
+  const dot = { idle: '', connecting: 'busy', listening: 'on', reconnecting: 'busy' };
+  statusState = state;
+  els.dot.className = `dot ${dot[state]}`;
+  els.statusText.textContent = t(`status.${state}`);
 }
 
 function setRunning(running) {
-  els.toggle.textContent = running ? '停止' : '翻訳開始';
+  els.toggle.textContent = t(running ? 'toggle.stop' : 'toggle.start');
   els.toggle.classList.toggle('stop', running);
   document.body.classList.toggle('running', running);
   els.now.hidden = !running;
@@ -475,7 +525,7 @@ els.toggle.onclick = () => (run ? stop() : start());
 
 async function start() {
   if (!MOCK && !settings.apiKey) {
-    toast('最初に Gemini APIキーを設定してください');
+    toast(t('toast.apiKeyFirst'));
     return openSettings();
   }
   const langA = LANGS.find((l) => l.code === settings.langA);
@@ -496,7 +546,7 @@ async function start() {
     onInterim: (text) => { if (DEBUG) console.log('[interim]', text); if (run === r) r.tracker.interim(text); },
     onFinal: (text) => { if (DEBUG) console.log('[final]', text); if (run === r) r.tracker.final(text); },
     onState: (state) => run === r && setStatus(state),
-    onError: (err) => { if (run === r) { toast(err.message, 10000); stop(); } },
+    onError: (err) => { if (run === r) { toast(errorText(err), 10000); stop(); } },
   };
   if (MOCK) {
     r.translator = new MockTranslator();
@@ -517,7 +567,7 @@ async function start() {
       r.capture = new AudioCapture({
         onChunk: (b64) => r.transcriber.sendAudio(b64),
         onLevel: (rms) => { els.level.style.width = `${Math.min(100, rms * 400)}%`; },
-        onEnded: (err) => { if (run === r) { toast(err?.message ?? '音声入力が終了しました', err ? 20000 : 6000); stop(); } },
+        onEnded: (err) => { if (run === r) { toast(err ? errorText(err) : t('toast.audioEnded'), err ? 20000 : 6000); stop(); } },
       });
       await r.capture.start(settings.source);
       if (run !== r) return r.capture.stop(); // stopped while the permission prompt was open
@@ -532,7 +582,7 @@ async function start() {
   } catch (err) {
     if (run !== r) return;
     const denied = err.name === 'NotAllowedError' || err.name === 'SecurityError';
-    toast(denied ? 'マイク/画面共有の許可が必要です。ブラウザの設定を確認してください。' : err.message, 10000);
+    toast(denied ? t('toast.permissionNeeded') : errorText(err), 10000);
     stop();
   }
 }
@@ -546,9 +596,7 @@ function watchSystemAudio(r) {
     if (Date.now() - since < SILENT_SYSTEM_AUDIO_MS) return;
     clearInterval(r.systemWatch);
     const isMacApp = /Electron/.test(navigator.userAgent) && /Mac/.test(navigator.userAgent);
-    toast(isMacApp
-      ? 'PC音声が届いていません。音を再生しても反応しない場合は、システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Twinscript を許可し、アプリを開き直してください。'
-      : 'PC音声が届いていません。音を再生しても反応しない場合は、共有するときに音声の共有をオンにしたか確認してください。', 20000);
+    toast(t(isMacApp ? 'toast.systemAudioSilentMac' : 'toast.systemAudioSilent'), 20000);
   }, 1000);
 }
 
@@ -558,7 +606,7 @@ function startRecording(r) {
   try {
     r.recorder = new Recorder(r.capture.stream, (blob) => {
       store.addAudioChunk(sess.id, rec.id, blob).catch(() => {
-        if (!r.recordWarned) toast('録音を保存できませんでした（空き容量を確認してください）');
+        if (!r.recordWarned) toast(t('toast.recordSaveFailed'));
         r.recordWarned = true;
       });
     });
@@ -568,7 +616,7 @@ function startRecording(r) {
     sess.recordings.push(rec);
     markDirty(sess);
   } catch {
-    toast('このブラウザでは録音できないため、文字起こしのみ行います');
+    toast(t('toast.recordUnsupported'));
   }
 }
 
@@ -653,7 +701,7 @@ function scheduleInterimTranslation(s) {
     } catch (err) {
       if (err instanceof RateLimitError) {
         it.pausedUntil = Date.now() + INTERIM_COOLDOWN_MS;
-        toast('レート制限のため、途中経過の翻訳を1分間停止します（確定文の翻訳は継続）');
+        toast(t('toast.rateLimited'));
       }
     } finally {
       it.busy = false;
@@ -708,19 +756,21 @@ async function translateFinal(r, seg) {
         await new Promise((res) => setTimeout(res, 1500 * 2 ** attempt));
         continue;
       }
-      if (shown()) setText(seg, 'tgt', err.message, 'error');
+      if (shown()) setText(seg, 'tgt', errorText(err), 'error');
       return;
     }
   }
 }
 
 // ---------- startup ----------
+setStatus('idle');
+els.toggle.textContent = t('toggle.start');
 try {
   sessions = (await store.listSessions()).sort((a, b) => b.createdAt - a.createdAt);
 } catch {
-  toast('ブラウザの保存領域が使えないため、このタブを閉じると内容は消えます');
+  toast(t('toast.storageUnavailable'));
 }
 let lastId = null;
 try { lastId = localStorage.getItem('rt-current'); } catch { /* private mode */ }
 showSession(sessions.find((x) => x.id === lastId) ?? blankSession());
-if (MOCK) toast('デモモード: 実際の音声認識・翻訳は行いません', 4000);
+if (MOCK) toast(t('toast.demo'), 4000);

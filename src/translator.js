@@ -1,8 +1,9 @@
 // Streaming text translation with a small Gemini model.
+import { MessageError } from './message-error.js';
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-export class RateLimitError extends Error {}
+export class RateLimitError extends MessageError {}
 
 export class GeminiTranslator {
   constructor({ apiKey, model, langA, langB, otherInto = langA, glossary }) {
@@ -46,10 +47,10 @@ export class GeminiTranslator {
         this.useThinkingConfig = false;
         return this.translate(text, { history, onDelta, signal });
       }
-      if (res.status === 429) throw new RateLimitError('翻訳APIのレート制限に達しました');
+      if (res.status === 429) throw new RateLimitError('error.rateLimit');
       let message = detail;
       try { message = JSON.parse(detail).error.message; } catch { /* keep raw */ }
-      throw new Error(`翻訳エラー (${res.status}): ${message.slice(0, 200)}`);
+      throw new MessageError('error.translate', { status: res.status, message: message.slice(0, 200) });
     }
 
     const reader = res.body.getReader();

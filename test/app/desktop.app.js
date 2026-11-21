@@ -26,6 +26,7 @@ test('serves only the app files from app://rt/', async () => {
   assert.equal(page.url(), 'app://rt/');
   const status = (path) => page.evaluate((p) => fetch(p).then((r) => r.status), path);
   assert.equal(await status('src/app.js'), 200);
+  assert.equal(await status('src/locales/ja.js'), 200);
   assert.equal(await status('package.json'), 404);
   assert.equal(await status('app/main.js'), 404);
 });
@@ -42,6 +43,7 @@ test('runs the demo and moves the captions into an overlay window and back', asy
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  await page.evaluate(() => localStorage.setItem('rt-settings', JSON.stringify({ uiLang: 'ja' }))); // assertions read Japanese
   await page.goto('app://rt/?mock=1');
   assert.ok(await page.locator('#pip').isVisible(), 'the caption window button is shown in the app');
 

@@ -1,127 +1,129 @@
 # Twinscript
 
-会議向けのリアルタイム文字起こし＋双方向翻訳 Web アプリ（PWA）。
-言語を2つ選んで「翻訳開始」を押すと、話された言語を自動判定して文字起こしし、もう一方の言語へ翻訳します。
+English | [日本語](README.ja.md)
 
-- PC（Chrome / Edge）: マイクに加え、タブ・画面共有の音声（Zoom / Teams / Meet の相手の声）も取り込めます
-- iPhone（Safari）: マイク入力。共有メニューの「ホーム画面に追加」でアプリのように使えます
-- ビルド不要の静的サイト。サーバー側の処理はありません
+A web app (PWA) for real-time transcription and two-way translation in meetings.
+Choose two languages and press "Start translating": the app detects which language is spoken, transcribes it and translates it into the other one.
 
-## セッションと保存
+- PC (Chrome / Edge): besides the microphone, it can capture the audio of a tab or screen share (the other participants in Zoom / Teams / Meet)
+- iPhone (Safari): microphone input. Use "Add to Home Screen" in the share menu to use it like an app
+- A static site with no build step. Nothing runs on a server
+- The UI is available in English, Japanese and Simplified Chinese. It follows the browser language and can be changed in settings
 
-- 左の一覧で翻訳セッションを複数持てます（新規作成・切り替え・名前変更・削除）。スマホでは ☰ から開きます
-- 文字起こしと訳文はブラウザ内（IndexedDB）に自動保存され、リロードしたり閉じたりしても残ります
-- 音声も録音して保存します（設定でオフにできます。1時間で約15MB）
-- ⤓ から、タイムライン付きの文字起こし（テキスト / Markdown の表 / CSV / 字幕 SRT、原文と訳文・原文のみ・訳文のみ）と録音をダウンロードできます
-- データはその端末のそのブラウザにしかありません。別の端末とは同期されず、ブラウザのサイトデータを消すと失われます。
-  iPhone の Safari は長期間使わないサイトのデータを消すことがあるので、残したい記録はダウンロードしてください
+## Sessions and storage
 
-## 仕組み
+- The list on the left holds multiple translation sessions (create, switch, rename, delete). On a phone, open it from ☰
+- Transcripts and translations are saved automatically in the browser (IndexedDB) and survive a reload or closing the page
+- The audio is recorded and saved as well (can be turned off in settings; about 15 MB per hour)
+- From ⤓ you can download the transcript with a timeline (text / Markdown table / CSV / SRT subtitles; source and translation, source only, or translation only) and the recordings
+- The data exists only in that browser on that device. It is not synced to other devices and is lost if you clear the browser's site data.
+  Safari on iPhone may delete data of sites that have not been used for a long time, so download any records you want to keep
 
-| 役割 | 使用モデル |
+## How it works
+
+| Role | Model |
 | --- | --- |
-| 文字起こし（途中経過つきストリーミング） | Gemini Live API `gemini-3.5-transcribe-live` |
-| 翻訳（ストリーミング） | `gemini-3.5-flash-lite`（設定で変更可） |
+| Transcription (streaming with interim results) | Gemini Live API `gemini-3.5-transcribe-live` |
+| Translation (streaming) | `gemini-3.5-flash-lite` (can be changed in settings) |
 
-ブラウザから Google の API に直接つなぎます。APIキーは端末のブラウザ（localStorage）にだけ保存されます。
+The browser connects directly to Google's API. The API key is stored only in the browser on your device (localStorage).
 
-## 使い方
+## Usage
 
-1. [Google AI Studio](https://aistudio.google.com/apikey) で Gemini APIキーを発行する
-2. 起動する
+1. Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/apikey)
+2. Start the app
 
    ```sh
    npm start        # http://localhost:5173
    ```
 
-3. 右上の ⚙ から APIキーを入力して保存し、「翻訳開始」
+3. Open ⚙ at the top right, enter the API key, save, and press "Start translating"
 
-`http://localhost:5173/?mock=1` を開くと、APIキーなしで画面の動きだけ確認できるデモモードになります。
+Open `http://localhost:5173/?mock=1` for a demo mode that shows how the screen behaves without an API key.
 
-### iPhone や他の PC で使う
+### Using it on an iPhone or another PC
 
-マイクは HTTPS（または localhost）でしか使えないため、このフォルダをそのまま HTTPS の静的ホスティング
-（Firebase Hosting、Cloudflare Pages、GitHub Pages など）に置いてください。
+The microphone only works over HTTPS (or on localhost), so put this folder as-is on an HTTPS static host
+(Firebase Hosting, Cloudflare Pages, GitHub Pages, etc.).
 
-### 字幕を他のアプリの上に重ねる
+### Showing captions on top of other apps
 
-PC の Chrome / Edge では、右上の ⧉ を押すと字幕欄が「常に最前面」の小さなウィンドウに移ります。
-Zoom やスライドの上に置いて、大きさと位置を自由に変えられます。閉じると元の画面に戻ります。
-Safari と iPhone には対応していません。
+In Chrome / Edge on a PC, press ⧉ at the top right to move the caption area into a small "always on top" window.
+You can place it over Zoom or slides and resize and move it freely. Closing it puts the captions back on the main screen.
+Safari and iPhone are not supported.
 
-### オンライン会議で使う
+### Using it in online meetings
 
-ビルド済みの zip は GitHub の [Releases](../../releases) にあります。`main` にアプリの変更が入るたびに、
-Mac（Apple シリコン / Intel）と Windows 用が自動でビルドされ、新しいバージョンとして公開されます。
+Prebuilt zips are on GitHub [Releases](../../releases). Each time app changes land on `main`,
+builds for Mac (Apple silicon / Intel) and Windows are made automatically and published as a new version.
 
-音声入力で「PC音声」または「マイク＋PC音声」を選び、共有ダイアログで会議のタブ（または画面全体）を選んで
-**音声の共有をオン**にします。「マイク＋PC音声」ではスピーカーの音をマイクが拾って二重になるため、イヤホン推奨です。
+For the audio input, choose "PC audio" or "Microphone + PC audio", pick the meeting tab (or the entire screen) in the sharing dialog and
+**turn on audio sharing**. With "Microphone + PC audio" the microphone picks up the speakers and the audio is doubled, so earphones are recommended.
 
-## デスクトップアプリ（macOS / Windows）
+## Desktop app (macOS / Windows)
 
-同じコードを Electron で包んだデスクトップ版もあります。APIキーはアプリ内（localStorage）に保存されます。
-ブラウザ版との違いは次の2つです。
+There is also a desktop version that wraps the same code in Electron. The API key is stored inside the app (localStorage).
+It differs from the browser version in two ways:
 
-- 「PC音声」で共有ダイアログが出ず、PC で鳴っている音をそのまま取り込みます
-- ⧉ の字幕ウィンドウが背景の透けた枠なしのウィンドウになり、全画面のスライドや会議アプリの上にも重なります。
-  字幕の部分をドラッグすると動かせ、右上の × で閉じます
-
-```sh
-npm install
-npm run app        # 開発用に起動
-npm run dist:mac   # dist/ に macOS 用 zip（Apple Silicon / Intel）
-npm run dist:win   # dist/ に Windows 用 zip（x64）
-```
-
-GitHub の Actions で「desktop」ワークフローを手動実行するか `v*` のタグを push すると、両方の zip がアーティファクトとして作られます。
-
-### macOS の PC音声
-
-macOS 13 以降で使えます（マイクはそれより前の macOS でも使えます）。
-システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Twinscript を許可しておく必要があります。
-許可がないまま開始すると、その旨を案内して停止します。許可したらアプリを開き直してください。
-開発用に `npm run app` や `npm run dist:mac` を実行すると、PC音声の取り込み部分も Swift（Xcode のコマンドラインツール）でビルドされます。
-
-### 受け取った zip の開き方
-
-署名・公証をしていないため、初回だけ OS の警告を回避する必要があります。
-
-- macOS: zip を展開して「Twinscript.app」をアプリケーションフォルダに移して開きます。
-  初回は「"Twinscript" Not Opened（開けませんでした）」と表示されます。ゴミ箱には入れず「完了（Done）」を押し、
-  システム設定 → プライバシーとセキュリティ を下までスクロールして「このまま開く（Open Anyway）」を押すと、次から普通に開けます。
-  ターミナルで `xattr -dr com.apple.quarantine "/Applications/Twinscript.app"` を実行しても同じです
-- Windows: zip を右クリック →「すべて展開」し、フォルダ内の「Twinscript.exe」を実行します。
-  「Windows によって PC が保護されました」と出たら「詳細情報」→「実行」を押します
-
-macOS で「PC音声」を使うには、システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で
-Twinscript を許可し、アプリを開き直します（macOS 13 以降）。
-
-アプリを作り直して差し替えると、macOS ではマイクや画面収録の許可を求め直されることがあります。
-
-## 料金
-
-- 無料枠: どちらのモデルも無料枠で動きます。ただしレート制限があり、送信内容が Google の製品改善に使われます
-- 有料枠（Google Cloud の課金に紐づけたキー）: 文字起こしが約 $0.009/分（1時間で約 $0.54）＋翻訳の少額のトークン料金。
-  送信内容は学習に使われません。社外秘の会議では有料枠を使ってください
-
-## 制限
-
-- 文字起こしセッションは最長10分のため、裏で新しい接続に自動で切り替えています（切り替えは発話の切れ目で行います）
-- 話者の識別（誰が話したか）はできません
-- 録音ファイル（WebM / iPhone は M4A）は再生時間の情報を持たないため、プレーヤーによってはシークできません
-- 無料枠でレート制限に当たると、途中経過の翻訳を1分間止め、確定した文の翻訳だけ続けます
-
-## テスト
+- "PC audio" captures what is playing on the PC directly, without a sharing dialog
+- The ⧉ caption window is a frameless window with a transparent background that also stays on top of full-screen slides and meeting apps.
+  Drag the captions to move it and close it with × at the top right
 
 ```sh
 npm install
-npm test          # 単体テスト（区切りロジック・文字起こし接続・翻訳）。依存なしで動きます
-npm run test:e2e  # ブラウザでの通しテスト。インストール済みの Chrome と偽マイクを使います
-npm run test:app  # デスクトップアプリの起動確認。実際にウィンドウが開くので画面のある PC で実行します
+npm run app        # start for development
+npm run dist:mac   # macOS zip in dist/ (Apple Silicon / Intel)
+npm run dist:win   # Windows zip in dist/ (x64)
 ```
 
-どちらも Gemini の API は模擬しているので、APIキーは不要です。
 
-## ライセンス
+### PC audio on macOS
+
+Available on macOS 13 or later (the microphone also works on earlier versions of macOS).
+Twinscript must be allowed in System Settings → Privacy & Security → "Screen & System Audio Recording".
+If you start without that permission, the app explains it and stops. After allowing it, reopen the app.
+Running `npm run app` or `npm run dist:mac` for development also builds the PC audio capture part in Swift (Xcode command line tools).
+
+### Opening a downloaded zip
+
+The app is not signed or notarized, so you need to get past an OS warning the first time.
+
+- macOS: unzip it, move "Twinscript.app" to the Applications folder and open it.
+  The first time, it shows "\"Twinscript\" Not Opened". Do not move it to the Trash; press "Done",
+  then scroll to the bottom of System Settings → Privacy & Security and press "Open Anyway". After that it opens normally.
+  Running `xattr -dr com.apple.quarantine "/Applications/Twinscript.app"` in Terminal does the same
+- Windows: right-click the zip → "Extract All" and run "Twinscript.exe" in the folder.
+  If "Windows protected your PC" appears, press "More info" → "Run anyway"
+
+To use "PC audio" on macOS, allow Twinscript in System Settings → Privacy & Security → "Screen & System Audio Recording"
+and reopen the app (macOS 13 or later).
+
+If you rebuild and replace the app, macOS may ask for microphone and screen recording permission again.
+
+## Pricing
+
+- Free tier: both models work on the free tier. It is rate-limited, however, and what you send is used to improve Google's products
+- Paid tier (a key linked to Google Cloud billing): transcription costs about $0.009/minute (about $0.54 per hour) plus a small token fee for translation.
+  What you send is not used for training. Use the paid tier for confidential meetings
+
+## Limitations
+
+- A transcription session lasts at most 10 minutes, so the app switches to a new connection in the background (at a pause in speech)
+- It cannot tell speakers apart (who said what)
+- Recordings (WebM, or M4A on iPhone) carry no duration information, so some players cannot seek in them
+- When the free tier hits its rate limit, translation of sentences in progress pauses for 1 minute and only finished sentences are translated
+
+## Tests
+
+```sh
+npm install
+npm test          # unit tests (segmentation logic, transcription connection, translation). No dependencies needed
+npm run test:e2e  # end-to-end tests in a browser, using the installed Chrome and a fake microphone
+npm run test:app  # desktop app smoke test. It opens real windows, so run it on a PC with a display
+```
+
+The Gemini API is mocked in both, so no API key is needed.
+
+## License
 
 [MIT](LICENSE)

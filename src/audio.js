@@ -1,6 +1,7 @@
 // Captures microphone and/or system (tab / screen share) audio and delivers
 // base64 16 kHz PCM chunks. In the macOS desktop app, system audio comes from a native helper
 // through window.nativeSystemAudio (app/preload.js) instead of a screen share.
+import { MessageError } from './message-error.js';
 
 export const canCaptureSystemAudio = () =>
   !!navigator.mediaDevices?.getDisplayMedia && !/iPhone|iPad|Android/i.test(navigator.userAgent);
@@ -15,8 +16,6 @@ function toBase64(buffer) {
 }
 
 const NATIVE_RATE = 48000; // what the native helper delivers
-const PERMISSION_MESSAGE = 'PC音声を取り込む許可がありません。システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Twinscript を許可し、アプリを開き直してください。';
-const NATIVE_ERROR_MESSAGE = 'PC音声を取り込めませんでした。';
 
 // Whole Float32 samples from an ArrayBuffer or a typed array, copied so they can be transferred.
 function toFloat32(data) {
@@ -50,7 +49,7 @@ export class AudioCapture {
         this.streams.push(display);
         this.systemStream = display;
         if (!display.getAudioTracks().length) {
-          throw new Error('共有した画面/タブに音声が含まれていません。共有ダイアログで「音声も共有」をオンにしてください。');
+          throw new MessageError('error.noSharedAudio');
         }
         display.getVideoTracks().forEach((t) => { t.enabled = false; });
         display.getAudioTracks()[0].addEventListener('ended', () => this.onEnded?.());
@@ -120,12 +119,12 @@ export class AudioCapture {
     native.onEnd((reason) => {
       if (this.native !== native) return;
       this.stop();
-      this.onEnded?.(new Error(reason === 'permission' ? PERMISSION_MESSAGE : NATIVE_ERROR_MESSAGE));
+      this.onEnded?.(new MessageError(reason === 'permission' ? 'error.systemAudioPermission' : 'error.systemAudioFailed'));
     });
     try {
       await native.start();
     } catch {
-      throw new Error(NATIVE_ERROR_MESSAGE);
+      throw new MessageError('error.systemAudioFailed');
     }
   }
 

@@ -18,24 +18,32 @@ function srtTime(ms) {
   return `${formatElapsed(ms).replace(/^(\d+)/, (h) => pad(h))},${pad(Math.floor(ms % 1000), 3)}`;
 }
 
+// Words used in the header and the Markdown table; the app passes them in the UI language.
+// CSV column ids are machine-readable and stay English.
+export const DEFAULT_LABELS = {
+  title: 'Transcript', date: 'Date', languages: 'Languages', duration: 'Duration',
+  time: 'Time', source: 'Source', translation: 'Translation', separator: '   ',
+};
+
 // session: { title, createdAt, activeMs, langA, langB, segments: [{ elapsed, src, tgt }] }
-// options: { format: 'txt' | 'md' | 'csv' | 'srt', content: 'both' | 'src' | 'tgt', langLabel(code) }
+// options: { format: 'txt' | 'md' | 'csv' | 'srt', content: 'both' | 'src' | 'tgt', langLabel(code), labels }
 // Returns { text, ext, mime }.
-export function buildTranscript(session, { format = 'txt', content = 'both', langLabel = (c) => c } = {}) {
+export function buildTranscript(session, { format = 'txt', content = 'both', langLabel = (c) => c, labels } = {}) {
+  const L = { ...DEFAULT_LABELS, ...labels };
   const rows = session.segments
     .map((seg) => ({ time: seg.elapsed || 0, src: oneLine(seg.src), tgt: oneLine(seg.tgt) }))
     .filter((r) => (content === 'tgt' ? r.tgt : r.src));
   const lines = (r) => (content === 'src' ? [r.src] : content === 'tgt' ? [r.tgt] : [r.src, r.tgt].filter(Boolean));
-  const title = session.title || '文字起こし';
+  const title = session.title || L.title;
   const meta = [
-    `日時: ${formatDateTime(session.createdAt)}`,
-    `言語: ${langLabel(session.langA)} ⇄ ${langLabel(session.langB)}`,
-    `長さ: ${formatElapsed(session.activeMs || rows.at(-1)?.time || 0)}`,
+    `${L.date}: ${formatDateTime(session.createdAt)}`,
+    `${L.languages}: ${langLabel(session.langA)} ⇄ ${langLabel(session.langB)}`,
+    `${L.duration}: ${formatElapsed(session.activeMs || rows.at(-1)?.time || 0)}`,
   ];
 
   if (format === 'md') {
     const cell = (t) => t.replace(/\|/g, '\\|');
-    const head = content === 'both' ? ['時間', '原文', '訳文'] : ['時間', content === 'src' ? '原文' : '訳文'];
+    const head = content === 'both' ? [L.time, L.source, L.translation] : [L.time, content === 'src' ? L.source : L.translation];
     const body = rows.map((r) => {
       const cells = content === 'both' ? [r.src, r.tgt] : lines(r);
       return `| ${formatElapsed(r.time)} | ${cells.map(cell).join(' | ')} |`;
@@ -70,7 +78,7 @@ export function buildTranscript(session, { format = 'txt', content = 'both', lan
     const [first, ...rest] = lines(r);
     return [`[${formatElapsed(r.time)}] ${first}`, ...rest.map((t) => `${indent}→ ${t}`)].join('\n');
   });
-  const text = [title, meta.join('　'), '', body.join(content === 'both' ? '\n\n' : '\n'), ''].join('\n');
+  const text = [title, meta.join(L.separator), '', body.join(content === 'both' ? '\n\n' : '\n'), ''].join('\n');
   return { text, ext: 'txt', mime: 'text/plain' };
 }
 
