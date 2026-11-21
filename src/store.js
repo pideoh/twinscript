@@ -1,6 +1,6 @@
 // Persistence in IndexedDB: sessions (with their segments) and recorded audio chunks.
 
-const DB_NAME = 'realtime-translate';
+const DB_NAME = 'twinscript';
 let dbPromise;
 
 function open() {

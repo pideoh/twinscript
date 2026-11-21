@@ -20,5 +20,5 @@ for arch in arm64 x86_64; do
 done
 lipo -create -output "$OUT" "$OUT_DIR/system-audio-arm64" "$OUT_DIR/system-audio-x86_64"
 rm -f "$OUT_DIR/system-audio-arm64" "$OUT_DIR/system-audio-x86_64"
-codesign --force --sign - --identifier io.github.pideoh.realtime-translate.system-audio "$OUT"
+codesign --force --sign - --identifier io.github.pideoh.twinscript.system-audio "$OUT"
 echo "built $OUT"

@@ -1,11 +1,11 @@
 {
-  "name": "realtime-translate",
-  "productName": "Realtime Translate",
+  "name": "twinscript",
+  "productName": "Twinscript",
   "private": true,
   "license": "MIT",
   "version": "0.1.0",
   "description": "Real-time speech transcription and two-way translation for meetings (static web app / PWA)",
-  "author": "realtime-translate",
+  "author": "Hideo Sumi",
   "main": "app/main.js",
   "scripts": {
     "start": "python3 -m http.server 5173",
@@ -24,8 +24,8 @@
     "playwright-core": "^1.50.0"
   },
   "build": {
-    "appId": "io.github.pideoh.realtime-translate",
-    "productName": "Realtime Translate",
+    "appId": "io.github.pideoh.twinscript",
+    "productName": "Twinscript",
     "directories": { "output": "dist" },
     "files": [
       "app/**/*",
@@ -36,7 +36,7 @@
       "src/**/*",
       "package.json"
     ],
-    "artifactName": "realtime-translate-${version}-${os}-${arch}.${ext}",
+    "artifactName": "twinscript-${version}-${os}-${arch}.${ext}",
     "mac": {
       "target": "zip",
       "category": "public.app-category.productivity",

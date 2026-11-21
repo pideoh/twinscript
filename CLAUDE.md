@@ -1,4 +1,4 @@
-# realtime-translate
+# twinscript
 
 会議向けリアルタイム文字起こし＋双方向翻訳の静的 Web アプリ（PWA）。ビルドなし・サーバーなし。
 ブラウザが Gemini API に直接つなぐ。使い方と料金は README.md。

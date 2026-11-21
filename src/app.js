@@ -547,7 +547,7 @@ function watchSystemAudio(r) {
     clearInterval(r.systemWatch);
     const isMacApp = /Electron/.test(navigator.userAgent) && /Mac/.test(navigator.userAgent);
     toast(isMacApp
-      ? 'PC音声が届いていません。音を再生しても反応しない場合は、システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Realtime Translate を許可し、アプリを開き直してください。'
+      ? 'PC音声が届いていません。音を再生しても反応しない場合は、システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Twinscript を許可し、アプリを開き直してください。'
       : 'PC音声が届いていません。音を再生しても反応しない場合は、共有するときに音声の共有をオンにしたか確認してください。', 20000);
   }, 1000);
 }

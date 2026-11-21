@@ -6,12 +6,12 @@ import { helperPath, endReason, isSystemAudioCaller, createSampleFramer, EXIT_PE
 
 test('the helper is in Resources when packaged and in the build folder in development', () => {
   assert.equal(
-    helperPath({ packaged: true, resourcesPath: '/Applications/Realtime Translate.app/Contents/Resources', appRoot: '/x' }),
-    join('/Applications/Realtime Translate.app/Contents/Resources', 'system-audio'),
+    helperPath({ packaged: true, resourcesPath: '/Applications/Twinscript.app/Contents/Resources', appRoot: '/x' }),
+    join('/Applications/Twinscript.app/Contents/Resources', 'system-audio'),
   );
   assert.equal(
-    helperPath({ packaged: false, resourcesPath: '/electron/Resources', appRoot: '/src/realtime-translate' }),
-    join('/src/realtime-translate', 'native', 'mac', 'build', 'system-audio'),
+    helperPath({ packaged: false, resourcesPath: '/electron/Resources', appRoot: '/src/twinscript' }),
+    join('/src/twinscript', 'native', 'mac', 'build', 'system-audio'),
   );
 });
 

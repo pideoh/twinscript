@@ -134,7 +134,7 @@ function createMainWindow() {
     height: 760,
     minWidth: 360,
     minHeight: 420,
-    title: 'Realtime Translate',
+    title: 'Twinscript',
     backgroundColor: '#0b1120',
     webPreferences: {
       contextIsolation: true,

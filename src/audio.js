@@ -15,7 +15,7 @@ function toBase64(buffer) {
 }
 
 const NATIVE_RATE = 48000; // what the native helper delivers
-const PERMISSION_MESSAGE = 'PC音声を取り込む許可がありません。システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Realtime Translate を許可し、アプリを開き直してください。';
+const PERMISSION_MESSAGE = 'PC音声を取り込む許可がありません。システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Twinscript を許可し、アプリを開き直してください。';
 const NATIVE_ERROR_MESSAGE = 'PC音声を取り込めませんでした。';
 
 // Whole Float32 samples from an ArrayBuffer or a typed array, copied so they can be transferred.

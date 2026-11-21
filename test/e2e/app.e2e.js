@@ -514,7 +514,7 @@ test('the desktop app on macOS explains a missing Screen Recording permission an
   await mockGemini(page, []);
   await page.click('#toggle');
   await page.waitForFunction(() => document.getElementById('toast').textContent.includes('画面収録とシステムオーディオ録音'));
-  assert.match(await page.textContent('#toast'), /Realtime Translate を許可し、アプリを開き直してください/);
+  assert.match(await page.textContent('#toast'), /Twinscript を許可し、アプリを開き直してください/);
   assert.equal(await page.textContent('#toggle'), '翻訳開始');
   assert.equal(await page.textContent('#statusText'), '停止中');
   const calls = await page.evaluate(() => window.nativeCalls);

@@ -1,4 +1,4 @@
-# リアルタイム翻訳
+# Twinscript
 
 会議向けのリアルタイム文字起こし＋双方向翻訳 Web アプリ（PWA）。
 言語を2つ選んで「翻訳開始」を押すと、話された言語を自動判定して文字起こしし、もう一方の言語へ翻訳します。
@@ -78,7 +78,7 @@ GitHub の Actions で「desktop」ワークフローを手動実行するか `v
 ### macOS の PC音声
 
 macOS 13 以降で使えます（マイクはそれより前の macOS でも使えます）。
-システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Realtime Translate を許可しておく必要があります。
+システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Twinscript を許可しておく必要があります。
 許可がないまま開始すると、その旨を案内して停止します。許可したらアプリを開き直してください。
 開発用に `npm run app` や `npm run dist:mac` を実行すると、PC音声の取り込み部分も Swift（Xcode のコマンドラインツール）でビルドされます。
 
@@ -86,15 +86,15 @@ macOS 13 以降で使えます（マイクはそれより前の macOS でも使�
 
 署名・公証をしていないため、初回だけ OS の警告を回避する必要があります。
 
-- macOS: zip を展開して「Realtime Translate.app」をアプリケーションフォルダに移して開きます。
-  初回は「"Realtime Translate" Not Opened（開けませんでした）」と表示されます。ゴミ箱には入れず「完了（Done）」を押し、
+- macOS: zip を展開して「Twinscript.app」をアプリケーションフォルダに移して開きます。
+  初回は「"Twinscript" Not Opened（開けませんでした）」と表示されます。ゴミ箱には入れず「完了（Done）」を押し、
   システム設定 → プライバシーとセキュリティ を下までスクロールして「このまま開く（Open Anyway）」を押すと、次から普通に開けます。
-  ターミナルで `xattr -dr com.apple.quarantine "/Applications/Realtime Translate.app"` を実行しても同じです
-- Windows: zip を右クリック →「すべて展開」し、フォルダ内の「Realtime Translate.exe」を実行します。
+  ターミナルで `xattr -dr com.apple.quarantine "/Applications/Twinscript.app"` を実行しても同じです
+- Windows: zip を右クリック →「すべて展開」し、フォルダ内の「Twinscript.exe」を実行します。
   「Windows によって PC が保護されました」と出たら「詳細情報」→「実行」を押します
 
 macOS で「PC音声」を使うには、システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で
-Realtime Translate を許可し、アプリを開き直します（macOS 13 以降）。
+Twinscript を許可し、アプリを開き直します（macOS 13 以降）。
 
 アプリを作り直して差し替えると、macOS ではマイクや画面収録の許可を求め直されることがあります。
 
