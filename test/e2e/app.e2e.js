@@ -455,7 +455,7 @@ test('PC audio that is playing raises no warning', async () => {
 
 // Stands in for the macOS desktop app's preload (app/preload.js): a 440 Hz tone at 48 kHz, sent
 // in 20 ms chunks once started, or the helper ending with `endWith` shortly after it starts.
-function fakeNativeSystemAudio({ endWith }) {
+function fakeNativeSystemAudio({ endWith, amplitude = 0.5 }) {
   const calls = { start: 0, stop: 0, displayMedia: 0 };
   window.nativeCalls = calls;
   navigator.mediaDevices.getDisplayMedia = async () => { calls.displayMedia++; throw new Error('not expected'); };
@@ -469,7 +469,7 @@ function fakeNativeSystemAudio({ endWith }) {
       if (endWith) { setTimeout(() => onEnd?.(endWith), 200); return; }
       timer = setInterval(() => {
         const samples = new Float32Array(960);
-        for (let i = 0; i < samples.length; i++) samples[i] = 0.5 * Math.sin(2 * Math.PI * 440 * (phase++) / 48000);
+        for (let i = 0; i < samples.length; i++) samples[i] = amplitude * Math.sin(2 * Math.PI * 440 * (phase++) / 48000);
         onData?.(samples.buffer); // the real preload hands over an ArrayBuffer
       }, 20);
     },
@@ -520,5 +520,29 @@ test('the desktop app on macOS explains a missing Screen Recording permission an
   const calls = await page.evaluate(() => window.nativeCalls);
   assert.deepEqual(calls, { start: 1, stop: 1, displayMedia: 0 });
   assert.deepEqual(errors, []);
+  await close();
+});
+
+test('very quiet PC audio is brought up to a usable level before it is transcribed', async () => {
+  const { page, close } = await openApp('', { apiKey: 'test-key', source: 'system', record: false },
+    { script: fakeNativeSystemAudio, arg: { amplitude: 0.005 } }); // about -46 dBFS
+  const peaks = [];
+  await page.routeWebSocket(/generativelanguage/, (ws) => {
+    ws.onMessage((raw) => {
+      const msg = JSON.parse(raw);
+      if (msg.setup) ws.send(JSON.stringify({ setupComplete: {} }));
+      if (!msg.realtimeInput?.audio) return;
+      const pcm = Buffer.from(msg.realtimeInput.audio.data, 'base64');
+      let peak = 0;
+      for (let i = 0; i < pcm.length; i += 2) peak = Math.max(peak, Math.abs(pcm.readInt16LE(i)));
+      peaks.push(peak / 0x7fff);
+    });
+  });
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  await page.waitForTimeout(5000);
+  const settled = peaks.at(-1);
+  assert.ok(settled > 0.1 && settled < 0.3, `0.005 in should come out near 0.15–0.2, got ${settled}`);
+  await page.click('#toggle');
   await close();
 });

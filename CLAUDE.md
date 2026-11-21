@@ -12,6 +12,7 @@
 | `src/transcriber.js` | Gemini Live API (`gemini-3.5-transcribe-live`) の WebSocket、再接続、10分制限前の接続切り替え |
 | `src/translator.js` | `gemini-3.5-flash-lite` でのストリーミング翻訳 |
 | `src/audio.js`, `src/pcm-worklet.js` | マイク/タブ音声の取り込み、16kHz PCM 100ms チャンク化、録音用ミックス |
+| `src/auto-gain.js` | 小さい PC 音声を聞き取れる音量まで自動で上げる（マイクには掛けない）。純粋なクラス |
 | `src/recorder.js` | MediaRecorder で録音し 5 秒ごとにチャンクを渡す |
 | `src/store.js` | IndexedDB。`sessions`（文字起こし込み）と `audio`（録音チャンク） |
 | `src/exporter.js` | 文字起こしの書き出し（txt / md / csv / srt）。純粋関数 |

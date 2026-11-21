@@ -1,5 +1,8 @@
 // pcm-processor: downmixes to mono, resamples to 16 kHz and emits 100 ms chunks of 16-bit PCM.
 // pcm-feeder: plays mono Float32 chunks posted to its port (the desktop app's native PC audio).
+// auto-gain: raises quiet PC audio to a usable level.
+import { AutoGain } from './auto-gain.js';
+
 const TARGET_RATE = 16000;
 const CHUNK = 1600;
 
@@ -97,3 +100,27 @@ class PcmFeeder extends AudioWorkletProcessor {
 }
 
 registerProcessor('pcm-feeder', PcmFeeder);
+
+class AutoGainProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.gain = new AutoGain(sampleRate);
+    this.mono = new Float32Array(128);
+  }
+
+  process(inputs, outputs) {
+    const input = inputs[0];
+    const out = outputs[0][0];
+    if (!input.length) { out.fill(0); return true; }
+    if (this.mono.length !== out.length) this.mono = new Float32Array(out.length);
+    for (let i = 0; i < out.length; i++) {
+      let sum = 0;
+      for (let c = 0; c < input.length; c++) sum += input[c][i];
+      this.mono[i] = sum / input.length;
+    }
+    this.gain.process(this.mono, out);
+    return true;
+  }
+}
+
+registerProcessor('auto-gain', AutoGainProcessor);

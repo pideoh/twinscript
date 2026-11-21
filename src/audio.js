@@ -32,6 +32,7 @@ export class AudioCapture {
     this.onLevel = onLevel;
     this.onEnded = onEnded;
     this.streams = [];
+    this.gains = [];
     this.systemStream = this.systemProbe = null;
   }
 
@@ -77,8 +78,9 @@ export class AudioCapture {
       this.stream = mix.stream;
       for (const stream of this.streams) {
         const source = this.ctx.createMediaStreamSource(new MediaStream(stream.getAudioTracks()));
-        source.connect(this.node);
-        source.connect(mix);
+        const heard = stream === this.systemStream ? this.#levelled(source) : source;
+        heard.connect(this.node);
+        heard.connect(mix);
         if (stream === this.systemStream) {
           this.systemProbe = this.ctx.createAnalyser();
           this.systemProbe.fftSize = 2048;
@@ -103,8 +105,9 @@ export class AudioCapture {
       numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1],
     });
     this.feeder = feeder;
-    feeder.connect(this.node);
-    feeder.connect(mix);
+    const heard = this.#levelled(feeder);
+    heard.connect(this.node);
+    heard.connect(mix);
     this.systemProbe = this.ctx.createAnalyser();
     this.systemProbe.fftSize = 2048;
     feeder.connect(this.systemProbe);
@@ -124,6 +127,15 @@ export class AudioCapture {
     } catch {
       throw new Error(NATIVE_ERROR_MESSAGE);
     }
+  }
+
+  // PC audio can be very quiet (it follows the playing app's own volume), so its level is evened
+  // out before it is transcribed and recorded. The probe keeps measuring the raw signal.
+  #levelled(source) {
+    const gain = new AudioWorkletNode(this.ctx, 'auto-gain', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+    source.connect(gain);
+    this.gains.push(gain);
+    return gain;
   }
 
   // Peak level (0..1) of the system audio right now, or null when it is not being captured.
@@ -148,6 +160,8 @@ export class AudioCapture {
       native.stop()?.catch?.(() => {});
     }
     if (this.feeder) { this.feeder.disconnect(); this.feeder = null; }
+    this.gains.forEach((g) => g.disconnect());
+    this.gains = [];
     if (this.node) { this.node.port.onmessage = null; this.node.disconnect(); this.node = null; }
     if (this.ctx) { this.ctx.close().catch(() => {}); this.ctx = null; }
   }
