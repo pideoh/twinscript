@@ -4,7 +4,7 @@ export default {
 
   // sidebar and session list
   'sidebar.label': 'セッション',
-  'sidebar.newSession': '＋ 新しいセッション',
+  'sidebar.newSession': '新しいセッション',
   'session.when': '{date} ・ {duration}',
   'session.rename': '名前を変更',
   'session.delete': '削除',
@@ -29,7 +29,7 @@ export default {
   // transcript and caption zone
   'empty.main': '言語を2つ選んで「翻訳開始」を押してください。',
   'empty.sub': 'どちらの言語で話しても自動で判定し、もう一方の言語に翻訳します。',
-  'log.jump': '最新へ ↓',
+  'log.jump': '最新へ',
   'now.label': 'いま話している文',
   'now.head': 'いま',
   'now.empty': '翻訳を開始すると、ここに字幕が出ます',

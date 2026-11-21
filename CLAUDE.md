@@ -20,6 +20,7 @@ Electron desktop app. Usage and pricing are in README.md; contribution rules are
 | `src/mock.js` | Stand-in engines for the `?mock=1` demo |
 | `src/i18n.js` | Display-language resolution (`resolveLocale`), `t(key, params)`, applying `data-i18n*` to static HTML. Languages are registered only in its `LOCALES` array |
 | `src/locales/*.js` | Message catalogs (`en` is the reference and fallback, `ja`, `zh-Hans`). Dotted keys |
+| `src/icons.js` | Octicons (SVG) for buttons that are created at runtime |
 | `src/message-error.js` | Error carrying a message key and params; thrown by `audio.js`, `transcriber.js`, `translator.js` and translated by `app.js` |
 | `app/main.js` | Electron main process: serves the app from `app://rt/`, PC audio, caption overlay |
 | `app/policy.js` | Desktop rules (served files, navigation, `window.open`, permissions). Electron-free |
@@ -47,6 +48,13 @@ Electron desktop app. Usage and pricing are in README.md; contribution rules are
 - Some assumptions about the Gemini Live API are unverified against the real service (interim text is the whole utterance so far; one final result per utterance). Check the official documentation instead of guessing when a change depends on API behavior.
 - User-visible text goes through i18n (`t()` or `data-i18n*`; modules without UI throw `MessageError` with a message key). Add every new key to all files in `src/locales/` with the same placeholders; `test/i18n.test.js` checks this.
 - Code, comments and commit messages are in English.
+
+## Design
+
+- The visual reference is GitHub Primer (https://primer.style/product/). Components follow Primer's anatomy and sizes (Button / IconButton / Select / TextInput / Dialog / NavList / Banner / Label).
+- Tokens live only in the block at the top of `styles.css` (copied from `@primer/primitives` under Primer's token names; the version is in the comment there). All other CSS refers to them with `var(--…)`: no literal colors, spacing, radii or font sizes. The one exception is the translucent backdrop of the caption overlay.
+- Icons are 16px Octicons embedded as SVG (`aria-hidden="true"`, `fill="currentColor"`, with a translated `aria-label` on the button). Icons created at runtime come from `src/icons.js`. Do not use Unicode symbols as icons.
+- When you add a component or token from Primer, keep the versions in `THIRD-PARTY-NOTICES.md` in step.
 
 ## Releases
 

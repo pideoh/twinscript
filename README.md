@@ -131,3 +131,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). To report a security problem, see [SECUR
 ## License
 
 [MIT](LICENSE)
+
+The UI uses design tokens from Primer Primitives and icons from Octicons (both MIT, © GitHub Inc.); see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

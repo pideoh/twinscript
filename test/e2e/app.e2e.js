@@ -557,7 +557,29 @@ test('very quiet PC audio is brought up to a usable level before it is transcrib
 });
 
 // ---------- UI language ----------
-const optionText = (page, select, value) => page.locator(`${select} option[value="${value}"]`).textContent();
+test('icons are decorative Octicons and messages are inline banners with a variant', async () => {
+  const { page, errors, close } = await openApp('?mock=1', { uiLang: 'en' });
+  // Every icon-only button shows an SVG hidden from assistive tech and is named by its label.
+  const iconButtons = await page.locator('button.icon-btn').evaluateAll((bs) => bs.map((b) => ({
+    label: b.getAttribute('aria-label'), text: b.textContent.trim(), svg: b.querySelector('svg')?.getAttribute('aria-hidden'),
+  })));
+  assert.ok(iconButtons.length >= 6);
+  for (const b of iconButtons) assert.deepEqual([!!b.label, b.text, b.svg], [true, '', 'true'], JSON.stringify(b));
+  assert.equal(await page.textContent('#newSession'), 'New session');
+  assert.equal(await page.textContent('#jump'), 'Latest');
+  assert.equal(await page.getAttribute('#toast', 'data-variant'), 'info', 'the demo notice is informational');
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.querySelectorAll('#sessionList .session').length === 1);
+  const actions = await page.locator('#sessionList .act').evaluateAll((bs) => bs.map((b) => [b.title, b.textContent, !!b.querySelector('svg')]));
+  assert.deepEqual(actions, [['Rename', '', true], ['Delete', '', true]]);
+  await page.locator('#sessionList .open').click({ force: true });
+  await page.waitForFunction(() => document.getElementById('toast').dataset.variant === 'warning');
+  assert.equal(await page.textContent('#toast'), 'Stop translating before switching sessions');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+const optionText = (page, select, value) =>page.locator(`${select} option[value="${value}"]`).textContent();
 
 test('the UI follows the browser language: English by default', async () => {
   const { page, errors, close } = await openApp('', { uiLang: 'auto' });

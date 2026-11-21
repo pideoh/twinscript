@@ -5,7 +5,7 @@ export default {
 
   // sidebar and session list
   'sidebar.label': 'Sessions',
-  'sidebar.newSession': '＋ New session',
+  'sidebar.newSession': 'New session',
   'session.when': '{date} ・ {duration}',
   'session.rename': 'Rename',
   'session.delete': 'Delete',
@@ -30,7 +30,7 @@ export default {
   // transcript and caption zone
   'empty.main': 'Choose two languages and press "Start translating".',
   'empty.sub': 'Speak in either language. It is detected automatically and translated into the other one.',
-  'log.jump': 'Latest ↓',
+  'log.jump': 'Latest',
   'now.label': 'Sentence being spoken',
   'now.head': 'Now',
   'now.empty': 'Captions appear here once translation starts',

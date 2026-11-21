@@ -131,3 +131,5 @@ npm run test:app  # デスクトップアプリの起動確認。実際にウィ
 ## ライセンス
 
 [MIT](LICENSE)
+
+画面には Primer Primitives のデザイントークンと Octicons のアイコン（いずれも MIT、© GitHub Inc.）を使っています。[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) を参照してください。

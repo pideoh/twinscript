@@ -34,7 +34,9 @@
       "manifest.webmanifest",
       "icons/**/*",
       "src/**/*",
-      "package.json"
+      "package.json",
+      "LICENSE",
+      "THIRD-PARTY-NOTICES.md"
     ],
     "artifactName": "twinscript-${version}-${os}-${arch}.${ext}",
     "mac": {
