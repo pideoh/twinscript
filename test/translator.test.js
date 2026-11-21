@@ -143,7 +143,12 @@ test('speech in a third writing system is sent with the language to translate in
   );
   const tr = make();
   await tr.translate('但是我想我们这一批人,或者我们这一代人,有一个东西');
-  assert.match(calls[0].body.systemInstruction.parts[0].text, /is not in Japanese: translate it into Japanese\.$/);
+  const told = calls[0].body.systemInstruction.parts[0].text;
+  assert.match(told, /inside <text>\. Translate it into Japanese\.\n/);
+  assert.doesNotMatch(told, /English;|any other language/, 'no rules that could point elsewhere');
   await tr.translate('你好');
-  assert.doesNotMatch(calls[1].body.systemInstruction.parts[0].text, /in this request/);
+  assert.match(
+    calls[1].body.systemInstruction.parts[0].text,
+    /any other language, translate it into Japanese, never into English/,
+  );
 });
