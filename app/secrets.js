@@ -14,7 +14,8 @@ export const isSecretName = (name) => typeof name === 'string' && SECRET_NAMES.i
 // fs: readFile / writeFile / rename (node:fs/promises by default).
 //
 // get(name) -> { value, available }: value is '' when nothing usable is stored (no file, a corrupt
-//   file, a failed decryption, or encryption unavailable). Never throws for those.
+//   file, a failed decryption, or encryption unavailable). Never throws for those. With nothing
+//   stored the system is not asked, and available is true; set() reports the real state.
 // set(name, value) -> { persisted }: an empty value deletes the entry. When encryption is not
 //   available nothing is written to disk and persisted is false.
 // Both throw only for a name outside SECRET_NAMES or a value that is not a string.
@@ -51,9 +52,11 @@ export function createSecretStore({ file, encryption, fs = nodeFs }) {
 
   async function get(name) {
     check(name);
-    if (!available()) return { value: '', available: false };
+    // The file is read first: asking the system about encryption opens the Keychain on macOS,
+    // which can prompt, so it only happens once there is something to decrypt.
     const stored = (await readAll())[name];
     if (typeof stored !== 'string' || !stored) return { value: '', available: true };
+    if (!available()) return { value: '', available: false };
     try {
       return { value: String(encryption.decrypt(Buffer.from(stored, 'base64'))), available: true };
     } catch {

@@ -108,9 +108,27 @@ test('without OS encryption nothing is written and the key is reported as not pe
   const store = createSecretStore({ file, encryption });
   assert.deepEqual(await store.set('apiKey', 'k'), { persisted: false });
   assert.deepEqual(await store.set('apiKey', ''), { persisted: false });
-  assert.deepEqual(await store.get('apiKey'), { value: '', available: false });
   assert.equal(encrypted, 0);
   await assert.rejects(readFile(file), { code: 'ENOENT' });
+});
+
+test('with no saved key, starting the app does not touch the system keychain', async () => {
+  let asked = 0;
+  const touch = () => {
+    asked++;
+    return true;
+  };
+  const encryption = fakeEncryption({ isAvailable: touch, decrypt: touch, encrypt: touch });
+  const store = createSecretStore({ file: fileFor(), encryption });
+  assert.deepEqual(await store.get('apiKey'), { value: '', available: true });
+  assert.equal(asked, 0);
+});
+
+test('a saved key that can no longer be decrypted is reported as unavailable', async () => {
+  const file = fileFor();
+  await createSecretStore({ file, encryption: fakeEncryption() }).set('apiKey', 'k');
+  const store = createSecretStore({ file, encryption: fakeEncryption({ isAvailable: () => false }) });
+  assert.deepEqual(await store.get('apiKey'), { value: '', available: false });
 });
 
 test('a failed write or encryption reports the key as not persisted instead of throwing', async () => {
