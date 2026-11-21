@@ -106,6 +106,11 @@ test('runs the demo and moves the captions into an overlay window and back', asy
   assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'true');
   const onTop = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((w) => w.isAlwaysOnTop()));
   assert.deepEqual(onTop.sort(), [false, true], 'only the overlay floats on top');
+  if (process.platform === 'darwin') {
+    // Showing the overlay on every desktop must not turn the app into one without a Dock icon.
+    await page.waitForTimeout(500); // the Dock state changes after the window call returns
+    assert.equal(await app.evaluate(({ app }) => app.dock.isVisible()), true, 'the Dock icon stays');
+  }
 
   await Promise.all([overlay.waitForEvent('close'), overlay.click('.overlay-close')]);
   await page.locator('#now').waitFor({ state: 'attached' });
