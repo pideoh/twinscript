@@ -100,7 +100,7 @@ export default {
   'settings.apiKey.storage.page': 'キーはこのページを閉じるまでの間だけ保持されます。',
   'settings.apiKey.storage.none': 'この端末ではキーを保存できません。次回また入力が必要です。',
   'settings.running':
-    '翻訳中です。APIキー・翻訳モデル・整形・録音・用語集・訳し先の変更は、次に開始したときから反映されます。',
+    '翻訳中です。APIキー・翻訳モデル・整形・録音・用語集・用語と置き換え・訳し先の変更は、次に開始したときから反映されます。',
   'settings.model': '翻訳モデル',
   'settings.interim': '話している途中の文も翻訳する（リアルタイム重視）',
   'settings.smart': '文字起こしを整形する（フィラー除去。確定が少し遅くなることがあります）',
@@ -117,6 +117,10 @@ export default {
   'settings.interimInterval.value': '{s} 秒',
   'settings.glossary': '用語集・会議の背景（翻訳に反映されます）',
   'settings.glossary.placeholder': '例: 固有名詞、製品名、会議のテーマなど',
+  'settings.vocabulary': '用語と置き換え',
+  'settings.vocabulary.placeholder': 'Twinscript\nツインスクリプト => Twinscript',
+  'settings.vocabulary.help':
+    '1行に1つ。用語を書くと聞き取りやすくなります。「誤 => 正」の形で書くと、文字起こしの誤りを置き換えます。',
   'settings.fontSize': '文字サイズ',
   'settings.uiLang': '表示言語',
   'settings.uiLang.auto': '自動',

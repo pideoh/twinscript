@@ -96,6 +96,61 @@ test('SMART mode is requested when enabled', (t) => {
   tr.stop();
 });
 
+test('custom terms are sent to the recognizer', (t) => {
+  const { tr, sockets } = setup(t, { customVocabulary: ['Twinscript', 'Kubernetes'] });
+  sockets[0].open();
+  assert.deepEqual(sockets[0].sent[0].setup.inputAudioTranscription, {
+    languageCodes: ['ja-JP', 'en-US'],
+    customVocabulary: ['Twinscript', 'Kubernetes'],
+  });
+  tr.stop();
+});
+
+test('no term list is sent when the user gave no terms', (t) => {
+  const { tr, sockets } = setup(t, { customVocabulary: [] });
+  sockets[0].open();
+  assert.ok(!('customVocabulary' in sockets[0].sent[0].setup.inputAudioTranscription));
+  tr.stop();
+});
+
+test('if setup with custom terms is rejected, transcription continues once without them', (t) => {
+  const { tr, log, sockets } = setup(t, { customVocabulary: ['Twinscript'] });
+  sockets[0].open();
+  sockets[0].drop('Invalid argument', 1007);
+  assert.equal(sockets.length, 2);
+  sockets[1].open();
+  const first = sockets[1].sent[0].setup.inputAudioTranscription;
+  assert.ok(!('customVocabulary' in first), 'the terms are dropped first');
+  assert.deepEqual(first.languageCodes, ['ja-JP', 'en-US'], 'the language hint is kept');
+  sockets[1].drop('Invalid argument', 1007);
+  assert.equal(sockets.length, 3);
+  sockets[2].open();
+  assert.deepEqual(sockets[2].sent[0].setup.inputAudioTranscription, { languageCodes: [] }, 'then the language hint');
+  sockets[2].receive({ setupComplete: {} });
+  assert.deepEqual(log.errors, []);
+  assert.equal(log.state.at(-1), 'listening');
+  tr.stop();
+});
+
+test('custom terms do not delay the error for an invalid API key', (t) => {
+  const { log, sockets } = setup(t, { customVocabulary: ['Twinscript'] });
+  sockets[0].open();
+  sockets[0].drop('API key not valid. Please pass a valid API key.', 1007);
+  assert.equal(sockets.length, 1);
+  assert.equal(log.errors[0].key, 'error.connectFailed');
+});
+
+test('custom terms are kept when a working session reconnects', (t) => {
+  const { tr, sockets, tick } = setup(t, { customVocabulary: ['Twinscript'] });
+  sockets[0].open();
+  sockets[0].receive({ setupComplete: {} });
+  sockets[0].drop();
+  tick(500);
+  sockets[1].open();
+  assert.deepEqual(sockets[1].sent[0].setup.inputAudioTranscription.customVocabulary, ['Twinscript']);
+  tr.stop();
+});
+
 test('delivers interim and final text, from text or binary frames', (t) => {
   const { tr, log, sockets } = setup(t);
   const ws = sockets[0];

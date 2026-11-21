@@ -118,7 +118,7 @@
         <button value="close" class="icon-btn" title="Close" aria-label="Close" data-i18n-title="export.close" data-i18n-aria-label="export.close"><svg class="octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg></button>
       </header>
       <div class="dialog-body">
-        <small id="settingsRunning" class="banner" data-variant="info" data-i18n="settings.running" hidden>Translation is running. Changes to the API key, translation model, cleanup, recording, glossary and target language take effect the next time you start.</small>
+        <small id="settingsRunning" class="banner" data-variant="info" data-i18n="settings.running" hidden>Translation is running. Changes to the API key, translation model, cleanup, recording, glossary, terms and corrections, and target language take effect the next time you start.</small>
         <label class="form-control"><span class="form-label" data-i18n="settings.apiKey">Gemini API key</span>
           <input id="apiKey" class="text-input" type="password" autocomplete="off" placeholder="AIza...">
           <small class="caption"><span data-i18n="settings.apiKey.helpBefore">Get one for free at </span><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a><span data-i18n="settings.apiKey.helpAfter">. </span><span id="apiKeyStorage"></span></small>
@@ -140,6 +140,10 @@
         </label>
         <label class="form-control"><span class="form-label" data-i18n="settings.glossary">Glossary and meeting background (used in translation)</span>
           <textarea id="glossary" class="text-input" rows="3" placeholder="e.g. proper nouns, product names, meeting topic" data-i18n-placeholder="settings.glossary.placeholder"></textarea>
+        </label>
+        <label class="form-control"><span class="form-label" data-i18n="settings.vocabulary">Terms and corrections</span>
+          <textarea id="vocabulary" class="text-input" rows="3" spellcheck="false" placeholder="Twinscript&#10;twin script => Twinscript" data-i18n-placeholder="settings.vocabulary.placeholder"></textarea>
+          <small class="caption" data-i18n="settings.vocabulary.help">One per line. A term helps the recognizer catch it; a line like “wrong => right” corrects the transcript.</small>
         </label>
         <label class="form-control"><span class="form-label" data-i18n="settings.fontSize">Text size</span>
           <input id="fontSize" type="range" min="14" max="30" step="1">

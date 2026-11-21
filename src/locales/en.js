@@ -101,7 +101,7 @@ export default {
   'settings.apiKey.storage.page': 'The key is kept only until this page is closed.',
   'settings.apiKey.storage.none': 'The key cannot be saved on this device; you will be asked for it again next time.',
   'settings.running':
-    'Translation is running. Changes to the API key, translation model, cleanup, recording, glossary and target language take effect the next time you start.',
+    'Translation is running. Changes to the API key, translation model, cleanup, recording, glossary, terms and corrections, and target language take effect the next time you start.',
   'settings.model': 'Translation model',
   'settings.interim': 'Translate sentences while they are being spoken (favors real-time)',
   'settings.smart': 'Clean up the transcript (removes fillers; sentences may take a little longer to finalize)',
@@ -120,6 +120,10 @@ export default {
   'settings.interimInterval.value': '{s} s',
   'settings.glossary': 'Glossary and meeting background (used in translation)',
   'settings.glossary.placeholder': 'e.g. proper nouns, product names, meeting topic',
+  'settings.vocabulary': 'Terms and corrections',
+  'settings.vocabulary.placeholder': 'Twinscript\ntwin script => Twinscript',
+  'settings.vocabulary.help':
+    'One per line. A term helps the recognizer catch it; a line like “wrong => right” corrects the transcript.',
   'settings.fontSize': 'Text size',
   'settings.uiLang': 'Display language',
   'settings.uiLang.auto': 'Auto',
