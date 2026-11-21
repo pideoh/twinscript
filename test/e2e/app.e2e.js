@@ -37,6 +37,8 @@ async function openApp(query = '', settings, init, { locale = 'en-US' } = {}) {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  // A blocked script, style or request shows up as a console error; treat it like a page error.
+  page.on('console', (m) => { if (m.type() === 'error' && /Content Security Policy/i.test(m.text())) errors.push(m.text()); });
   const stored = { uiLang: 'ja', ...settings };
   await context.addInitScript((s) => {
     try {
@@ -650,5 +652,26 @@ test('changing the display language in settings updates the screen at once and i
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('rt-settings')));
   assert.equal(stored.uiLang, 'zh-Hans');
   assert.deepEqual(errors, []);
+  await close();
+});
+
+test('the content security policy blocks requests to anywhere but the Gemini API', async () => {
+  const { page, errors, close } = await openApp('?mock=1');
+  const outcome = await page.evaluate(async () => {
+    const tryFetch = (url) => fetch(url).then(() => 'allowed', () => 'blocked');
+    const tryScript = () => new Promise((resolve) => {
+      const el = document.createElement('script');
+      el.src = 'https://example.com/x.js';
+      el.onload = () => resolve('allowed');
+      el.onerror = () => resolve('blocked');
+      document.head.append(el);
+    });
+    const inline = document.createElement('script');
+    inline.textContent = 'window.inlineRan = true';
+    document.head.append(inline);
+    return { elsewhere: await tryFetch('https://example.com/collect'), script: await tryScript(), inline: !!window.inlineRan };
+  });
+  assert.deepEqual(outcome, { elsewhere: 'blocked', script: 'blocked', inline: false });
+  assert.ok(errors.filter((e) => /Content Security Policy/i.test(e)).length >= 3, 'each attempt is reported');
   await close();
 });
