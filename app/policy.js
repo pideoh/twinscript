@@ -12,7 +12,6 @@ const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
-  '.webmanifest': 'application/manifest+json',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
 };
@@ -21,7 +20,6 @@ const TYPES = {
 const ALLOWED = [
   /^index\.html$/,
   /^styles\.css$/,
-  /^manifest\.webmanifest$/,
   /^icons\/[\w-][\w.-]*\.(svg|png)$/,
   /^src\/[\w-][\w.-]*\.js$/,
   /^src\/locales\/[\w-][\w.-]*\.js$/,

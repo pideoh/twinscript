@@ -11,7 +11,6 @@ test('serves the files the web app is made of, with their content types', () => 
   assert.deepEqual(resolveAppFile('app://rt/src/app.js'), { path: 'src/app.js', type: 'text/javascript; charset=utf-8' });
   assert.deepEqual(resolveAppFile('app://rt/src/pcm-worklet.js'), { path: 'src/pcm-worklet.js', type: 'text/javascript; charset=utf-8' });
   assert.deepEqual(resolveAppFile('app://rt/src/locales/zh-Hans.js'), { path: 'src/locales/zh-Hans.js', type: 'text/javascript; charset=utf-8' });
-  assert.deepEqual(resolveAppFile('app://rt/manifest.webmanifest'), { path: 'manifest.webmanifest', type: 'application/manifest+json' });
   assert.deepEqual(resolveAppFile('app://rt/icons/icon.svg'), { path: 'icons/icon.svg', type: 'image/svg+xml' });
   assert.deepEqual(resolveAppFile('app://rt/icons/icon-512.png#x'), { path: 'icons/icon-512.png', type: 'image/png' });
 });

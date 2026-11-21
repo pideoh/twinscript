@@ -31,7 +31,6 @@
       "app/**/*",
       "index.html",
       "styles.css",
-      "manifest.webmanifest",
       "icons/**/*",
       "src/**/*",
       "package.json",
