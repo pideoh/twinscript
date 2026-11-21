@@ -29,7 +29,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `app/system-audio.js` | PC audio helper rules (location, caller check, exit reasons, sample framing). Electron-free |
 | `native/mac/system-audio.swift`, `scripts/build-mac-helper.sh` | macOS PC audio helper (ScreenCaptureKit, 48 kHz mono Float32 on stdout) and its build, output in `native/mac/build/` |
 | `test/*.test.js` | Unit tests (`node:test`, no dependencies) |
-| `test/e2e/app.e2e.js` | Browser tests: Chrome, a fake microphone and mocked Gemini endpoints |
+| `test/e2e/*.e2e.js`, `test/e2e/helpers.js` | Browser tests: Chrome, a fake microphone and mocked Gemini endpoints. Split into files by topic so they run in parallel; shared setup is in `helpers.js` |
 | `test/app/desktop.app.js` | Desktop smoke tests (need a display, so not run in CI) |
 | `.github/workflows/release.yml`, `scripts/next-version.js` | Build the zips, pick the next version and publish a GitHub Release when the app changes on `main` |
 
