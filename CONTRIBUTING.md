@@ -28,7 +28,7 @@ npm run test:app   # desktop smoke tests (opens windows)
 
 ## Commit messages decide the release version
 
-Every change to the app that lands on `main` is released automatically. The version bump is derived
+Every change to the app that lands on `main` is released automatically (changes to tests, docs, workflows and development tools are not). The version bump is derived
 from the commit subjects since the last release:
 
 | Bump | When | Example |

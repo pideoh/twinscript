@@ -32,7 +32,7 @@ The app is not signed or notarized, so the operating system warns the first time
 - **Windows**: right-click the zip → "Extract All" and run "Twinscript.exe" in the folder.
   If "Windows protected your PC" appears, press "More info" → "Run anyway".
 
-Each release also has a `SHA256SUMS.txt` to check the download against.
+Each release also has a `SHA256SUMS.txt` to check the download against. See the [code signing policy](docs/code-signing-policy.md) for the state of signing.
 
 ## Get started
 
