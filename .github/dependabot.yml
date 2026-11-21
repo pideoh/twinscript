@@ -3,11 +3,23 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
+    # Only versions that have been out for a week: time for a bad release to be noticed and pulled.
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
+    cooldown:
+      default-days: 7
     groups:
-      dev-dependencies:
-        patterns: ["*"]
+      # Checking and testing tools: not part of the app that is shipped. Merged automatically
+      # (see dependabot-automerge.yml). Everything else, i.e. Electron and electron-builder,
+      # gets its own pull request and is merged by a person after trying the app.
+      tools:
+        patterns: ["@biomejs/biome", "playwright-core", "axe-core"]

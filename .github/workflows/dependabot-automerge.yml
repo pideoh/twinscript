@@ -1,0 +1,35 @@
+# Lets Dependabot's low-risk updates merge by themselves once the required checks pass:
+# GitHub Actions versions and the checking / testing tools, minor and patch versions only.
+# Electron and electron-builder end up in the shipped app (or build it) and are left to a person.
+name: dependabot-automerge
+on: pull_request
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  automerge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dependabot/fetch-metadata@v3
+        id: meta
+      - name: Enable auto-merge for low-risk updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          ECOSYSTEM: ${{ steps.meta.outputs.package-ecosystem }}
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          NAMES: ${{ steps.meta.outputs.dependency-names }}
+        run: |
+          if [ "$UPDATE_TYPE" = "version-update:semver-major" ]; then
+            echo "Major update: left for a person."; exit 0
+          fi
+          if [ "$ECOSYSTEM" != "github_actions" ]; then
+            for name in $(echo "$NAMES" | tr ',' ' '); do
+              case "$name" in
+                @biomejs/biome|playwright-core|axe-core) ;;
+                *) echo "$name is not a tool that merges automatically: left for a person."; exit 0 ;;
+              esac
+            done
+          fi
+          gh pr merge --auto --squash "$PR_URL"

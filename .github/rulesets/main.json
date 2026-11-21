@@ -2,11 +2,20 @@
   "name": "main",
   "target": "branch",
   "enforcement": "active",
-  "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
+  "conditions": {
+    "ref_name": {
+      "include": ["~DEFAULT_BRANCH"],
+      "exclude": []
+    }
+  },
   "bypass_actors": [],
   "rules": [
-    { "type": "deletion" },
-    { "type": "non_fast_forward" },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
     {
       "type": "pull_request",
       "parameters": {
@@ -21,7 +30,20 @@
       "type": "required_status_checks",
       "parameters": {
         "strict_required_status_checks_policy": false,
-        "required_status_checks": [{ "context": "test" }]
+        "required_status_checks": [
+          {
+            "context": "test"
+          },
+          {
+            "context": "unit-other-os (macos-latest)"
+          },
+          {
+            "context": "unit-other-os (windows-latest)"
+          },
+          {
+            "context": "analyze"
+          }
+        ]
       }
     }
   ]
