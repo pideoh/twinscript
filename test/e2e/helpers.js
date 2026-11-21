@@ -153,42 +153,34 @@ export const translated = (page, count) =>
   );
 export const saved = (page) => page.waitForTimeout(500); // saves are debounced by 250 ms
 
-// Stands in for the macOS desktop app's preload (app/preload.js): a 440 Hz tone at 48 kHz, sent
-// in 20 ms chunks once started, or the helper ending with `endWith` shortly after it starts.
-export function fakeNativeSystemAudio({ endWith, amplitude = 0.5 }) {
-  const calls = { start: 0, stop: 0, displayMedia: 0 };
-  window.nativeCalls = calls;
-  navigator.mediaDevices.getDisplayMedia = async () => {
-    calls.displayMedia++;
-    throw new Error('not expected');
+// Stands in for sharing PC audio: getDisplayMedia gives a 440 Hz tone at `amplitude`, and the
+// constraints the page asked for are kept in window.displayMediaCalls. `desktopApp` ('mac' or
+// 'win') makes the page see the desktop app's user agent. `endAfterMs` ends the audio track on its
+// own after that long, which is what the macOS app sees without the "System Audio Recording" permission.
+export function fakeDisplayMedia({ amplitude = 0.5, endAfterMs, desktopApp } = {}) {
+  if (window !== top) return;
+  const AGENTS = {
+    mac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) twinscript/1.0.0 Chrome/140.0.0.0 Electron/45.4.1 Safari/537.36',
+    win: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) twinscript/1.0.0 Chrome/140.0.0.0 Electron/45.4.1 Safari/537.36',
   };
-  let onData = null;
-  let onEnd = null;
-  let timer = null;
-  let phase = 0;
-  window.nativeSystemAudio = {
-    start: async () => {
-      calls.start++;
-      if (endWith) {
-        setTimeout(() => onEnd?.(endWith), 200);
-        return;
-      }
-      timer = setInterval(() => {
-        const samples = new Float32Array(960);
-        for (let i = 0; i < samples.length; i++)
-          samples[i] = amplitude * Math.sin((2 * Math.PI * 440 * phase++) / 48000);
-        onData?.(samples.buffer); // the real preload hands over an ArrayBuffer
-      }, 20);
-    },
-    stop: async () => {
-      calls.stop++;
-      clearInterval(timer);
-    },
-    onData: (cb) => {
-      onData = cb;
-    },
-    onEnd: (cb) => {
-      onEnd = cb;
-    },
+  if (desktopApp) Object.defineProperty(Navigator.prototype, 'userAgent', { get: () => AGENTS[desktopApp] });
+  window.displayMediaCalls = [];
+  navigator.mediaDevices.getDisplayMedia = async (constraints) => {
+    window.displayMediaCalls.push(constraints);
+    const ctx = new AudioContext();
+    const out = ctx.createMediaStreamDestination();
+    const tone = ctx.createOscillator();
+    const level = ctx.createGain();
+    level.gain.value = amplitude;
+    tone.connect(level).connect(out);
+    tone.start();
+    const [track] = out.stream.getAudioTracks();
+    if (endAfterMs !== undefined) {
+      setTimeout(() => {
+        track.stop(); // stopping it here does not fire 'ended', so that is done by hand
+        track.dispatchEvent(new Event('ended'));
+      }, endAfterMs);
+    }
+    return new MediaStream([track]);
   };
 }

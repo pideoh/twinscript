@@ -27,12 +27,10 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/icons.js` | Octicons (SVG) for buttons that are created at runtime |
 | `src/message-error.js` | Error carrying a message key and params; thrown by `audio.js`, `transcriber.js`, `translator.js` and translated by `app.js` |
 | `app/main.js` | Electron main process: serves the app from `app://rt/`, PC audio, caption overlay |
-| `app/policy.js` | Desktop rules (served files, navigation, `window.open`, permissions). Electron-free |
-| `app/preload.js` | The page's only bridge to the main process: `window.secretStore`, `window.captionOverlay` (click-through), `window.appShortcuts` (global shortcuts) and, on macOS, `window.nativeSystemAudio` |
+| `app/policy.js` | Desktop rules (served files, navigation, `window.open`, permissions, IPC caller check, what a screen-share request gets per platform). Electron-free |
+| `app/preload.js` | The page's only bridge to the main process: `window.secretStore`, `window.captionOverlay` (click-through) and `window.appShortcuts` (global shortcuts) |
 | `app/shortcuts.js` | Global shortcut table, platform labels and registration status. Electron-free |
 | `app/secrets.js` | Desktop secret store: `safeStorage` ciphertext in `userData/secrets.json`, allowlisted names. Electron-free |
-| `app/system-audio.js` | PC audio helper rules (location, caller check, exit reasons, sample framing). Electron-free |
-| `native/mac/system-audio.swift`, `scripts/build-mac-helper.sh` | macOS PC audio helper (ScreenCaptureKit, 48 kHz mono Float32 on stdout) and its build, output in `native/mac/build/` |
 | `test/*.test.js` | Unit tests (`node:test`, no dependencies) |
 | `test/e2e/*.e2e.js`, `test/e2e/helpers.js` | Browser tests: Chrome, a fake microphone and mocked Gemini endpoints. Split into files by topic so they run in parallel; shared setup is in `helpers.js` |
 | `test/app/desktop.app.js` | Desktop smoke tests (need a display, so not run in CI) |
@@ -46,7 +44,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 - `npm run test:e2e`: only when `src/app.js`, `src/audio.js`, HTML or CSS changed.
 - `npm start`: http://localhost:5173 (`?mock=1` for a demo without a key, `?debug=1` to log raw recognizer output).
 - `npm run app`: start the desktop app. `npm run test:app` only when `app/` or the caption window changed.
-- `npm run dist:mac` / `npm run dist:win`: build zips into `dist/` (`dist:mac`, and `npm run app` on macOS, also build the Swift helper).
+- `npm run dist:mac` / `npm run dist:win`: build zips into `dist/`.
 
 ## Rules
 
@@ -67,7 +65,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 ## Releases
 
 A change on `main` is built and published automatically when it changes what users download: the app's
-own files (`app/`, `src/`, `native/`, `icons/`, `index.html`, `styles.css`), Electron or electron-builder,
+own files (`app/`, `src/`, `icons/`, `index.html`, `styles.css`), Electron or electron-builder,
 or the build configuration in `package.json`. `scripts/release-needed.js` decides this; updates to checking
 and testing tools, workflows, tests and docs do not publish a version. The version bump comes from the
 commit subjects since the last release; the table is in CONTRIBUTING.md. In short: start a subject with

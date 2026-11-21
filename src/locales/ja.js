@@ -159,7 +159,7 @@ export default {
   'toast.audioEnded': '音声入力が終了しました',
   'toast.permissionNeeded': 'マイク/画面共有の許可が必要です。ブラウザの設定を確認してください。',
   'toast.systemAudioSilentMac':
-    'PC音声が届いていません。音を再生しても反応しない場合は、システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Twinscript を許可し、アプリを開き直してください。',
+    'PC音声が届いていません。音を再生しても反応しない場合は、システム設定 → プライバシーとセキュリティ → 画面収録とシステムオーディオ録音 →「システムオーディオ録音のみ」で Twinscript を許可し、アプリを開き直してください。PC音声には macOS 14.2 以降が必要です。',
   'toast.systemAudioSilent':
     'PC音声が届いていません。音を再生しても反応しない場合は、共有するときに音声の共有をオンにしたか確認してください。',
   'toast.recordSaveFailed': '録音を保存できませんでした（空き容量を確認してください）',
@@ -174,8 +174,7 @@ export default {
   'error.noSharedAudio':
     '共有した画面/タブに音声が含まれていません。共有ダイアログで「音声も共有」をオンにしてください。',
   'error.systemAudioPermission':
-    'PC音声を取り込む許可がありません。システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Twinscript を許可し、アプリを開き直してください。',
-  'error.systemAudioFailed': 'PC音声を取り込めませんでした。',
+    'PC音声が止まりました。システム設定 → プライバシーとセキュリティ → 画面収録とシステムオーディオ録音 →「システムオーディオ録音のみ」で Twinscript を許可し、アプリを開き直してください。PC音声には macOS 14.2 以降が必要です。',
   'error.connectFailed': '接続できませんでした: {reason}',
   'error.disconnected': '接続が切れました: {reason}',
   'error.disconnectedCode': '接続が切れました（コード {code}）',

@@ -157,7 +157,7 @@ export default {
   'toast.audioEnded': '音频输入已结束',
   'toast.permissionNeeded': '需要麦克风或屏幕共享权限。请检查浏览器设置。',
   'toast.systemAudioSilentMac':
-    '没有收到电脑音频。如果播放声音时仍无反应，请在 系统设置 → 隐私与安全性 →“录屏与系统录音”中允许 Twinscript，然后重新打开应用。',
+    '没有收到电脑音频。如果播放声音时仍无反应，请在 系统设置 → 隐私与安全性 → 录屏与系统录音 →“仅系统录音”中允许 Twinscript，然后重新打开应用。电脑音频需要 macOS 14.2 或更高版本。',
   'toast.systemAudioSilent': '没有收到电脑音频。如果播放声音时仍无反应，请确认共享时已开启音频共享。',
   'toast.recordSaveFailed': '无法保存录音（请检查可用存储空间）',
   'toast.recordUnsupported': '此浏览器无法录音，将只进行转录',
@@ -170,8 +170,7 @@ export default {
   'error.windowBlocked': '窗口被拦截',
   'error.noSharedAudio': '共享的屏幕或标签页不含音频。请在共享对话框中开启“分享音频”。',
   'error.systemAudioPermission':
-    '没有采集电脑音频的权限。请在 系统设置 → 隐私与安全性 →“录屏与系统录音”中允许 Twinscript，然后重新打开应用。',
-  'error.systemAudioFailed': '无法采集电脑音频。',
+    '电脑音频已中断。请在 系统设置 → 隐私与安全性 → 录屏与系统录音 →“仅系统录音”中允许 Twinscript，然后重新打开应用。电脑音频需要 macOS 14.2 或更高版本。',
   'error.connectFailed': '无法连接：{reason}',
   'error.disconnected': '连接已断开：{reason}',
   'error.disconnectedCode': '连接已断开（代码 {code}）',

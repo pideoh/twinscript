@@ -72,6 +72,18 @@ export function windowOpenAction({ url, frameName }) {
   return 'deny';
 }
 
+// Only the app's own page in the main window's top frame may use the IPC handlers.
+export function isAppCaller({ url, isMainFrame, isMainWindow }) {
+  return !!isMainWindow && !!isMainFrame && isAppUrl(url ?? '');
+}
+
+// What stands in for the video when getDisplayMedia ("PC音声") is answered without a picker; the
+// audio is always the system loopback. 'frame': the requesting page itself (macOS, where only
+// the "System Audio Recording" permission is then needed). 'screen': the primary screen.
+export function displayMediaVideo(platform) {
+  return platform === 'darwin' ? 'frame' : 'screen';
+}
+
 // 'display-capture' is asked before session.setDisplayMediaRequestHandler runs (checked on
 // Electron 45); denying it makes getDisplayMedia fail, so "PC音声" needs it.
 const GRANTED = new Set(['media', 'display-capture', 'screen-wake-lock']);

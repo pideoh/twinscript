@@ -16,15 +16,9 @@ import { posix } from 'node:path';
 
 const { join } = posix;
 
-// The codesign calls, innermost first. `--deep` covers the frameworks and helper apps inside the
-// bundle, but not a bare executable in Resources, which is sealed as a resource of the app and so
-// has to be signed before the app itself.
-export function signingPlan({ appPath, identity, helperIdentifier }) {
-  const base = ['--force', '--timestamp=none', '--sign', identity];
-  return [
-    [...base, '--identifier', helperIdentifier, join(appPath, 'Contents', 'Resources', 'system-audio')],
-    [...base, '--deep', appPath],
-  ];
+// The codesign calls. `--deep` covers the frameworks and helper apps inside the bundle.
+export function signingPlan({ appPath, identity }) {
+  return [['--force', '--timestamp=none', '--sign', identity, '--deep', appPath]];
 }
 
 export default async function afterSign(context) {
@@ -34,13 +28,9 @@ export default async function afterSign(context) {
     console.log('  • MAC_SIGN_IDENTITY is not set: keeping the ad hoc signature');
     return;
   }
-  const { id: appId, productFilename } = context.packager.appInfo;
+  const { productFilename } = context.packager.appInfo;
   const appPath = join(context.appOutDir, `${productFilename}.app`);
-  const plan = signingPlan({
-    appPath,
-    identity,
-    helperIdentifier: `${appId}.system-audio`,
-  });
+  const plan = signingPlan({ appPath, identity });
   for (const args of plan) execFileSync('codesign', args, { stdio: 'inherit' });
   console.log(`  • re-signed with the fixed certificate  file=${appPath}`);
 }

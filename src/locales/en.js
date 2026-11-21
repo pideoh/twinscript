@@ -163,7 +163,7 @@ export default {
   'toast.audioEnded': 'Audio input ended',
   'toast.permissionNeeded': 'Microphone or screen sharing permission is required. Check your browser settings.',
   'toast.systemAudioSilentMac':
-    'No PC audio is coming in. If nothing reacts while sound is playing, allow Twinscript in System Settings → Privacy & Security → "Screen & System Audio Recording" and reopen the app.',
+    'No PC audio is coming in. If nothing reacts while sound is playing, allow Twinscript in System Settings → Privacy & Security → Screen & System Audio Recording → "System Audio Recording Only" and reopen the app. PC audio needs macOS 14.2 or later.',
   'toast.systemAudioSilent':
     'No PC audio is coming in. If nothing reacts while sound is playing, check that audio sharing was turned on when you shared.',
   'toast.recordSaveFailed': 'Could not save the recording (check the free storage space)',
@@ -178,8 +178,7 @@ export default {
   'error.windowBlocked': 'The window was blocked',
   'error.noSharedAudio': 'The shared screen or tab has no audio. Turn on "Share audio" in the sharing dialog.',
   'error.systemAudioPermission':
-    'Twinscript has no permission to capture PC audio. Allow it in System Settings → Privacy & Security → "Screen & System Audio Recording" and reopen the app.',
-  'error.systemAudioFailed': 'Could not capture PC audio.',
+    'PC audio stopped. Allow Twinscript in System Settings → Privacy & Security → Screen & System Audio Recording → "System Audio Recording Only" and reopen the app. PC audio needs macOS 14.2 or later.',
   'error.connectFailed': 'Could not connect: {reason}',
   'error.disconnected': 'Disconnected: {reason}',
   'error.disconnectedCode': 'Disconnected (code {code})',

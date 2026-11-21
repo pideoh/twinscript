@@ -1,8 +1,8 @@
-// Browser tests: audio capture (microphone, PC audio, native helper, auto gain).
+// Browser tests: audio capture (microphone, PC audio in a browser and the desktop app, auto gain).
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { fakeNativeSystemAudio, mockGemini, rows, setup } from './helpers.js';
+import { fakeDisplayMedia, mockGemini, rows, setup } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -122,11 +122,11 @@ test('a rejected API key stops the session with a message', async () => {
   await close();
 });
 
-test('the desktop app on macOS takes PC audio from the native helper instead of a screen share', async () => {
+test('the desktop app on macOS streams PC audio without picking up its own sound', async () => {
   const { page, errors, close } = await openApp(
     '',
     { apiKey: 'test-key', source: 'system', record: false },
-    { script: fakeNativeSystemAudio, arg: {} },
+    { script: fakeDisplayMedia, arg: { desktopApp: 'mac' } },
   );
   const seen = { chunks: 0, peak: 0, bytes: 0 };
   await page.routeWebSocket(/generativelanguage/, (ws) => {
@@ -147,30 +147,87 @@ test('the desktop app on macOS takes PC audio from the native helper instead of 
   assert.equal(seen.bytes, 3200, '100 ms of 16 kHz 16-bit mono');
   assert.ok(seen.peak > 0x7fff * 0.3, `the tone should come through, peak ${seen.peak}`);
   await page.click('#toggle');
-  const calls = await page.evaluate(() => window.nativeCalls);
-  assert.deepEqual(calls, { start: 1, stop: 1, displayMedia: 0 });
+  const calls = await page.evaluate(() => window.displayMediaCalls);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].audio.restrictOwnAudio, true);
   assert.ok(await page.locator('#toast').isHidden(), 'no silent-audio warning');
   assert.deepEqual(errors, []);
   await close();
 });
 
-test('the desktop app on macOS explains a missing Screen Recording permission and stops', async () => {
+test('in a browser, sharing PC audio keeps the shared tab or screen sound as it is', async () => {
   const { page, errors, close } = await openApp(
     '',
     { apiKey: 'test-key', source: 'system', record: false },
-    { script: fakeNativeSystemAudio, arg: { endWith: 'permission' } },
+    { script: fakeDisplayMedia, arg: {} },
   );
   await mockGemini(page, []);
   await page.click('#toggle');
-  await page.waitForFunction(() =>
-    document.getElementById('toast').textContent.includes('画面収録とシステムオーディオ録音'),
+  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  await page.click('#toggle');
+  const calls = await page.evaluate(() => window.displayMediaCalls);
+  assert.deepEqual(calls, [
+    {
+      video: true,
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      systemAudio: 'include',
+    },
+  ]);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+const PERMISSION_PATH = '画面収録とシステムオーディオ録音 →「システムオーディオ録音のみ」で Twinscript を許可';
+
+test('the desktop app on macOS explains the System Audio Recording permission when PC audio ends, and stops', async () => {
+  const { page, errors, close } = await openApp(
+    '',
+    { apiKey: 'test-key', source: 'system', record: false },
+    { script: fakeDisplayMedia, arg: { desktopApp: 'mac', endAfterMs: 500 } },
   );
-  assert.match(await page.textContent('#toast'), /Twinscript を許可し、アプリを開き直してください/);
+  await mockGemini(page, []);
+  await page.click('#toggle');
+  await page.waitForFunction((path) => document.getElementById('toast').textContent.includes(path), PERMISSION_PATH);
+  assert.match(await page.textContent('#toast'), /macOS 14\.2 以降が必要です/);
+  assert.equal(await page.getAttribute('#toast', 'data-variant'), 'critical');
   assert.equal(await page.textContent('#toggle'), '翻訳開始');
   assert.equal(await page.textContent('#statusText'), '停止中');
-  const calls = await page.evaluate(() => window.nativeCalls);
-  assert.deepEqual(calls, { start: 1, stop: 1, displayMedia: 0 });
   assert.deepEqual(errors, []);
+  await close();
+});
+
+test('PC audio that ends in a browser or the Windows app just says the audio input ended', async () => {
+  for (const desktopApp of [undefined, 'win']) {
+    const { page, errors, close } = await openApp(
+      '',
+      { apiKey: 'test-key', source: 'system', record: false },
+      { script: fakeDisplayMedia, arg: { desktopApp, endAfterMs: 500 } },
+    );
+    await mockGemini(page, []);
+    await page.click('#toggle');
+    await page.waitForFunction(() => document.getElementById('toast').textContent === '音声入力が終了しました');
+    assert.equal(await page.textContent('#statusText'), '停止中');
+    assert.deepEqual(errors, []);
+    await close();
+  }
+});
+
+test('the desktop app on macOS points to the System Audio Recording permission when no PC audio arrives', async () => {
+  const { page, close } = await openApp(
+    '',
+    { apiKey: 'test-key', source: 'system', record: false },
+    { script: fakeDisplayMedia, arg: { desktopApp: 'mac', amplitude: 0 } },
+  );
+  await mockGemini(page, []);
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  await page.waitForFunction((path) => document.getElementById('toast').textContent.includes(path), PERMISSION_PATH, {
+    timeout: 15_000,
+  });
+  assert.match(await page.textContent('#toast'), /^PC音声が届いていません/);
+  assert.equal(await page.getAttribute('#toast', 'data-variant'), 'warning');
+  assert.equal(await page.textContent('#statusText'), '聞き取り中', 'a warning, the session goes on');
+  await page.click('#toggle');
   await close();
 });
 
@@ -178,7 +235,7 @@ test('very quiet PC audio is brought up to a usable level before it is transcrib
   const { page, close } = await openApp(
     '',
     { apiKey: 'test-key', source: 'system', record: false },
-    { script: fakeNativeSystemAudio, arg: { amplitude: 0.005 } },
+    { script: fakeDisplayMedia, arg: { amplitude: 0.005 } },
   ); // about -46 dBFS
   const peaks = [];
   await page.routeWebSocket(/generativelanguage/, (ws) => {

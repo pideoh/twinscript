@@ -7,7 +7,6 @@ on:
     paths:
       - 'app/**'
       - 'src/**'
-      - 'native/**'
       - 'icons/**'
       - index.html
       - styles.css
@@ -15,7 +14,6 @@ on:
       # so that a fix to the release process itself is released
       - .github/workflows/release.yml
       - scripts/next-version.js
-      - scripts/build-mac-helper.sh
   workflow_dispatch:
     inputs:
       bump:
@@ -86,15 +84,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # The macOS PC audio helper only changes with its source, so it is built once and reused.
-      - uses: actions/cache@v6
-        id: helper
-        if: runner.os == 'macOS'
-        with:
-          path: native/mac/build/system-audio
-          key: mac-helper-${{ hashFiles('native/mac/system-audio.swift', 'scripts/build-mac-helper.sh') }}
-      - run: sh scripts/build-mac-helper.sh
-        if: runner.os == 'macOS' && steps.helper.outputs.cache-hit != 'true'
       # The macOS app is signed with a fixed self-signed certificate so that its identity, and with it
       # the permissions users granted, stays the same from release to release (scripts/sign-mac.js).
       - name: Set up the macOS signing certificate

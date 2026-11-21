@@ -8,8 +8,6 @@ on:
       - scripts/sign-mac.js
       - scripts/verify-mac-signature.js
       - scripts/ci-mac-signing-keychain.sh
-      - scripts/build-mac-helper.sh
-      - native/**
       - package.json
       - .github/workflows/release.yml
       - .github/workflows/sign-check.yml
@@ -27,7 +25,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: sh scripts/build-mac-helper.sh
       - name: Set up the signing certificate
         env:
           MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
@@ -38,8 +35,6 @@ jobs:
         run: |
           mkdir "$RUNNER_TEMP/unzipped"
           ditto -x -k dist/*.zip "$RUNNER_TEMP/unzipped"
-          node scripts/verify-mac-signature.js "$RUNNER_TEMP/unzipped/Twinscript.app" io.github.pideoh.twinscript
-          codesign -dv "$RUNNER_TEMP/unzipped/Twinscript.app/Contents/Resources/system-audio" 2>&1 | grep -E "^(Identifier|Signature)"
-      - name: Remove the signing keychain
+          node scripts/verify-mac-signature.js "$RUNNER_TEMP/unzipped/Twinscript.app" io.github.pideoh.twinscript      - name: Remove the signing keychain
         if: always()
         run: sh scripts/ci-mac-signing-keychain.sh cleanup

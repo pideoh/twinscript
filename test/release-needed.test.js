@@ -22,12 +22,10 @@ test('changes to the app are released', () => {
     'src/app.js',
     'src/locales/ja.js',
     'app/main.js',
-    'native/mac/system-audio.swift',
     'index.html',
     'styles.css',
     'icons/icon.svg',
     'LICENSE',
-    'scripts/build-mac-helper.sh',
   ]) {
     assert.equal(needed([file]), true, file);
   }

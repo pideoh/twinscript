@@ -2,7 +2,15 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { allowPermission, isAppUrl, isExternalUrl, resolveAppFile, windowOpenAction } from '../app/policy.js';
+import {
+  allowPermission,
+  displayMediaVideo,
+  isAppCaller,
+  isAppUrl,
+  isExternalUrl,
+  resolveAppFile,
+  windowOpenAction,
+} from '../app/policy.js';
 
 test('serves the files the web app is made of, with their content types', () => {
   assert.deepEqual(resolveAppFile('app://rt/'), { path: 'index.html', type: 'text/html; charset=utf-8' });
@@ -77,6 +85,24 @@ test('window.open: the caption overlay opens, web links go out, the rest is deni
   assert.equal(windowOpenAction({ url: 'about:blank', frameName: '' }), 'deny');
   assert.equal(windowOpenAction({ url: 'app://rt/', frameName: '' }), 'deny');
   assert.equal(windowOpenAction({ url: 'file:///etc/passwd', frameName: 'captions' }), 'deny');
+});
+
+test('only the app page in the main window top frame may call the main process', () => {
+  const ok = { url: 'app://rt/', isMainFrame: true, isMainWindow: true };
+  assert.equal(isAppCaller(ok), true);
+  assert.equal(isAppCaller({ ...ok, url: 'app://rt/?mock=1' }), true);
+  assert.equal(isAppCaller({ ...ok, isMainFrame: false }), false, 'an iframe');
+  assert.equal(isAppCaller({ ...ok, isMainWindow: false }), false, 'the caption overlay or another window');
+  assert.equal(isAppCaller({ ...ok, url: 'https://example.com/' }), false);
+  assert.equal(isAppCaller({ ...ok, url: 'about:blank' }), false);
+  assert.equal(isAppCaller({ ...ok, url: 'app://other/' }), false);
+  assert.equal(isAppCaller({ ...ok, url: undefined }), false);
+});
+
+test('PC audio on macOS is answered with the requesting page instead of a screen, elsewhere with the screen', () => {
+  assert.equal(displayMediaVideo('darwin'), 'frame');
+  assert.equal(displayMediaVideo('win32'), 'screen');
+  assert.equal(displayMediaVideo('linux'), 'screen');
 });
 
 test('permissions: microphone, system audio capture and wake lock for the app only', () => {

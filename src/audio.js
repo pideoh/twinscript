@@ -1,9 +1,14 @@
 // Captures microphone and/or system (tab / screen share) audio and delivers
-// base64 16 kHz PCM chunks. In the macOS desktop app, system audio comes from a native helper
-// through window.nativeSystemAudio (app/preload.js) instead of a screen share.
+// base64 16 kHz PCM chunks. In the desktop app, system audio comes from the same getDisplayMedia
+// call, answered by the main process without a picker (app/main.js).
 import { MessageError } from './message-error.js';
 
 export const canCaptureSystemAudio = () => !!navigator.mediaDevices?.getDisplayMedia;
+
+const inDesktopApp = () => /\bElectron\//.test(navigator.userAgent);
+
+// The macOS desktop app, where PC audio depends on the "System Audio Recording" permission.
+export const inMacDesktopApp = () => inDesktopApp() && /Mac/.test(navigator.userAgent);
 
 function toBase64(buffer) {
   const bytes = new Uint8Array(buffer);
@@ -12,16 +17,6 @@ function toBase64(buffer) {
     bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
   }
   return btoa(bin);
-}
-
-const NATIVE_RATE = 48000; // what the native helper delivers
-
-// Whole Float32 samples from an ArrayBuffer or a typed array, copied so they can be transferred.
-function toFloat32(data) {
-  const bytes = ArrayBuffer.isView(data)
-    ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
-    : new Uint8Array(data);
-  return new Float32Array(bytes.slice(0, bytes.byteLength - (bytes.byteLength % 4)).buffer);
 }
 
 export class AudioCapture {
@@ -36,15 +31,13 @@ export class AudioCapture {
 
   // source: 'mic' | 'system' | 'both'
   async start(source) {
-    const native = source !== 'mic' ? (window.nativeSystemAudio ?? null) : null;
     try {
-      if (source !== 'mic' && !native) {
+      if (source !== 'mic') {
+        const audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+        // The desktop app captures the whole system's audio, which would include its own sounds.
+        if (inDesktopApp()) audio.restrictOwnAudio = true;
         // Ask for this first: the picker needs the click's user activation.
-        const display = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-          systemAudio: 'include',
-        });
+        const display = await navigator.mediaDevices.getDisplayMedia({ video: true, audio, systemAudio: 'include' });
         this.streams.push(display);
         this.systemStream = display;
         if (!display.getAudioTracks().length) {
@@ -53,7 +46,10 @@ export class AudioCapture {
         display.getVideoTracks().forEach((t) => {
           t.enabled = false;
         });
-        display.getAudioTracks()[0].addEventListener('ended', () => this.onEnded?.());
+        // In the macOS app a missing "System Audio Recording" permission raises no error; the
+        // audio track just ends, so that is when the user is told how to allow it.
+        const why = inMacDesktopApp() ? new MessageError('error.systemAudioPermission') : undefined;
+        display.getAudioTracks()[0].addEventListener('ended', () => this.onEnded?.(why));
       }
       if (source !== 'system') {
         const mic = await navigator.mediaDevices.getUserMedia({
@@ -64,9 +60,7 @@ export class AudioCapture {
       }
 
       const Ctx = window.AudioContext || window.webkitAudioContext;
-      this.ctx = native
-        ? new Ctx({ latencyHint: 'interactive', sampleRate: NATIVE_RATE })
-        : new Ctx({ latencyHint: 'interactive' });
+      this.ctx = new Ctx({ latencyHint: 'interactive' });
       await this.ctx.audioWorklet.addModule(new URL('./pcm-worklet.js', import.meta.url));
       this.node = new AudioWorkletNode(this.ctx, 'pcm-processor', { numberOfOutputs: 1 });
       this.node.port.onmessage = (e) => {
@@ -87,7 +81,6 @@ export class AudioCapture {
           source.connect(this.systemProbe);
         }
       }
-      if (native) await this.startNative(native, mix);
       // Keep the graph pulling without playing anything back.
       const mute = this.ctx.createGain();
       mute.gain.value = 0;
@@ -96,40 +89,6 @@ export class AudioCapture {
     } catch (err) {
       this.stop();
       throw err;
-    }
-  }
-
-  // Plays the helper's samples through a worklet connected where a screen share would be.
-  async startNative(native, mix) {
-    const feeder = new AudioWorkletNode(this.ctx, 'pcm-feeder', {
-      numberOfInputs: 0,
-      numberOfOutputs: 1,
-      outputChannelCount: [1],
-    });
-    this.feeder = feeder;
-    const heard = this.#levelled(feeder);
-    heard.connect(this.node);
-    heard.connect(mix);
-    this.systemProbe = this.ctx.createAnalyser();
-    this.systemProbe.fftSize = 2048;
-    feeder.connect(this.systemProbe);
-    this.native = native;
-    native.onData((data) => {
-      if (this.feeder !== feeder) return;
-      const samples = toFloat32(data);
-      feeder.port.postMessage(samples, [samples.buffer]);
-    });
-    native.onEnd((reason) => {
-      if (this.native !== native) return;
-      this.stop();
-      this.onEnded?.(
-        new MessageError(reason === 'permission' ? 'error.systemAudioPermission' : 'error.systemAudioFailed'),
-      );
-    });
-    try {
-      await native.start();
-    } catch {
-      throw new MessageError('error.systemAudioFailed');
     }
   }
 
@@ -160,17 +119,6 @@ export class AudioCapture {
   stop() {
     for (const s of this.streams) for (const track of s.getTracks()) track.stop();
     this.streams = [];
-    if (this.native) {
-      const native = this.native;
-      this.native = null;
-      native.onData(null);
-      native.onEnd(null);
-      native.stop()?.catch?.(() => {});
-    }
-    if (this.feeder) {
-      this.feeder.disconnect();
-      this.feeder = null;
-    }
     for (const gain of this.gains) gain.disconnect();
     this.gains = [];
     if (this.node) {

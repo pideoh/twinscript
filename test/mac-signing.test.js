@@ -5,18 +5,9 @@ import { checkRequirement } from '../scripts/verify-mac-signature.js';
 
 const ID = 'io.github.pideoh.twinscript';
 
-test('the helper in Resources is signed before the app that seals it', () => {
-  const plan = signingPlan({
-    appPath: '/out/Twinscript.app',
-    identity: 'ABC123',
-    helperIdentifier: `${ID}.system-audio`,
-  });
-  assert.equal(plan.length, 2);
-  assert.equal(plan[0].at(-1), '/out/Twinscript.app/Contents/Resources/system-audio');
-  assert.ok(plan[0].includes(`${ID}.system-audio`));
-  assert.equal(plan[1].at(-1), '/out/Twinscript.app');
-  assert.ok(plan[1].includes('--deep'));
-  for (const args of plan) assert.deepEqual(args.slice(0, 4), ['--force', '--timestamp=none', '--sign', 'ABC123']);
+test('the whole app bundle is signed with the certificate in one call', () => {
+  const plan = signingPlan({ appPath: '/out/Twinscript.app', identity: 'ABC123' });
+  assert.deepEqual(plan, [['--force', '--timestamp=none', '--sign', 'ABC123', '--deep', '/out/Twinscript.app']]);
 });
 
 test('the hook does nothing without a certificate or on other platforms', async () => {

@@ -1,4 +1,4 @@
-import { AudioCapture, canCaptureSystemAudio } from './audio.js';
+import { AudioCapture, canCaptureSystemAudio, inMacDesktopApp } from './audio.js';
 import { buildTranscript, formatDateTime, formatElapsed, safeFileName } from './exporter.js';
 import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './i18n.js';
 import { octicon } from './icons.js';
@@ -1080,8 +1080,7 @@ function watchSystemAudio(r) {
     if (r.capture.systemLevel() > 0) return clearInterval(r.systemWatch);
     if (Date.now() - since < SILENT_SYSTEM_AUDIO_MS) return;
     clearInterval(r.systemWatch);
-    const isMacApp = /Electron/.test(navigator.userAgent) && /Mac/.test(navigator.userAgent);
-    toast(t(isMacApp ? 'toast.systemAudioSilentMac' : 'toast.systemAudioSilent'), 20000, 'warning');
+    toast(t(inMacDesktopApp() ? 'toast.systemAudioSilentMac' : 'toast.systemAudioSilent'), 20000, 'warning');
   }, 1000);
 }
 
