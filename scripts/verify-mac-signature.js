@@ -14,11 +14,12 @@ export function checkRequirement(output, identifier) {
   const requirement = line.slice(line.indexOf('designated =>') + 'designated =>'.length).trim();
   if (/\bcdhash\b/.test(requirement))
     return { ok: false, requirement, reason: 'ad hoc signature: the identity changes with every build' };
-  const expected = new RegExp(
-    `^identifier "${identifier.replace(/\./g, '\\.')}" and certificate leaf = H"[0-9a-f]{40}"$`,
-  );
-  if (!expected.test(requirement))
+  // Parsed with a fixed pattern and compared as a plain string, so the identifier passed on the
+  // command line never becomes part of a regular expression.
+  const match = /^identifier "([^"]+)" and certificate leaf = H"[0-9a-f]{40}"$/.exec(requirement);
+  if (!match || match[1] !== identifier) {
     return { ok: false, requirement, reason: 'not the expected identifier and certificate form' };
+  }
   return { ok: true, requirement };
 }
 
