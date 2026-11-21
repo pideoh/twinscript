@@ -30,7 +30,7 @@ function setup(t, options = {}) {
   const tr = new GeminiLiveTranscriber({
     apiKey: 'KEY', languageCodes: ['ja-JP', 'en-US'], smart: false,
     onInterim: (x) => log.interim.push(x), onFinal: (x) => log.final.push(x),
-    onState: (x) => log.state.push(x), onError: (e) => log.errors.push(e.message),
+    onState: (x) => log.state.push(x), onError: (e) => log.errors.push(e),
     ...options,
   });
   tr.start();
@@ -98,7 +98,8 @@ test('an invalid API key fails immediately without retrying', (t) => {
   sockets[0].drop('API key not valid. Please pass a valid API key.', 1007);
   assert.equal(sockets.length, 1);
   assert.equal(log.errors.length, 1);
-  assert.match(log.errors[0], /API key not valid/);
+  assert.equal(log.errors[0].key, 'error.connectFailed', 'reported with a UI message key');
+  assert.match(log.errors[0].params.reason, /API key not valid/);
 });
 
 test('falls back to automatic language detection if setup is rejected', (t) => {
@@ -138,6 +139,7 @@ test('gives up after repeated failed reconnects', (t) => {
     sockets.at(-1).drop();
   }
   assert.equal(log.errors.length, 1);
+  assert.deepEqual([log.errors[0].key, log.errors[0].params], ['error.disconnectedCode', { code: 1006 }]);
   const count = sockets.length;
   tick(60_000);
   assert.equal(sockets.length, count, 'no further attempts after giving up');

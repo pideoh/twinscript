@@ -214,7 +214,7 @@ body.pip { display: block; height: 100vh; }
 body.pip .now, body.pip .now[hidden] {
   display: flex; height: 100vh; min-height: 0; max-height: none; border-top: 0; padding: 10px 14px;
 }
-body.pip .now-list:empty::before { content: '翻訳を開始すると、ここに字幕が出ます'; color: var(--muted); font-size: 14px; }
+body.pip .now-list:empty::before { content: attr(data-empty); color: var(--muted); font-size: 14px; }
 /* Desktop app: the caption window is a frameless, transparent overlay. The zone gets its own
    dark rounded backdrop so it reads over any content, and the whole window drags it around. */
 body.overlay {

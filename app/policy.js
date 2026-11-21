@@ -24,6 +24,7 @@ const ALLOWED = [
   /^manifest\.webmanifest$/,
   /^icons\/[\w-][\w.-]*\.(svg|png)$/,
   /^src\/[\w-][\w.-]*\.js$/,
+  /^src\/locales\/[\w-][\w.-]*\.js$/,
 ];
 
 // Maps a request URL on the app's own origin to a file relative to the app root.

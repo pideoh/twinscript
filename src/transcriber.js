@@ -1,6 +1,7 @@
 // Streaming speech-to-text over the Gemini Live API (gemini-3.5-transcribe-live).
 // A session lasts at most 10 minutes, so connections are rotated transparently:
 // a fresh one is opened in the background and audio is switched over at a pause.
+import { MessageError } from './message-error.js';
 
 const WS_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 const MODEL = 'models/gemini-3.5-transcribe-live';
@@ -144,7 +145,7 @@ export class GeminiLiveTranscriber {
     if (this.next) { this.#retire(this.next); this.next = null; }
 
     if (!conn.ready && FATAL_REASON.test(reason)) {
-      return this.#fail(`接続できませんでした: ${reason}`);
+      return this.#fail(new MessageError('error.connectFailed', { reason }));
     }
     if (!conn.ready && this.languageCodes.length && !this.triedAuto) {
       // The language hint may be unsupported; fall back to automatic detection.
@@ -154,7 +155,9 @@ export class GeminiLiveTranscriber {
       return;
     }
     if (++this.retries > MAX_RETRIES) {
-      return this.#fail(`接続が切れました${reason ? `: ${reason}` : `（コード ${event.code}）`}`);
+      return this.#fail(reason
+        ? new MessageError('error.disconnected', { reason })
+        : new MessageError('error.disconnectedCode', { code: event.code }));
     }
     this.onState('reconnecting');
     this.active = null;
@@ -163,8 +166,8 @@ export class GeminiLiveTranscriber {
     }, Math.min(500 * 2 ** (this.retries - 1), 8000));
   }
 
-  #fail(message) {
+  #fail(error) {
     this.stop();
-    this.onError(new Error(message));
+    this.onError(error);
   }
 }

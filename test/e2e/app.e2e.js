@@ -30,12 +30,21 @@ before(async () => {
 });
 after(async () => { await browser?.close(); server?.close(); });
 
-async function openApp(query = '', settings, init) {
-  const context = await browser.newContext({ permissions: ['microphone'] });
+// The UI is Japanese unless the test says otherwise (most assertions read Japanese text).
+// Settings are seeded on the first load of the tab only, so what the app saves survives a reload.
+async function openApp(query = '', settings, init, { locale = 'en-US' } = {}) {
+  const context = await browser.newContext({ permissions: ['microphone'], locale });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  if (settings) await context.addInitScript((s) => localStorage.setItem('rt-settings', JSON.stringify(s)), settings);
+  const stored = { uiLang: 'ja', ...settings };
+  await context.addInitScript((s) => {
+    try {
+      if (window !== top || sessionStorage.getItem('e2e-seeded')) return;
+      sessionStorage.setItem('e2e-seeded', '1');
+      localStorage.setItem('rt-settings', JSON.stringify(s));
+    } catch { /* a frame without storage */ }
+  }, stored);
   if (init) await context.addInitScript(init.script, init.arg);
   await page.goto(`${origin}/${query}`);
   return { page, errors, close: () => context.close() };
@@ -544,5 +553,80 @@ test('very quiet PC audio is brought up to a usable level before it is transcrib
   const settled = peaks.at(-1);
   assert.ok(settled > 0.1 && settled < 0.3, `0.005 in should come out near 0.15–0.2, got ${settled}`);
   await page.click('#toggle');
+  await close();
+});
+
+// ---------- UI language ----------
+const optionText = (page, select, value) => page.locator(`${select} option[value="${value}"]`).textContent();
+
+test('the UI follows the browser language: English by default', async () => {
+  const { page, errors, close } = await openApp('', { uiLang: 'auto' });
+  assert.equal(await page.getAttribute('html', 'lang'), 'en');
+  assert.equal(await page.textContent('#toggle'), 'Start translating');
+  assert.equal(await page.textContent('#statusText'), 'Stopped');
+  assert.equal(await page.textContent('#empty p'), 'Choose two languages and press "Start translating".');
+  assert.equal(await page.getAttribute('#openSettings', 'title'), 'Settings');
+  assert.equal(await optionText(page, '#langA', 'ja-JP'), 'Japanese');
+  assert.equal(await optionText(page, '#langA', 'cmn-Hans-CN'), 'Simplified Chinese');
+  assert.equal(await optionText(page, '#source', 'mic'), 'Microphone');
+  await page.click('#toggle'); // no API key yet
+  assert.equal(await page.textContent('#toast'), 'Set your Gemini API key first');
+  assert.equal(await page.inputValue('#uiLang'), 'auto');
+  assert.deepEqual(await page.locator('#uiLang option').allTextContents(), ['Auto', 'English', '日本語', '简体中文']);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('the UI follows the browser language: Simplified Chinese for zh-CN', async () => {
+  const { page, errors, close } = await openApp('', { uiLang: 'auto' }, undefined, { locale: 'zh-CN' });
+  assert.equal(await page.getAttribute('html', 'lang'), 'zh-Hans');
+  assert.equal(await page.textContent('#toggle'), '开始翻译');
+  assert.equal(await page.textContent('#statusText'), '已停止');
+  assert.equal(await page.getAttribute('#export', 'aria-label'), '下载');
+  assert.equal(await page.getAttribute('#glossary', 'placeholder'), '例如：专有名词、产品名称、会议主题等');
+  assert.equal(await optionText(page, '#langA', 'en-US'), '英语');
+  assert.equal(await optionText(page, '#langA', 'cmn-Hans-CN'), '简体中文');
+  assert.equal(await optionText(page, '#langA', 'cmn-Hant-TW'), '繁体中文');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('changing the display language in settings updates the screen at once and is kept', async () => {
+  const { page, errors, close } = await openApp('?mock=1');
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.querySelectorAll('.seg:not(.live)').length >= 1);
+  assert.equal(await page.textContent('#toggle'), '停止');
+  assert.equal(await page.textContent('#statusText'), '聞き取り中');
+
+  await page.click('#openSettings');
+  assert.equal(await page.inputValue('#uiLang'), 'ja');
+  await page.locator('#captionItems').fill('1');
+  assert.equal(await page.textContent('#captionItemsOut'), '1 文');
+  await page.selectOption('#uiLang', 'en');
+  assert.equal(await page.getAttribute('html', 'lang'), 'en');
+  assert.equal(await page.textContent('#settings h2'), 'Settings');
+  assert.equal(await page.textContent('#captionItemsOut'), '1 sentence');
+  assert.equal(await optionText(page, '#otherInto', 'A'), 'Japanese (left language)');
+  assert.equal(await optionText(page, '#uiLang', 'auto'), 'Auto');
+  assert.equal(await page.textContent('#toggle'), 'Stop', 'the button keeps its running state');
+  assert.equal(await page.textContent('#statusText'), 'Listening');
+  assert.equal(await optionText(page, '#langB', 'en-US'), 'English');
+  await page.click('#settings button[value=ok]');
+  await page.click('#toggle');
+  assert.equal(await page.textContent('#statusText'), 'Stopped');
+  await saved(page);
+  assert.equal(await page.getAttribute('#sessionList .act >> nth=0', 'title'), 'Rename');
+
+  await page.click('#openSettings');
+  await page.selectOption('#uiLang', 'zh-Hans');
+  assert.equal(await page.getAttribute('#sessionList .act >> nth=1', 'aria-label'), '删除', 'the session list is redrawn');
+  await page.click('#settings button[value=ok]');
+
+  await page.reload();
+  assert.equal(await page.textContent('#toggle'), '开始翻译');
+  assert.equal(await page.textContent('#settings h2'), '设置');
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('rt-settings')));
+  assert.equal(stored.uiLang, 'zh-Hans');
+  assert.deepEqual(errors, []);
   await close();
 });

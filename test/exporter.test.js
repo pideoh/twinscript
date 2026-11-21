@@ -15,6 +15,11 @@ const session = {
   ],
 };
 const langLabel = (code) => ({ 'ja-JP': '日本語', 'en-US': '英語' }[code]);
+// What the app passes in when the UI is Japanese.
+const labels = {
+  title: '文字起こし', date: '日時', languages: '言語', duration: '長さ',
+  time: '時間', source: '原文', translation: '訳文', separator: '　',
+};
 
 test('formatElapsed', () => {
   assert.equal(formatElapsed(0), '00:00:00');
@@ -23,7 +28,7 @@ test('formatElapsed', () => {
 });
 
 test('plain text has a header, timestamps and the translation aligned under the source', () => {
-  const { text, ext } = buildTranscript(session, { langLabel });
+  const { text, ext } = buildTranscript(session, { langLabel, labels });
   assert.equal(ext, 'txt');
   assert.equal(text, [
     '定例会議',
@@ -48,7 +53,7 @@ test('source-only and translation-only text', () => {
 });
 
 test('markdown is a table with escaped pipes', () => {
-  const { text, ext } = buildTranscript(session, { format: 'md', langLabel });
+  const { text, ext } = buildTranscript(session, { format: 'md', langLabel, labels });
   assert.equal(ext, 'md');
   const lines = text.split('\n');
   assert.equal(lines[0], '# 定例会議');
@@ -72,6 +77,21 @@ test('srt cues end at the next cue, capped at 8 seconds', () => {
   assert.equal(blocks[2], '3\n01:02:05,000 --> 01:02:13,000\nまだ翻訳されていない文');
   const close = buildTranscript({ ...session, segments: [{ elapsed: 1000, src: 'a' }, { elapsed: 2500, src: 'b' }] }, { format: 'srt' });
   assert.ok(close.text.startsWith('1\n00:00:01,000 --> 00:00:02,500\na\n'));
+});
+
+test('labels default to English and the CSV header never changes', () => {
+  const untitled = { ...session, title: '' };
+  const txt = buildTranscript(untitled).text.split('\n');
+  assert.equal(txt[0], 'Transcript');
+  assert.equal(txt[1], 'Date: 2026-11-15 09:05   Languages: ja-JP ⇄ en-US   Duration: 00:12:34');
+  const md = buildTranscript(untitled, { format: 'md', content: 'tgt' }).text.split('\n');
+  assert.equal(md[0], '# Transcript');
+  assert.equal(md[4], '| Time | Translation |');
+  assert.equal(buildTranscript(untitled, { format: 'md', content: 'src', labels }).text.split('\n')[4], '| 時間 | 原文 |');
+  const zh = { title: '转录文本', date: '日期', languages: '语言', duration: '时长' };
+  assert.equal(buildTranscript(untitled, { labels: zh }).text.split('\n')[1], '日期: 2026-11-15 09:05   语言: ja-JP ⇄ en-US   时长: 00:12:34',
+    'labels that are not given keep their defaults');
+  assert.ok(buildTranscript(untitled, { format: 'csv', labels }).text.startsWith('\ufefftime,source,translation\r\n'));
 });
 
 test('safeFileName strips characters that are invalid in file names', () => {

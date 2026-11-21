@@ -1,7 +1,7 @@
 # twinscript
 
 会議向けリアルタイム文字起こし＋双方向翻訳の静的 Web アプリ（PWA）。ビルドなし・サーバーなし。
-ブラウザが Gemini API に直接つなぐ。使い方と料金は README.md。
+ブラウザが Gemini API に直接つなぐ。使い方と料金は README.md（日本語版は README.ja.md）。
 
 ## 構成（探索せずここを見る）
 
@@ -17,8 +17,11 @@
 | `src/store.js` | IndexedDB。`sessions`（文字起こし込み）と `audio`（録音チャンク） |
 | `src/exporter.js` | 文字起こしの書き出し（txt / md / csv / srt）。純粋関数 |
 | `src/mock.js` | `?mock=1` デモ用ダミー |
+| `src/i18n.js` | UI 言語の決定（`resolveLocale`）、`t(key, params)`、静的 HTML への適用（`data-i18n*`）。言語の登録はここの `LOCALES` だけ |
+| `src/locales/*.js` | UI 文言のカタログ（`en` が基準兼フォールバック、`ja`、`zh-Hans`）。キーはドット区切り |
+| `src/message-error.js` | 文言キー＋値を持つエラー。`audio.js`・`transcriber.js`・`translator.js` が投げ、`app.js` が訳して表示する |
 | `app/main.js` | デスクトップ版（Electron）のメインプロセス。`app://rt/` で配信、PC音声、字幕オーバーレイ |
-| `app/policy.js` | デスクトップ版の規則（配信するファイル、遷移・window.open・権限の許可）。Electron 非依存 |
+| `app/policy.js` | デスクトップ版の規則（配信するファイル（`src/locales/` を含む）、遷移・window.open・権限の許可）。Electron 非依存 |
 | `app/preload.js` | macOS 版のみ。PC音声ヘルパーの開始/停止と受信を `window.nativeSystemAudio` として画面に渡す |
 | `app/system-audio.js` | PC音声ヘルパーの規則（置き場所、呼び出し元の確認、終了理由、サンプル単位への区切り）。Electron 非依存 |
 | `native/mac/system-audio.swift`, `scripts/build-mac-helper.sh` | macOS の PC音声ヘルパー（ScreenCaptureKit、48kHz モノラル Float32 を標準出力へ）とそのビルド。`native/mac/build/` に出力 |
@@ -42,7 +45,8 @@
 - Web 版はブラウザでそのまま動くこと。デスクトップ版専用の処理は `app/` に置き、`src/` では Electron 判定での分岐に留める
 - 実 API では未検証の前提がある（途中経過は発話全体の累積、確定は発話の切れ目で1回）。API の仕様に関わる変更は推測で書かず公式ドキュメントを確認する
 - マージ済みブランチに積まない。`main` から新しいブランチを切って PR を出す
-- UI 文言は日本語、コード・コメント・コミットメッセージは英語
+- UI 文言は直書きせず i18n を通す（`t()` か `data-i18n*`。UI を持たないモジュールは `MessageError` で文言キーを投げる）。新しいキーは `src/locales/` の全ファイルに同じキー・同じ `{placeholder}` で足す（`test/i18n.test.js` が検査する）
+- コード・コメント・コミットメッセージは英語
 
 ## リリース
 

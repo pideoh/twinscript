@@ -64,12 +64,16 @@ test('drops the thinking option for good when the model rejects it', async () =>
 
 test('429 is reported as a rate limit', async () => {
   stubFetch(() => new Response('{}', { status: 429 }));
-  await assert.rejects(make().translate('やあ'), RateLimitError);
+  await assert.rejects(make().translate('やあ'), (err) => err instanceof RateLimitError && err.key === 'error.rateLimit');
 });
 
 test('other errors surface the API message', async () => {
   stubFetch(() => new Response(JSON.stringify({ error: { message: 'API key not valid' } }), { status: 403 }));
-  await assert.rejects(make().translate('やあ'), /403.*API key not valid/);
+  await assert.rejects(make().translate('やあ'), (err) => {
+    assert.equal(err.key, 'error.translate', 'reported with a UI message key');
+    assert.deepEqual(err.params, { status: 403, message: 'API key not valid' });
+    return true;
+  });
 });
 
 test('a third language goes to the first language unless told otherwise', async () => {

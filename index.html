@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -14,8 +14,8 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <aside id="sidebar" aria-label="セッション">
-    <button id="newSession" class="new-session">＋ 新しいセッション</button>
+  <aside id="sidebar" aria-label="Sessions" data-i18n-aria-label="sidebar.label">
+    <button id="newSession" class="new-session" data-i18n="sidebar.newSession">＋ New session</button>
     <nav id="sessionList"></nav>
   </aside>
   <div id="backdrop"></div>
@@ -23,36 +23,36 @@
   <div class="app">
     <header class="bar">
       <div class="langs">
-        <button id="menu" class="icon-btn" title="セッション一覧" aria-label="セッション一覧">☰</button>
-        <select id="langA" aria-label="言語1"></select>
-        <button id="swap" class="icon-btn" title="入れ替え" aria-label="言語を入れ替え">⇄</button>
-        <select id="langB" aria-label="言語2"></select>
+        <button id="menu" class="icon-btn" title="Sessions" aria-label="Sessions" data-i18n-title="header.menu" data-i18n-aria-label="header.menu">☰</button>
+        <select id="langA" aria-label="Language 1" data-i18n-aria-label="header.langA"></select>
+        <button id="swap" class="icon-btn" title="Swap" aria-label="Swap languages" data-i18n-title="header.swap.title" data-i18n-aria-label="header.swap.label">⇄</button>
+        <select id="langB" aria-label="Language 2" data-i18n-aria-label="header.langB"></select>
       </div>
       <div class="tools">
-        <select id="source" aria-label="音声入力">
-          <option value="mic">マイク</option>
-          <option value="system">PC音声（タブ/画面共有）</option>
-          <option value="both">マイク＋PC音声</option>
+        <select id="source" aria-label="Audio input" data-i18n-aria-label="header.source">
+          <option value="mic" data-i18n="source.mic">Microphone</option>
+          <option value="system" data-i18n="source.system">PC audio (tab/screen share)</option>
+          <option value="both" data-i18n="source.both">Microphone + PC audio</option>
         </select>
-        <button id="pip" class="icon-btn" title="字幕を別ウィンドウに出す（常に最前面）" aria-label="字幕を別ウィンドウに出す" hidden>⧉</button>
-        <button id="export" class="icon-btn" title="ダウンロード" aria-label="ダウンロード">⤓</button>
-        <button id="openSettings" class="icon-btn" title="設定" aria-label="設定">⚙</button>
+        <button id="pip" class="icon-btn" title="Show captions in a separate window (always on top)" aria-label="Show captions in a separate window" data-i18n-title="header.pip.title" data-i18n-aria-label="header.pip.label" hidden>⧉</button>
+        <button id="export" class="icon-btn" title="Download" aria-label="Download" data-i18n-title="header.export" data-i18n-aria-label="header.export">⤓</button>
+        <button id="openSettings" class="icon-btn" title="Settings" aria-label="Settings" data-i18n-title="header.settings" data-i18n-aria-label="header.settings">⚙</button>
       </div>
     </header>
 
     <div class="log-wrap">
       <main id="log" aria-live="polite">
         <div id="empty" class="empty">
-          <p>言語を2つ選んで「翻訳開始」を押してください。</p>
-          <p class="sub">どちらの言語で話しても自動で判定し、もう一方の言語に翻訳します。</p>
+          <p data-i18n="empty.main">Choose two languages and press "Start translating".</p>
+          <p class="sub" data-i18n="empty.sub">Speak in either language. It is detected automatically and translated into the other one.</p>
         </div>
         <div id="anchor"></div>
       </main>
-      <button id="jump" class="jump" hidden>最新へ ↓</button>
+      <button id="jump" class="jump" data-i18n="log.jump" hidden>Latest ↓</button>
     </div>
 
-    <section id="now" class="now" hidden aria-label="いま話している文">
-      <div class="now-head"><span class="dot on"></span><span>いま</span></div>
+    <section id="now" class="now" hidden aria-label="Sentence being spoken" data-i18n-aria-label="now.label">
+      <div class="now-head"><span class="dot on"></span><span data-i18n="now.head">Now</span></div>
       <div id="nowList" class="now-list"></div>
     </section>
 
@@ -61,70 +61,73 @@
     <footer class="dock">
       <div class="status">
         <span id="dot" class="dot"></span>
-        <span id="statusText">停止中</span>
+        <span id="statusText">Stopped</span>
         <span id="clock" class="clock">00:00:00</span>
         <span class="meter"><span id="level"></span></span>
       </div>
-      <button id="toggle" class="primary">翻訳開始</button>
+      <button id="toggle" class="primary">Start translating</button>
     </footer>
   </div>
 
   <dialog id="exportDialog">
     <form method="dialog" class="settings">
-      <h2>ダウンロード</h2>
-      <label>文字起こしの形式
+      <h2 data-i18n="export.title">Download</h2>
+      <label><span data-i18n="export.format">Transcript format</span>
         <select id="exportFormat">
-          <option value="txt">テキスト (.txt)</option>
-          <option value="md">Markdown の表 (.md)</option>
-          <option value="csv">CSV / Excel (.csv)</option>
-          <option value="srt">字幕 (.srt)</option>
+          <option value="txt" data-i18n="export.format.txt">Text (.txt)</option>
+          <option value="md" data-i18n="export.format.md">Markdown table (.md)</option>
+          <option value="csv" data-i18n="export.format.csv">CSV / Excel (.csv)</option>
+          <option value="srt" data-i18n="export.format.srt">Subtitles (.srt)</option>
         </select>
       </label>
-      <label>内容
+      <label><span data-i18n="export.content">Content</span>
         <select id="exportContent">
-          <option value="both">原文と訳文</option>
-          <option value="src">原文のみ</option>
-          <option value="tgt">訳文のみ</option>
+          <option value="both" data-i18n="export.content.both">Source and translation</option>
+          <option value="src" data-i18n="export.content.src">Source only</option>
+          <option value="tgt" data-i18n="export.content.tgt">Translation only</option>
         </select>
       </label>
-      <div class="actions"><button type="button" id="exportTranscript" class="primary">文字起こしを保存</button></div>
+      <div class="actions"><button type="button" id="exportTranscript" class="primary" data-i18n="export.saveTranscript">Save transcript</button></div>
       <div id="recordings" class="recordings"></div>
-      <div class="actions"><button value="close" class="plain">閉じる</button></div>
+      <div class="actions"><button value="close" class="plain" data-i18n="export.close">Close</button></div>
     </form>
   </dialog>
 
   <dialog id="settings">
     <form method="dialog" class="settings">
-      <h2>設定</h2>
-      <label>Gemini APIキー
+      <h2 data-i18n="settings.title">Settings</h2>
+      <label><span data-i18n="settings.apiKey">Gemini API key</span>
         <input id="apiKey" type="password" autocomplete="off" placeholder="AIza...">
-        <small><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> で無料で発行できます。キーはこの端末のブラウザ内にのみ保存されます。</small>
-        <small id="settingsRunning" hidden>翻訳中です。APIキー・翻訳モデル・整形・録音・用語集・訳し先の変更は、次に開始したときから反映されます。</small>
+        <small><span data-i18n="settings.apiKey.helpBefore">Get one for free at </span><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a><span data-i18n="settings.apiKey.helpAfter">. The key is stored only in this browser on this device.</span></small>
+        <small id="settingsRunning" data-i18n="settings.running" hidden>Translation is running. Changes to the API key, translation model, cleanup, recording, glossary and target language take effect the next time you start.</small>
       </label>
-      <label>翻訳モデル
+      <label><span data-i18n="settings.model">Translation model</span>
         <input id="translateModel" type="text" spellcheck="false">
       </label>
-      <label class="check"><input id="interimTranslate" type="checkbox"> 話している途中の文も翻訳する（リアルタイム重視）</label>
-      <label class="check"><input id="smart" type="checkbox"> 文字起こしを整形する（フィラー除去。確定が少し遅くなることがあります）</label>
-      <label class="check"><input id="record" type="checkbox"> 音声を録音して保存する（この端末のブラウザ内。1時間で約15MB）</label>
-      <label>選んだ2言語以外が話されたときの訳し先
+      <label class="check"><input id="interimTranslate" type="checkbox"> <span data-i18n="settings.interim">Translate sentences while they are being spoken (favors real-time)</span></label>
+      <label class="check"><input id="smart" type="checkbox"> <span data-i18n="settings.smart">Clean up the transcript (removes fillers; sentences may take a little longer to finalize)</span></label>
+      <label class="check"><input id="record" type="checkbox"> <span data-i18n="settings.record">Record and save the audio (in this browser on this device; about 15 MB per hour)</span></label>
+      <label><span data-i18n="settings.otherInto">When a language other than these two is spoken, translate into</span>
         <select id="otherInto"><option value="A"></option><option value="B"></option></select>
       </label>
-      <label>下の欄に残す文数 <output id="captionItemsOut"></output>
+      <label><span data-i18n="settings.captionItems">Sentences kept in the area below</span> <output id="captionItemsOut"></output>
         <input id="captionItems" type="range" min="1" max="8" step="1">
-        <small>話している文を含む数です。増やすと読み返しやすくなり、欄は高くなります。</small>
+        <small data-i18n="settings.captionItems.help">This includes the sentence being spoken. More is easier to re-read, and the area gets taller.</small>
       </label>
-      <label>途中の文を翻訳し直す間隔 <output id="interimIntervalOut"></output>
+      <label><span data-i18n="settings.interimInterval">Interval for re-translating a sentence in progress</span> <output id="interimIntervalOut"></output>
         <input id="interimInterval" type="range" min="0.5" max="5" step="0.1">
-        <small>短いほど訳が早く出ますが、文面が頻繁に変わり、APIの消費も増えます。</small>
+        <small data-i18n="settings.interimInterval.help">Shorter shows translations sooner, but the text changes more often and uses more of the API.</small>
       </label>
-      <label>用語集・会議の背景（翻訳に反映されます）
-        <textarea id="glossary" rows="3" placeholder="例: 固有名詞、製品名、会議のテーマなど"></textarea>
+      <label><span data-i18n="settings.glossary">Glossary and meeting background (used in translation)</span>
+        <textarea id="glossary" rows="3" placeholder="e.g. proper nouns, product names, meeting topic" data-i18n-placeholder="settings.glossary.placeholder"></textarea>
       </label>
-      <label>文字サイズ
+      <label><span data-i18n="settings.fontSize">Text size</span>
         <input id="fontSize" type="range" min="14" max="30" step="1">
       </label>
-      <div class="actions"><button class="primary" value="ok">保存</button></div>
+      <label><span data-i18n="settings.uiLang">Display language</span>
+        <select id="uiLang"></select>
+      </label>
+      <div class="actions"><button class="primary" value="ok" data-i18n="settings.save">Save</button></div>
     </form>
   </dialog>
 
