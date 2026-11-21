@@ -1,0 +1,24 @@
+# Static security analysis. Code scanning is only available to public repositories on the free
+# plan, so the job is skipped while the repository is private.
+name: codeql
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 4 * * 1'
+permissions:
+  contents: read
+jobs:
+  analyze:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript, actions
+      - uses: github/codeql-action/analyze@v4
