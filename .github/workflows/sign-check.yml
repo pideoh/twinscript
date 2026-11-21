@@ -35,6 +35,7 @@ jobs:
         run: |
           mkdir "$RUNNER_TEMP/unzipped"
           ditto -x -k dist/*.zip "$RUNNER_TEMP/unzipped"
-          node scripts/verify-mac-signature.js "$RUNNER_TEMP/unzipped/Twinscript.app" io.github.pideoh.twinscript      - name: Remove the signing keychain
+          node scripts/verify-mac-signature.js "$RUNNER_TEMP/unzipped/Twinscript.app" io.github.pideoh.twinscript
+      - name: Remove the signing keychain
         if: always()
         run: sh scripts/ci-mac-signing-keychain.sh cleanup
