@@ -4,7 +4,17 @@ name: release
 on:
   push:
     branches: [main]
-    paths: ['app/**', 'src/**', 'icons/**', 'index.html', 'styles.css', 'manifest.webmanifest', 'package.json']
+    paths:
+      - 'app/**'
+      - 'src/**'
+      - 'icons/**'
+      - index.html
+      - styles.css
+      - manifest.webmanifest
+      - package.json
+      # so that a fix to the release process itself is released
+      - .github/workflows/release.yml
+      - scripts/next-version.js
   workflow_dispatch:
     inputs:
       bump:
@@ -37,6 +47,7 @@ jobs:
   build:
     needs: version
     strategy:
+      fail-fast: false # let the other platform finish so its log is available too
       matrix:
         include:
           - os: macos-latest
@@ -51,7 +62,9 @@ jobs:
           node-version: 22
       - run: npm ci
       # --publish never: electron-builder only builds; the release job below does the publishing.
-      - run: npm run ${{ matrix.script }} -- --publish never -c.extraMetadata.version=${{ needs.version.outputs.version }}
+      # bash on both runners: PowerShell splits a "-c.key=value" argument at the dot.
+      - run: npm run ${{ matrix.script }} -- --publish never --config.extraMetadata.version=${{ needs.version.outputs.version }}
+        shell: bash
       - uses: actions/upload-artifact@v4
         with:
           name: zips-${{ runner.os }}
