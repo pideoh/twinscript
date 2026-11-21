@@ -135,7 +135,9 @@ function openCaptionOverlay(win) {
     if (captionOverlay === win) captionOverlay = null;
   });
   win.setAlwaysOnTop(true, 'screen-saver');
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // Without skipTransformProcessType macOS turns the whole app into one without a Dock icon;
+  // the overlay is a panel (see the window options), which may float over full-screen apps as is.
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   applyClickThrough();
 }
 
@@ -214,6 +216,7 @@ function createMainWindow() {
         resizable: true,
         skipTaskbar: true,
         title: '字幕',
+        ...(process.platform === 'darwin' ? { type: 'panel' } : {}),
       },
     };
   });
