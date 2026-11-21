@@ -1,8 +1,15 @@
 // Rules for the macOS system-audio helper (app/system-audio.js), tested without Electron.
-import { test } from 'node:test';
+
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { helperPath, endReason, isSystemAudioCaller, createSampleFramer, EXIT_PERMISSION } from '../app/system-audio.js';
+import { test } from 'node:test';
+import {
+  createSampleFramer,
+  EXIT_PERMISSION,
+  endReason,
+  helperPath,
+  isSystemAudioCaller,
+} from '../app/system-audio.js';
 
 test('the helper is in Resources when packaged and in the build folder in development', () => {
   assert.equal(

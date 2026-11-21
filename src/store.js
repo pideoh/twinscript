@@ -19,10 +19,11 @@ function open() {
   return dbPromise;
 }
 
-const done = (request) => new Promise((resolve, reject) => {
-  request.onsuccess = () => resolve(request.result);
-  request.onerror = () => reject(request.error);
-});
+const done = (request) =>
+  new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
 
 async function write(stores, fn) {
   const tx = (await open()).transaction(stores, 'readwrite');

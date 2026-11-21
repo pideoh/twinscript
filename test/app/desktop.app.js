@@ -1,10 +1,11 @@
 // Smoke test of the desktop app (Electron). Opens real windows, so it needs a display; it is not
 // part of CI. Run with `npm run test:app`.
-import { test, before, after } from 'node:test';
+
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron } from 'playwright-core';
 
@@ -34,7 +35,9 @@ test('serves only the app files from app://rt/', async () => {
 
 test('on macOS the page gets the native PC audio bridge and nothing else from the preload', async () => {
   const page = await app.firstWindow();
-  const keys = await page.evaluate(() => (window.nativeSystemAudio ? Object.keys(window.nativeSystemAudio).sort() : null));
+  const keys = await page.evaluate(() =>
+    window.nativeSystemAudio ? Object.keys(window.nativeSystemAudio).sort() : null,
+  );
   if (process.platform === 'darwin') assert.deepEqual(keys, ['onData', 'onEnd', 'start', 'stop']);
   else assert.equal(keys, null);
   assert.equal(await page.evaluate(() => typeof require), 'undefined');
@@ -62,7 +65,10 @@ test('runs the demo and moves the captions into an overlay window and back', asy
 
   await Promise.all([overlay.waitForEvent('close'), overlay.click('.overlay-close')]);
   await page.locator('#now').waitFor({ state: 'attached' });
-  assert.ok(await page.locator('#now').evaluate((n) => n.previousElementSibling.classList.contains('log-wrap')), 'back under the transcript');
+  assert.ok(
+    await page.locator('#now').evaluate((n) => n.previousElementSibling.classList.contains('log-wrap')),
+    'back under the transcript',
+  );
   assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'false');
   assert.equal(await page.locator('.overlay-close').count(), 0);
 

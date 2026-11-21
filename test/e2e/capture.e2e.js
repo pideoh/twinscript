@@ -1,7 +1,8 @@
 // Browser tests: audio capture (microphone, PC audio, native helper, auto gain).
-import { test } from 'node:test';
+
 import assert from 'node:assert/strict';
-import { setup, rows, mockGemini, fakeNativeSystemAudio } from './helpers.js';
+import { test } from 'node:test';
+import { fakeNativeSystemAudio, mockGemini, rows, setup } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -17,7 +18,10 @@ test('microphone audio is streamed and results are transcribed, split and transl
   await page.routeWebSocket(/generativelanguage/, (ws) => {
     ws.onMessage((raw) => {
       const msg = JSON.parse(raw);
-      if (msg.setup) { seen.setup = msg.setup; ws.send(JSON.stringify({ setupComplete: {} })); }
+      if (msg.setup) {
+        seen.setup = msg.setup;
+        ws.send(JSON.stringify({ setupComplete: {} }));
+      }
       if (msg.realtimeInput?.audioStreamEnd) seen.ended++;
       if (!msg.realtimeInput?.audio) return;
       seen.chunks++;
@@ -38,11 +42,16 @@ test('microphone audio is streamed and results are transcribed, split and transl
   await page.click('#toggle');
   await page.waitForFunction(() => document.querySelector('.seg.live .src')?.textContent === 'ありがとう');
   assert.equal(await page.textContent('#statusText'), '聞き取り中');
-  await page.waitForFunction(() => [...document.querySelectorAll('.seg:not(.live) .tgt')].every((n) => n.textContent.startsWith('訳:')));
-  assert.deepEqual((await rows(page)).filter((r) => !r.live), [
-    { live: false, src: 'Hello everyone, thanks for joining.', tgt: '訳:Hello everyone, thanks for joining.' },
-    { live: false, src: 'Today we will review the plan.', tgt: '訳:Today we will review the plan.' },
-  ]);
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.seg:not(.live) .tgt')].every((n) => n.textContent.startsWith('訳:')),
+  );
+  assert.deepEqual(
+    (await rows(page)).filter((r) => !r.live),
+    [
+      { live: false, src: 'Hello everyone, thanks for joining.', tgt: '訳:Hello everyone, thanks for joining.' },
+      { live: false, src: 'Today we will review the plan.', tgt: '訳:Today we will review the plan.' },
+    ],
+  );
 
   await page.click('#toggle'); // stopping keeps the sentence in progress
   await page.waitForFunction(() => !document.querySelector('.seg.live'));
@@ -69,8 +78,11 @@ test('a rejected API key stops the session with a message', async () => {
 });
 
 test('the desktop app on macOS takes PC audio from the native helper instead of a screen share', async () => {
-  const { page, errors, close } = await openApp('', { apiKey: 'test-key', source: 'system', record: false },
-    { script: fakeNativeSystemAudio, arg: {} });
+  const { page, errors, close } = await openApp(
+    '',
+    { apiKey: 'test-key', source: 'system', record: false },
+    { script: fakeNativeSystemAudio, arg: {} },
+  );
   const seen = { chunks: 0, peak: 0, bytes: 0 };
   await page.routeWebSocket(/generativelanguage/, (ws) => {
     ws.onMessage((raw) => {
@@ -98,11 +110,16 @@ test('the desktop app on macOS takes PC audio from the native helper instead of 
 });
 
 test('the desktop app on macOS explains a missing Screen Recording permission and stops', async () => {
-  const { page, errors, close } = await openApp('', { apiKey: 'test-key', source: 'system', record: false },
-    { script: fakeNativeSystemAudio, arg: { endWith: 'permission' } });
+  const { page, errors, close } = await openApp(
+    '',
+    { apiKey: 'test-key', source: 'system', record: false },
+    { script: fakeNativeSystemAudio, arg: { endWith: 'permission' } },
+  );
   await mockGemini(page, []);
   await page.click('#toggle');
-  await page.waitForFunction(() => document.getElementById('toast').textContent.includes('画面収録とシステムオーディオ録音'));
+  await page.waitForFunction(() =>
+    document.getElementById('toast').textContent.includes('画面収録とシステムオーディオ録音'),
+  );
   assert.match(await page.textContent('#toast'), /Twinscript を許可し、アプリを開き直してください/);
   assert.equal(await page.textContent('#toggle'), '翻訳開始');
   assert.equal(await page.textContent('#statusText'), '停止中');
@@ -113,8 +130,11 @@ test('the desktop app on macOS explains a missing Screen Recording permission an
 });
 
 test('very quiet PC audio is brought up to a usable level before it is transcribed', async () => {
-  const { page, close } = await openApp('', { apiKey: 'test-key', source: 'system', record: false },
-    { script: fakeNativeSystemAudio, arg: { amplitude: 0.005 } }); // about -46 dBFS
+  const { page, close } = await openApp(
+    '',
+    { apiKey: 'test-key', source: 'system', record: false },
+    { script: fakeNativeSystemAudio, arg: { amplitude: 0.005 } },
+  ); // about -46 dBFS
   const peaks = [];
   await page.routeWebSocket(/generativelanguage/, (ws) => {
     ws.onMessage((raw) => {
@@ -135,4 +155,3 @@ test('very quiet PC audio is brought up to a usable level before it is transcrib
   await page.click('#toggle');
   await close();
 });
-

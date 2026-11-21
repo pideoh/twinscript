@@ -19,7 +19,9 @@ export class GeminiTranslator {
       'The text may be an unfinished sentence because the speaker is still talking; translate what is there without inventing a continuation.',
       '<context> holds earlier lines for reference only; never translate it.',
       glossary ? `Background and glossary supplied by the user:\n${glossary}` : '',
-    ].filter(Boolean).join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 
   // history: [{src, tgt}], onDelta(fullTextSoFar). Resolves with the full translation.
@@ -49,7 +51,11 @@ export class GeminiTranslator {
       }
       if (res.status === 429) throw new RateLimitError('error.rateLimit');
       let message = detail;
-      try { message = JSON.parse(detail).error.message; } catch { /* keep raw */ }
+      try {
+        message = JSON.parse(detail).error.message;
+      } catch {
+        /* keep raw */
+      }
       throw new MessageError('error.translate', { status: res.status, message: message.slice(0, 200) });
     }
 
@@ -67,9 +73,17 @@ export class GeminiTranslator {
         if (!line.startsWith('data:')) continue;
         try {
           const parts = JSON.parse(line.slice(5)).candidates?.[0]?.content?.parts || [];
-          const delta = parts.filter((p) => !p.thought).map((p) => p.text || '').join('');
-          if (delta) { out += delta; onDelta?.(out); }
-        } catch { /* partial or keep-alive line */ }
+          const delta = parts
+            .filter((p) => !p.thought)
+            .map((p) => p.text || '')
+            .join('');
+          if (delta) {
+            out += delta;
+            onDelta?.(out);
+          }
+        } catch {
+          /* partial or keep-alive line */
+        }
       }
     }
     return out.trim();

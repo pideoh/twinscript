@@ -1,5 +1,5 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { UtteranceTracker } from '../src/segmenter.js';
 
 // Minimal stand-in for the transcript view: finished segments in display order + the live text.
@@ -12,18 +12,25 @@ function screen() {
       if (!aboveLive) view.live = '';
       return seg;
     },
-    setLive(text) { view.live = text; },
-    correct(seg, text) { seg.text = text; },
+    setLive(text) {
+      view.live = text;
+    },
+    correct(seg, text) {
+      seg.text = text;
+    },
   });
   const feed = (events) => {
-    for (const [kind, text] of events) (kind === 'i' ? tracker.interim(text) : tracker.final(text));
+    for (const [kind, text] of events) kind === 'i' ? tracker.interim(text) : tracker.final(text);
   };
   return { view, tracker, feed, texts: () => view.segs.map((s) => s.text) };
 }
 
 test('a paused utterance becomes one segment', () => {
   const s = screen();
-  s.feed([['i', 'Good'], ['i', 'Good morning']]);
+  s.feed([
+    ['i', 'Good'],
+    ['i', 'Good morning'],
+  ]);
   assert.deepEqual(s.texts(), []);
   assert.equal(s.view.live, 'Good morning');
   s.feed([['f', 'Good morning.']]);
@@ -64,14 +71,20 @@ test('a sentence is only split off once it is unchanged between two updates', ()
 
 test('a sentence is not split off until the next one has started', () => {
   const s = screen();
-  s.feed([['i', 'This is a complete sentence.'], ['i', 'This is a complete sentence.']]);
+  s.feed([
+    ['i', 'This is a complete sentence.'],
+    ['i', 'This is a complete sentence.'],
+  ]);
   assert.deepEqual(s.texts(), []);
 });
 
 test('periods inside numbers and model names do not split', () => {
   const s = screen();
   const text = 'GPT-6.1 Astra costs $10.50 per million tokens today';
-  s.feed([['i', text], ['i', `${text} I think`]]);
+  s.feed([
+    ['i', text],
+    ['i', `${text} I think`],
+  ]);
   assert.deepEqual(s.texts(), []);
 });
 
@@ -89,11 +102,14 @@ test('text with no sentence end is force-split at a clause boundary', () => {
   const s = screen();
   const clause = 'and then we looked at the numbers again, ';
   const long = clause.repeat(6); // 246 chars, no sentence end
-  s.feed([['i', long], ['i', `${long}and`]]);
+  s.feed([
+    ['i', long],
+    ['i', `${long}and`],
+  ]);
   assert.equal(s.texts().length, 1);
   assert.ok(s.texts()[0].length <= 180);
   assert.ok(s.texts()[0].endsWith(','));
-  assert.equal(s.texts()[0] + ' ' + s.view.live, `${long}and`);
+  assert.equal(`${s.texts()[0]} ${s.view.live}`, `${long}and`);
 });
 
 test('revised earlier words do not lose or duplicate later text', () => {
@@ -109,7 +125,12 @@ test('revised earlier words do not lose or duplicate later text', () => {
 
 test('a new utterance without a final in between keeps the previous one', () => {
   const s = screen();
-  s.feed([['i', 'Hello there'], ['i', 'Hello there everyone'], ['i', 'So today'], ['i', 'So today we will talk']]);
+  s.feed([
+    ['i', 'Hello there'],
+    ['i', 'Hello there everyone'],
+    ['i', 'So today'],
+    ['i', 'So today we will talk'],
+  ]);
   assert.deepEqual(s.texts(), ['Hello there everyone']);
   assert.equal(s.view.live, 'So today we will talk');
   s.feed([['f', 'So today we will talk about it.']]);
@@ -118,10 +139,17 @@ test('a new utterance without a final in between keeps the previous one', () => 
 
 test('a late final corrects the segment it belongs to', () => {
   const s = screen();
-  s.feed([['i', 'こんにちは皆さん'], ['i', '今日は'], ['f', 'こんにちは、皆さん。']]);
+  s.feed([
+    ['i', 'こんにちは皆さん'],
+    ['i', '今日は'],
+    ['f', 'こんにちは、皆さん。'],
+  ]);
   assert.deepEqual(s.texts(), ['こんにちは、皆さん。']);
   assert.equal(s.view.live, '今日は');
-  s.feed([['i', '今日は天気がいい'], ['f', '今日は天気がいいですね。']]);
+  s.feed([
+    ['i', '今日は天気がいい'],
+    ['f', '今日は天気がいいですね。'],
+  ]);
   assert.deepEqual(s.texts(), ['こんにちは、皆さん。', '今日は天気がいいですね。']);
 });
 
@@ -140,10 +168,16 @@ test('a late final after split sentences only corrects the unfinished tail', () 
 
 test('an unrelated final does not disturb the utterance in progress', () => {
   const s = screen();
-  s.feed([['i', 'Talking right now'], ['f', 'Something else entirely.']]);
+  s.feed([
+    ['i', 'Talking right now'],
+    ['f', 'Something else entirely.'],
+  ]);
   assert.deepEqual(s.texts(), ['Something else entirely.']);
   assert.equal(s.view.live, 'Talking right now');
-  s.feed([['i', 'Talking right now about it'], ['f', 'Talking right now about it.']]);
+  s.feed([
+    ['i', 'Talking right now about it'],
+    ['f', 'Talking right now about it.'],
+  ]);
   assert.deepEqual(s.texts(), ['Something else entirely.', 'Talking right now about it.']);
 });
 
@@ -166,7 +200,10 @@ test('a final that rewords the utterance does not repeat sentences already shown
     ['i', `${a}都会の片隅`],
     ['i', `${a}${b}隣家は`],
     ['i', `${a}${b}隣家はさっさと土地を売ってどこかに引っ越してしまった。`],
-    ['f', 'ブルーバスターズ。僕はアカリ。都会の片隅の土地に、父の代から住んでいるのだが、そのすぐ隣がタワマンの建設予定地になった。リンカはさっさと土地を売って、どこかに引っ越してしまった。'],
+    [
+      'f',
+      'ブルーバスターズ。僕はアカリ。都会の片隅の土地に、父の代から住んでいるのだが、そのすぐ隣がタワマンの建設予定地になった。リンカはさっさと土地を売って、どこかに引っ越してしまった。',
+    ],
   ]);
   assert.deepEqual(s.texts(), [
     'ブルーバスターズ僕はアカリ。',
@@ -185,7 +222,9 @@ test('an interim that changes a word in the middle is the same utterance', () =>
   assert.deepEqual(s.texts(), []);
   assert.equal(s.view.live, '気になった僕はタママを手掛けている');
   s.feed([['f', '気になった僕は、タワマンを手がけているチャンピオン不動産の営業担当に話をすることにしたのだが。']]);
-  assert.deepEqual(s.texts(), ['気になった僕は、タワマンを手がけているチャンピオン不動産の営業担当に話をすることにしたのだが。']);
+  assert.deepEqual(s.texts(), [
+    '気になった僕は、タワマンを手がけているチャンピオン不動産の営業担当に話をすることにしたのだが。',
+  ]);
 });
 
 test('spaces between Japanese characters are removed, other spaces are kept', () => {

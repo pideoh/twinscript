@@ -1,16 +1,26 @@
 // Rules of the desktop app's main process (app/policy.js), tested without Electron.
-import { test } from 'node:test';
+
 import assert from 'node:assert/strict';
-import { resolveAppFile, isAppUrl, isExternalUrl, windowOpenAction, allowPermission } from '../app/policy.js';
+import { test } from 'node:test';
+import { allowPermission, isAppUrl, isExternalUrl, resolveAppFile, windowOpenAction } from '../app/policy.js';
 
 test('serves the files the web app is made of, with their content types', () => {
   assert.deepEqual(resolveAppFile('app://rt/'), { path: 'index.html', type: 'text/html; charset=utf-8' });
   assert.deepEqual(resolveAppFile('app://rt/?mock=1'), { path: 'index.html', type: 'text/html; charset=utf-8' });
   assert.deepEqual(resolveAppFile('app://rt/index.html'), { path: 'index.html', type: 'text/html; charset=utf-8' });
   assert.deepEqual(resolveAppFile('app://rt/styles.css'), { path: 'styles.css', type: 'text/css; charset=utf-8' });
-  assert.deepEqual(resolveAppFile('app://rt/src/app.js'), { path: 'src/app.js', type: 'text/javascript; charset=utf-8' });
-  assert.deepEqual(resolveAppFile('app://rt/src/pcm-worklet.js'), { path: 'src/pcm-worklet.js', type: 'text/javascript; charset=utf-8' });
-  assert.deepEqual(resolveAppFile('app://rt/src/locales/zh-Hans.js'), { path: 'src/locales/zh-Hans.js', type: 'text/javascript; charset=utf-8' });
+  assert.deepEqual(resolveAppFile('app://rt/src/app.js'), {
+    path: 'src/app.js',
+    type: 'text/javascript; charset=utf-8',
+  });
+  assert.deepEqual(resolveAppFile('app://rt/src/pcm-worklet.js'), {
+    path: 'src/pcm-worklet.js',
+    type: 'text/javascript; charset=utf-8',
+  });
+  assert.deepEqual(resolveAppFile('app://rt/src/locales/zh-Hans.js'), {
+    path: 'src/locales/zh-Hans.js',
+    type: 'text/javascript; charset=utf-8',
+  });
   assert.deepEqual(resolveAppFile('app://rt/icons/icon.svg'), { path: 'icons/icon.svg', type: 'image/svg+xml' });
   assert.deepEqual(resolveAppFile('app://rt/icons/icon-512.png#x'), { path: 'icons/icon-512.png', type: 'image/png' });
 });
@@ -41,7 +51,8 @@ test('everything else is not served', () => {
     'https://rt/index.html',
     'file:///etc/passwd',
     'not a url',
-  ]) assert.equal(resolveAppFile(url), null, url);
+  ])
+    assert.equal(resolveAppFile(url), null, url);
 });
 
 test('only app://rt/ counts as the app; only http(s) goes to the system browser', () => {

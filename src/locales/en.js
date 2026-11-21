@@ -78,7 +78,8 @@ export default {
   'settings.apiKey': 'Gemini API key',
   'settings.apiKey.helpBefore': 'Get one for free at ',
   'settings.apiKey.helpAfter': '. The key is stored only on this device.',
-  'settings.running': 'Translation is running. Changes to the API key, translation model, cleanup, recording, glossary and target language take effect the next time you start.',
+  'settings.running':
+    'Translation is running. Changes to the API key, translation model, cleanup, recording, glossary and target language take effect the next time you start.',
   'settings.model': 'Translation model',
   'settings.interim': 'Translate sentences while they are being spoken (favors real-time)',
   'settings.smart': 'Clean up the transcript (removes fillers; sentences may take a little longer to finalize)',
@@ -87,11 +88,13 @@ export default {
   'settings.otherInto.left': '{lang} (left language)',
   'settings.otherInto.right': '{lang} (right language)',
   'settings.captionItems': 'Sentences kept in the area below',
-  'settings.captionItems.help': 'This includes the sentence being spoken. More is easier to re-read, and the area gets taller.',
+  'settings.captionItems.help':
+    'This includes the sentence being spoken. More is easier to re-read, and the area gets taller.',
   'settings.captionItems.one': '{n} sentence',
   'settings.captionItems.other': '{n} sentences',
   'settings.interimInterval': 'Interval for re-translating a sentence in progress',
-  'settings.interimInterval.help': 'Shorter shows translations sooner, but the text changes more often and uses more of the API.',
+  'settings.interimInterval.help':
+    'Shorter shows translations sooner, but the text changes more often and uses more of the API.',
   'settings.interimInterval.value': '{s} s',
   'settings.glossary': 'Glossary and meeting background (used in translation)',
   'settings.glossary.placeholder': 'e.g. proper nouns, product names, meeting topic',
@@ -112,18 +115,22 @@ export default {
   'toast.apiKeyFirst': 'Set your Gemini API key first',
   'toast.audioEnded': 'Audio input ended',
   'toast.permissionNeeded': 'Microphone or screen sharing permission is required. Check your browser settings.',
-  'toast.systemAudioSilentMac': 'No PC audio is coming in. If nothing reacts while sound is playing, allow Twinscript in System Settings → Privacy & Security → "Screen & System Audio Recording" and reopen the app.',
-  'toast.systemAudioSilent': 'No PC audio is coming in. If nothing reacts while sound is playing, check that audio sharing was turned on when you shared.',
+  'toast.systemAudioSilentMac':
+    'No PC audio is coming in. If nothing reacts while sound is playing, allow Twinscript in System Settings → Privacy & Security → "Screen & System Audio Recording" and reopen the app.',
+  'toast.systemAudioSilent':
+    'No PC audio is coming in. If nothing reacts while sound is playing, check that audio sharing was turned on when you shared.',
   'toast.recordSaveFailed': 'Could not save the recording (check the free storage space)',
   'toast.recordUnsupported': 'This browser cannot record audio, so only the transcript is kept',
-  'toast.rateLimited': 'Rate limit reached. Translation of sentences in progress is paused for 1 minute (finished sentences are still translated).',
+  'toast.rateLimited':
+    'Rate limit reached. Translation of sentences in progress is paused for 1 minute (finished sentences are still translated).',
   'toast.storageUnavailable': 'Browser storage is unavailable, so the content is lost when this tab is closed',
   'toast.demo': 'Demo mode: no real speech recognition or translation',
 
   // errors reported by audio.js, transcriber.js and translator.js
   'error.windowBlocked': 'The window was blocked',
   'error.noSharedAudio': 'The shared screen or tab has no audio. Turn on "Share audio" in the sharing dialog.',
-  'error.systemAudioPermission': 'Twinscript has no permission to capture PC audio. Allow it in System Settings → Privacy & Security → "Screen & System Audio Recording" and reopen the app.',
+  'error.systemAudioPermission':
+    'Twinscript has no permission to capture PC audio. Allow it in System Settings → Privacy & Security → "Screen & System Audio Recording" and reopen the app.',
   'error.systemAudioFailed': 'Could not capture PC audio.',
   'error.connectFailed': 'Could not connect: {reason}',
   'error.disconnected': 'Disconnected: {reason}',

@@ -2,15 +2,23 @@
 // cannot do on its own: system audio without the share dialog and a caption overlay that floats
 // above full-screen apps. The rules themselves live in policy.js and system-audio.js (unit-tested
 // without Electron).
-import { app, BrowserWindow, desktopCapturer, ipcMain, nativeTheme, protocol, screen, session, shell } from 'electron';
+
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { app, BrowserWindow, desktopCapturer, ipcMain, nativeTheme, protocol, screen, session, shell } from 'electron';
 import {
-  SCHEME, START_URL, CAPTION_WINDOW, resolveAppFile, isAppUrl, isExternalUrl, windowOpenAction, allowPermission,
+  allowPermission,
+  CAPTION_WINDOW,
+  isAppUrl,
+  isExternalUrl,
+  resolveAppFile,
+  SCHEME,
+  START_URL,
+  windowOpenAction,
 } from './policy.js';
-import { helperPath, endReason, isSystemAudioCaller, createSampleFramer } from './system-audio.js';
+import { createSampleFramer, endReason, helperPath, isSystemAudioCaller } from './system-audio.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -85,7 +93,9 @@ function startSystemAudio(contents) {
     const samples = frame(chunk);
     if (samples && helper === current && !contents.isDestroyed()) contents.send('system-audio:data', samples);
   });
-  proc.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-1000); });
+  proc.stderr.on('data', (chunk) => {
+    stderr = (stderr + chunk).slice(-1000);
+  });
   proc.stdin.on('error', () => {}); // the helper may exit before we close its stdin
   const ended = (code) => {
     if (helper !== current) return;
@@ -97,7 +107,10 @@ function startSystemAudio(contents) {
   // Not starting at all (e.g. the helper is missing) rejects start(); a later failure is an end.
   let spawned = false;
   return new Promise((resolve, reject) => {
-    proc.once('spawn', () => { spawned = true; resolve(); });
+    proc.once('spawn', () => {
+      spawned = true;
+      resolve();
+    });
     proc.once('error', (err) => {
       if (spawned) return ended(null);
       if (helper === current) helper = null;
@@ -107,11 +120,12 @@ function startSystemAudio(contents) {
 }
 
 function handleSystemAudio() {
-  const allowed = (event) => isSystemAudioCaller({
-    url: event.senderFrame?.url,
-    isMainFrame: event.senderFrame === event.sender.mainFrame,
-    isMainWindow: !!mainWindow && event.sender === mainWindow.webContents,
-  });
+  const allowed = (event) =>
+    isSystemAudioCaller({
+      url: event.senderFrame?.url,
+      isMainFrame: event.senderFrame === event.sender.mainFrame,
+      isMainWindow: !!mainWindow && event.sender === mainWindow.webContents,
+    });
   ipcMain.handle('system-audio:start', async (event) => {
     if (!allowed(event)) throw new Error('not allowed');
     await startSystemAudio(event.sender);
@@ -201,7 +215,9 @@ app.whenReady().then(() => {
   handleDisplayMedia(ses);
   if (process.platform === 'darwin') handleSystemAudio();
   createMainWindow();
-  app.on('activate', () => { if (!mainWindow) createMainWindow(); });
+  app.on('activate', () => {
+    if (!mainWindow) createMainWindow();
+  });
 });
 
 app.on('window-all-closed', () => {

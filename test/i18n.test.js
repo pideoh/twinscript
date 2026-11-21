@@ -1,6 +1,6 @@
-import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveLocale, setLocale, getLocale, t, availableLocales, catalogs, DEFAULT_LOCALE } from '../src/i18n.js';
+import { afterEach, test } from 'node:test';
+import { availableLocales, catalogs, DEFAULT_LOCALE, getLocale, resolveLocale, setLocale, t } from '../src/i18n.js';
 
 afterEach(() => setLocale(DEFAULT_LOCALE));
 
@@ -36,7 +36,10 @@ test('t fills placeholders and falls back to English, then to the key', () => {
   setLocale('ja');
   assert.equal(getLocale(), 'ja');
   assert.equal(t('toggle.start'), '翻訳開始');
-  assert.equal(t('export.recording', { n: 2, date: '2026-11-15 09:05', length: '00:01:00' }), '録音 2 ・ 2026-11-15 09:05 ・ 00:01:00');
+  assert.equal(
+    t('export.recording', { n: 2, date: '2026-11-15 09:05', length: '00:01:00' }),
+    '録音 2 ・ 2026-11-15 09:05 ・ 00:01:00',
+  );
   assert.equal(t('error.disconnectedCode', { code: 0 }), '接続が切れました（コード 0）', 'falsy values are filled in');
   assert.equal(t('error.connectFailed', {}), '接続できませんでした: {reason}', 'missing values leave the placeholder');
   assert.equal(t('settings.apiKey.helpBefore'), '', 'an empty translation is a translation');

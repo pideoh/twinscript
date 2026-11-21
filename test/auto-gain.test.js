@@ -1,9 +1,10 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { AutoGain } from '../src/auto-gain.js';
 
 const RATE = 48000;
-const tone = (amplitude, seconds) => Float32Array.from({ length: RATE * seconds }, (_, i) => amplitude * Math.sin(2 * Math.PI * 440 * i / RATE));
+const tone = (amplitude, seconds) =>
+  Float32Array.from({ length: RATE * seconds }, (_, i) => amplitude * Math.sin((2 * Math.PI * 440 * i) / RATE));
 const rms = (a) => Math.sqrt(a.reduce((s, v) => s + v * v, 0) / a.length);
 function run(gain, input) {
   const out = new Float32Array(input.length);
@@ -26,7 +27,7 @@ test('audio that is already loud enough is left alone', () => {
 
 test('the output never clips', () => {
   const gain = new AutoGain(RATE);
-  run(gain, tone(0.005, 8));           // gain is now high
+  run(gain, tone(0.005, 8)); // gain is now high
   const out = run(gain, tone(0.9, 1)); // a sudden loud sound
   assert.ok(out.every((v) => Math.abs(v) <= 1));
   assert.ok(rms(tail(out, 0.5)) < 0.75, 'and the gain comes back down');
