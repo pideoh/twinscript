@@ -1,5 +1,4 @@
 node_modules/
 .DS_Store
 dist/
-native/mac/build/
 CLAUDE.local.md

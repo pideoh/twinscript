@@ -46,14 +46,14 @@ Each release also has a `SHA256SUMS.txt` to check the download against. See the 
 - **PC audio**: what is playing on the computer, for the other side of an online meeting.
 - **Microphone + PC audio**: both. The microphone also picks up the speakers, so use earphones.
 
-On macOS, PC audio needs macOS 13 or later and a permission: allow Twinscript in
-System Settings → Privacy & Security → "Screen & System Audio Recording", then reopen the app.
-If the permission is missing, the app explains it and stops.
+On macOS, PC audio needs macOS 14.2 or later and one permission: allow Twinscript in
+System Settings → Privacy & Security → Screen & System Audio Recording → "System Audio Recording Only", then reopen the app.
+If the permission is missing, the app tells you where to allow it.
 
 The permissions you grant are kept when you update: every release is signed with the same certificate, so macOS
 recognizes the new version as the same app. The one exception is the first update to a version signed this way
 (releases before it had a different identity each time). If PC audio stays silent or macOS keeps asking after that
-update, remove Twinscript from the list under "Screen & System Audio Recording" (and "Microphone") with the − button,
+update, remove Twinscript from the list under "System Audio Recording Only" (and "Microphone") with the − button,
 then open the app and allow it again.
 
 ### Captions on top of other apps
@@ -121,7 +121,7 @@ system cannot encrypt it, the key is not saved and the app asks for it again the
 | Transcription (streaming, with interim results) | Gemini Live API `gemini-3.5-transcribe-live` |
 | Translation (streaming) | `gemini-3.5-flash-lite` (can be changed in settings) |
 
-The app is built with web technology and packaged with Electron. On macOS, PC audio is captured by a small native helper.
+The app is built with web technology and packaged with Electron.
 
 ## Development
 
@@ -132,7 +132,6 @@ npm run dist:mac   # macOS zips in dist/ (Apple silicon / Intel)
 npm run dist:win   # Windows zip in dist/ (x64)
 ```
 
-On macOS, `npm run app` and `npm run dist:mac` also build the PC audio helper in Swift (Xcode command line tools).
 Releases are built and published automatically when a change to the app lands on `main`.
 
 The interface also runs in a browser, which is convenient while developing:

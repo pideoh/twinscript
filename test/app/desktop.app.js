@@ -33,7 +33,7 @@ test('serves only the app files from app://rt/', async () => {
   assert.equal(await status('app/main.js'), 404);
 });
 
-test('the preload gives the page the secret store, caption overlay click-through, global shortcuts and, on macOS, the native PC audio bridge, nothing else', async () => {
+test('the preload gives the page the secret store, caption overlay click-through and global shortcuts, nothing else', async () => {
   const page = await app.firstWindow();
   const surface = await page.evaluate(() => {
     const keys = (o) => (o ? Object.keys(o).sort() : null);
@@ -41,7 +41,6 @@ test('the preload gives the page the secret store, caption overlay click-through
       secretStore: keys(window.secretStore),
       captionOverlay: keys(window.captionOverlay),
       appShortcuts: keys(window.appShortcuts),
-      nativeSystemAudio: keys(window.nativeSystemAudio),
       // What the context bridge exposes arrives as frozen plain objects on window; anything
       // added later would show up here.
       bridged: Object.getOwnPropertyNames(window)
@@ -55,11 +54,7 @@ test('the preload gives the page the secret store, caption overlay click-through
   assert.deepEqual(surface.secretStore, ['get', 'set']);
   assert.deepEqual(surface.captionOverlay, ['setClickThrough']);
   assert.deepEqual(surface.appShortcuts, ['focusApp', 'onCommand', 'setEnabled', 'status']);
-  const exposed = ['appShortcuts', 'captionOverlay', 'secretStore'];
-  if (process.platform === 'darwin') exposed.push('nativeSystemAudio');
-  assert.deepEqual(surface.bridged, exposed.sort());
-  if (process.platform === 'darwin') assert.deepEqual(surface.nativeSystemAudio, ['onData', 'onEnd', 'start', 'stop']);
-  else assert.equal(surface.nativeSystemAudio, null);
+  assert.deepEqual(surface.bridged, ['appShortcuts', 'captionOverlay', 'secretStore']);
   assert.equal(await page.evaluate(() => typeof require), 'undefined');
   assert.equal(await page.evaluate(() => typeof window.electron), 'undefined');
 });

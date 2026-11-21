@@ -10,13 +10,11 @@ import { fileURLToPath } from 'node:url';
 const SHIPPED = [
   /^app\//,
   /^src\//,
-  /^native\//,
   /^icons\//,
   /^index\.html$/,
   /^styles\.css$/,
   /^LICENSE$/,
   /^THIRD-PARTY-NOTICES\.md$/,
-  /^scripts\/build-mac-helper\.sh$/,
 ];
 
 // The parts of package.json that end up in the app or decide how it is built.

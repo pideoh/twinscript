@@ -1,9 +1,8 @@
 // Electron main process: serves the static web app from app://rt/ and adds what a browser tab
 // cannot do on its own: system audio without the share dialog, a caption overlay that floats
 // above full-screen apps and secrets encrypted by the operating system. The rules themselves live
-// in policy.js, system-audio.js, secrets.js and shortcuts.js (unit-tested without Electron).
+// in policy.js, secrets.js and shortcuts.js (unit-tested without Electron).
 
-import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +22,8 @@ import {
 import {
   allowPermission,
   CAPTION_WINDOW,
+  displayMediaVideo,
+  isAppCaller,
   isAppUrl,
   isExternalUrl,
   resolveAppFile,
@@ -32,7 +33,6 @@ import {
 } from './policy.js';
 import { createSecretStore } from './secrets.js';
 import { createShortcuts } from './shortcuts.js';
-import { createSampleFramer, endReason, helperPath, isSystemAudioCaller } from './system-audio.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -67,10 +67,19 @@ function guardPermissions(ses) {
   ses.setPermissionCheckHandler((_wc, permission, requestingOrigin) => allowPermission(permission, requestingOrigin));
 }
 
-// Answers getDisplayMedia ("PC音声") with the primary screen and system audio, without a picker.
+// Answers getDisplayMedia ("PC音声") with system audio, without a picker. The video is the
+// requesting page on macOS and the primary screen elsewhere (see displayMediaVideo).
 function handleDisplayMedia(ses) {
   ses.setDisplayMediaRequestHandler(async (request, callback) => {
     if (!isAppUrl(request.securityOrigin ?? request.frame?.url ?? '')) return callback(null);
+    if (displayMediaVideo(process.platform) === 'frame') {
+      try {
+        callback(request.frame ? { video: request.frame, audio: 'loopback' } : null);
+      } catch {
+        // The callback throws when the frame is gone (the page navigated or closed); nobody waits.
+      }
+      return;
+    }
     try {
       const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
       const primary = String(screen.getPrimaryDisplay().id);
@@ -83,75 +92,13 @@ function handleDisplayMedia(ses) {
   });
 }
 
-// macOS: Electron's loopback audio delivers no samples there, so "PC音声" comes from a native
-// helper (ScreenCaptureKit) instead, streamed to the page through the preload script.
-let helper = null; // { proc, contents }
-
-function stopSystemAudio() {
-  if (!helper) return;
-  const { proc } = helper;
-  helper = null; // an exit we asked for is not reported to the page
-  proc.stdin.destroy();
-  proc.kill('SIGTERM');
-}
-
-function startSystemAudio(contents) {
-  stopSystemAudio();
-  const file = helperPath({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, appRoot: ROOT });
-  const proc = spawn(file, [], { stdio: ['pipe', 'pipe', 'pipe'] });
-  const current = { proc, contents };
-  helper = current;
-  const frame = createSampleFramer();
-  let stderr = '';
-  proc.stdout.on('data', (chunk) => {
-    const samples = frame(chunk);
-    if (samples && helper === current && !contents.isDestroyed()) contents.send('system-audio:data', samples);
-  });
-  proc.stderr.on('data', (chunk) => {
-    stderr = (stderr + chunk).slice(-1000);
-  });
-  proc.stdin.on('error', () => {}); // the helper may exit before we close its stdin
-  const ended = (code) => {
-    if (helper !== current) return;
-    helper = null;
-    if (stderr.trim()) console.error(`system-audio: ${stderr.trim()}`);
-    if (!contents.isDestroyed()) contents.send('system-audio:end', endReason(code));
-  };
-  proc.on('exit', (code) => ended(code));
-  // Not starting at all (e.g. the helper is missing) rejects start(); a later failure is an end.
-  let spawned = false;
-  return new Promise((resolve, reject) => {
-    proc.once('spawn', () => {
-      spawned = true;
-      resolve();
-    });
-    proc.once('error', (err) => {
-      if (spawned) return ended(null);
-      if (helper === current) helper = null;
-      reject(err);
-    });
-  });
-}
-
 // Only the app's own page in the main window's top frame may use the IPC handlers below.
 const allowed = (event) =>
-  isSystemAudioCaller({
+  isAppCaller({
     url: event.senderFrame?.url,
     isMainFrame: event.senderFrame === event.sender.mainFrame,
     isMainWindow: !!mainWindow && event.sender === mainWindow.webContents,
   });
-
-function handleSystemAudio() {
-  ipcMain.handle('system-audio:start', async (event) => {
-    if (!allowed(event)) throw new Error('not allowed');
-    await startSystemAudio(event.sender);
-  });
-  ipcMain.handle('system-audio:stop', (event) => {
-    if (!allowed(event)) throw new Error('not allowed');
-    stopSystemAudio();
-  });
-  app.on('will-quit', stopSystemAudio);
-}
 
 // The API key, encrypted with safeStorage. Nothing is written when encryption is unavailable.
 function handleSecrets() {
@@ -248,9 +195,6 @@ function createMainWindow() {
     },
   });
   const contents = mainWindow.webContents;
-  // A reload or a crashed page no longer listens to the capture it started.
-  contents.on('did-navigate', stopSystemAudio);
-  contents.on('render-process-gone', stopSystemAudio);
   contents.setWindowOpenHandler((details) => {
     const action = windowOpenAction(details);
     if (action === 'external') shell.openExternal(details.url);
@@ -277,7 +221,6 @@ function createMainWindow() {
     if (details.frameName === CAPTION_WINDOW) openCaptionOverlay(win);
   });
   mainWindow.on('closed', () => {
-    stopSystemAudio();
     // The overlay holds the caption zone of this page; it has nothing to show without it.
     for (const win of BrowserWindow.getAllWindows()) win.close();
     mainWindow = null;
@@ -302,7 +245,6 @@ app.whenReady().then(() => {
   serveAppFiles(ses);
   guardPermissions(ses);
   handleDisplayMedia(ses);
-  if (process.platform === 'darwin') handleSystemAudio();
   handleSecrets();
   handleCaptionOverlay();
   handleShortcuts();
