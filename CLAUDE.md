@@ -33,7 +33,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `test/*.test.js` | Unit tests (`node:test`, no dependencies) |
 | `test/e2e/*.e2e.js`, `test/e2e/helpers.js` | Browser tests: Chrome, a fake microphone and mocked Gemini endpoints. Split into files by topic so they run in parallel; shared setup is in `helpers.js` |
 | `test/app/desktop.app.js` | Desktop smoke tests (need a display, so not run in CI) |
-| `.github/workflows/release.yml`, `scripts/next-version.js` | Build the zips, pick the next version and publish a GitHub Release when the app changes on `main` |
+| `.github/workflows/release.yml`, `scripts/release-needed.js`, `scripts/next-version.js` | Decide whether a change on `main` affects the shipped app, pick the next version, build the zips and publish a GitHub Release |
 
 ## Commands
 
@@ -62,8 +62,10 @@ browser, which is used for development and the browser tests. Usage and pricing 
 
 ## Releases
 
-Any change to the app on `main` (`app/`, `src/`, `native/`, `icons/`, `index.html`, `styles.css`,
-`package.json`) is built and published automatically. The version bump comes
-from the commit subjects since the last release; the table is in CONTRIBUTING.md. In short: start a
-subject with `Add` or `feat` only for a new feature, never bump `version` in `package.json` by hand,
-and mark breaking changes with `BREAKING CHANGE` in the body.
+A change on `main` is built and published automatically when it changes what users download: the app's
+own files (`app/`, `src/`, `native/`, `icons/`, `index.html`, `styles.css`), Electron or electron-builder,
+or the build configuration in `package.json`. `scripts/release-needed.js` decides this; updates to checking
+and testing tools, workflows, tests and docs do not publish a version. The version bump comes from the
+commit subjects since the last release; the table is in CONTRIBUTING.md. In short: start a subject with
+`Add` or `feat` only for a new feature, never bump `version` in `package.json` by hand, and mark breaking
+changes with `BREAKING CHANGE` in the body.

@@ -37,6 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.next.outputs.version }}
+      release: ${{ steps.needed.outputs.release }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -45,11 +46,20 @@ jobs:
         with:
           node-version: 22
       - run: npm test
+      # Tool, workflow, test and doc changes do not change what users download: no new version.
+      # A manual run always releases.
+      - id: needed
+        env:
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          if [ "$MANUAL" = "true" ]; then echo "release=true" >> "$GITHUB_OUTPUT"
+          else echo "release=$(node scripts/release-needed.js)" >> "$GITHUB_OUTPUT"; fi
       - id: next
         run: echo "version=$(node scripts/next-version.js "${{ inputs.bump || 'auto' }}")" >> "$GITHUB_OUTPUT"
 
   build:
     needs: version
+    if: needs.version.outputs.release == 'true'
     strategy:
       fail-fast: false # let the other builds finish so their logs are available too
       matrix:
