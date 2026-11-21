@@ -48,7 +48,8 @@ export function buildTranscript(session, { format = 'txt', content = 'both', lan
   ];
 
   if (format === 'md') {
-    const cell = (t) => t.replace(/\|/g, '\\|');
+    // Backslashes first, so a "\|" already in the text cannot end the cell.
+    const cell = (t) => t.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
     const head =
       content === 'both' ? [L.time, L.source, L.translation] : [L.time, content === 'src' ? L.source : L.translation];
     const body = rows.map((r) => {

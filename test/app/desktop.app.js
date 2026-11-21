@@ -2,7 +2,7 @@
 // part of CI. Run with `npm run test:app`.
 
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
@@ -33,14 +33,45 @@ test('serves only the app files from app://rt/', async () => {
   assert.equal(await status('app/main.js'), 404);
 });
 
-test('on macOS the page gets the native PC audio bridge and nothing else from the preload', async () => {
+test('the preload gives the page the secret store and, on macOS, the native PC audio bridge, nothing else', async () => {
   const page = await app.firstWindow();
-  const keys = await page.evaluate(() =>
-    window.nativeSystemAudio ? Object.keys(window.nativeSystemAudio).sort() : null,
-  );
-  if (process.platform === 'darwin') assert.deepEqual(keys, ['onData', 'onEnd', 'start', 'stop']);
-  else assert.equal(keys, null);
+  const surface = await page.evaluate(() => {
+    const keys = (o) => (o ? Object.keys(o).sort() : null);
+    return { secretStore: keys(window.secretStore), nativeSystemAudio: keys(window.nativeSystemAudio) };
+  });
+  assert.deepEqual(surface.secretStore, ['get', 'set']);
+  if (process.platform === 'darwin') assert.deepEqual(surface.nativeSystemAudio, ['onData', 'onEnd', 'start', 'stop']);
+  else assert.equal(surface.nativeSystemAudio, null);
   assert.equal(await page.evaluate(() => typeof require), 'undefined');
+  assert.equal(await page.evaluate(() => typeof window.electron), 'undefined');
+});
+
+test('the API key is stored encrypted on disk, never in plain text, and reads back', async () => {
+  const page = await app.firstWindow();
+  const key = 'AIza-desktop-test-key';
+  const available = await app.evaluate(({ safeStorage }) => safeStorage.isEncryptionAvailable());
+  // Keychain (macOS) and DPAPI (Windows) are always there; elsewhere the fallback is checked.
+  if (['darwin', 'win32'].includes(process.platform)) assert.equal(available, true);
+  const result = await page.evaluate((k) => window.secretStore.set('apiKey', k), key);
+  assert.deepEqual(result, { persisted: available });
+  assert.deepEqual(await page.evaluate(() => window.secretStore.get('apiKey')), {
+    value: available ? key : '',
+    available,
+  });
+  if (available) {
+    const raw = await readFile(join(profile, 'secrets.json'), 'utf8');
+    assert.ok(!raw.includes(key), 'not in plain text');
+    assert.ok(!Buffer.from(JSON.parse(raw).apiKey, 'base64').toString('latin1').includes(key), 'not merely base64');
+    if (process.platform !== 'win32') assert.equal((await stat(join(profile, 'secrets.json'))).mode & 0o777, 0o600);
+  } else {
+    await assert.rejects(readFile(join(profile, 'secrets.json')), { code: 'ENOENT' });
+  }
+  await assert.rejects(
+    page.evaluate(() => window.secretStore.get('other')),
+    /unknown secret/,
+  );
+  assert.ok(!(await page.evaluate(() => JSON.stringify({ ...localStorage }))).includes(key));
+  assert.deepEqual(await page.evaluate(() => window.secretStore.set('apiKey', '')), { persisted: available });
 });
 
 test('runs the demo and moves the captions into an overlay window and back', async () => {

@@ -17,6 +17,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/auto-gain.js` | Raises quiet PC audio to a usable level (not applied to the microphone). Pure class |
 | `src/recorder.js` | Records with MediaRecorder, handing over a chunk every 5 seconds |
 | `src/store.js` | IndexedDB: `sessions` (with transcripts) and `audio` (recording chunks) |
+| `src/secrets.js` | Where the API key is kept (desktop: `window.secretStore`; browser: memory only). DOM-free |
 | `src/exporter.js` | Transcript export (txt / md / csv / srt). Pure functions |
 | `src/mock.js` | Stand-in engines for the `?mock=1` demo |
 | `src/i18n.js` | Display-language resolution (`resolveLocale`), `t(key, params)`, applying `data-i18n*` to static HTML. Languages are registered only in its `LOCALES` array |
@@ -25,7 +26,8 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/message-error.js` | Error carrying a message key and params; thrown by `audio.js`, `transcriber.js`, `translator.js` and translated by `app.js` |
 | `app/main.js` | Electron main process: serves the app from `app://rt/`, PC audio, caption overlay |
 | `app/policy.js` | Desktop rules (served files, navigation, `window.open`, permissions). Electron-free |
-| `app/preload.js` | macOS only: exposes the PC audio helper to the page as `window.nativeSystemAudio` |
+| `app/preload.js` | Exposes `window.secretStore` on every platform and the PC audio helper as `window.nativeSystemAudio` on macOS |
+| `app/secrets.js` | Desktop secret store: `safeStorage` ciphertext in `userData/secrets.json`, allowlisted names. Electron-free |
 | `app/system-audio.js` | PC audio helper rules (location, caller check, exit reasons, sample framing). Electron-free |
 | `native/mac/system-audio.swift`, `scripts/build-mac-helper.sh` | macOS PC audio helper (ScreenCaptureKit, 48 kHz mono Float32 on stdout) and its build, output in `native/mac/build/` |
 | `test/*.test.js` | Unit tests (`node:test`, no dependencies) |

@@ -1,13 +1,24 @@
 // Electron main process: serves the static web app from app://rt/ and adds what a browser tab
-// cannot do on its own: system audio without the share dialog and a caption overlay that floats
-// above full-screen apps. The rules themselves live in policy.js and system-audio.js (unit-tested
-// without Electron).
+// cannot do on its own: system audio without the share dialog, a caption overlay that floats
+// above full-screen apps and secrets encrypted by the operating system. The rules themselves live
+// in policy.js, system-audio.js and secrets.js (unit-tested without Electron).
 
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, desktopCapturer, ipcMain, nativeTheme, protocol, screen, session, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  desktopCapturer,
+  ipcMain,
+  nativeTheme,
+  protocol,
+  safeStorage,
+  screen,
+  session,
+  shell,
+} from 'electron';
 import {
   allowPermission,
   CAPTION_WINDOW,
@@ -18,6 +29,7 @@ import {
   START_URL,
   windowOpenAction,
 } from './policy.js';
+import { createSecretStore } from './secrets.js';
 import { createSampleFramer, endReason, helperPath, isSystemAudioCaller } from './system-audio.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -119,13 +131,15 @@ function startSystemAudio(contents) {
   });
 }
 
+// Only the app's own page in the main window's top frame may use the IPC handlers below.
+const allowed = (event) =>
+  isSystemAudioCaller({
+    url: event.senderFrame?.url,
+    isMainFrame: event.senderFrame === event.sender.mainFrame,
+    isMainWindow: !!mainWindow && event.sender === mainWindow.webContents,
+  });
+
 function handleSystemAudio() {
-  const allowed = (event) =>
-    isSystemAudioCaller({
-      url: event.senderFrame?.url,
-      isMainFrame: event.senderFrame === event.sender.mainFrame,
-      isMainWindow: !!mainWindow && event.sender === mainWindow.webContents,
-    });
   ipcMain.handle('system-audio:start', async (event) => {
     if (!allowed(event)) throw new Error('not allowed');
     await startSystemAudio(event.sender);
@@ -135,6 +149,26 @@ function handleSystemAudio() {
     stopSystemAudio();
   });
   app.on('will-quit', stopSystemAudio);
+}
+
+// The API key, encrypted with safeStorage. Nothing is written when encryption is unavailable.
+function handleSecrets() {
+  const secrets = createSecretStore({
+    file: join(app.getPath('userData'), 'secrets.json'),
+    encryption: {
+      isAvailable: () => safeStorage.isEncryptionAvailable(),
+      encrypt: (text) => safeStorage.encryptString(text),
+      decrypt: (bytes) => safeStorage.decryptString(bytes),
+    },
+  });
+  ipcMain.handle('secret:get', (event, name) => {
+    if (!allowed(event)) throw new Error('not allowed');
+    return secrets.get(name);
+  });
+  ipcMain.handle('secret:set', (event, name, value) => {
+    if (!allowed(event)) throw new Error('not allowed');
+    return secrets.set(name, value);
+  });
 }
 
 function openCaptionOverlay(win) {
@@ -155,7 +189,7 @@ function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      ...(process.platform === 'darwin' && { preload: join(ROOT, 'app', 'preload.js') }),
+      preload: join(ROOT, 'app', 'preload.js'),
     },
   });
   const contents = mainWindow.webContents;
@@ -214,6 +248,7 @@ app.whenReady().then(() => {
   guardPermissions(ses);
   handleDisplayMedia(ses);
   if (process.platform === 'darwin') handleSystemAudio();
+  handleSecrets();
   createMainWindow();
   app.on('activate', () => {
     if (!mainWindow) createMainWindow();
