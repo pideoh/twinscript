@@ -24,7 +24,8 @@ test('serves only the app files from app://rt/', async () => {
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
   assert.equal(page.url(), 'app://rt/');
-  const status = (path) => page.evaluate((p) => fetch(p).then((r) => r.status), path);
+  // Asked from the main process: the page's content security policy does not let it fetch.
+  const status = (path) => app.evaluate(({ net }, p) => net.fetch(`app://rt/${p}`).then((r) => r.status), path);
   assert.equal(await status('src/app.js'), 200);
   assert.equal(await status('src/locales/ja.js'), 200);
   assert.equal(await status('package.json'), 404);
