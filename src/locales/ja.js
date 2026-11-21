@@ -1,5 +1,7 @@
 // Japanese UI strings. Keys and {placeholders} must match src/locales/en.js.
 export default {
+  // the page's top-level heading, read by screen readers (the product name is not translated)
+  'app.name': 'Twinscript',
   'language.name': '日本語',
 
   // sidebar and session list

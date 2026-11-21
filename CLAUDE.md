@@ -33,7 +33,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `app/shortcuts.js` | Global shortcut table, platform labels and registration status. Electron-free |
 | `app/secrets.js` | Desktop secret store: `safeStorage` ciphertext in `userData/secrets.json`, allowlisted names. Electron-free |
 | `test/*.test.js` | Unit tests (`node:test`, no dependencies) |
-| `test/e2e/*.e2e.js`, `test/e2e/helpers.js` | Browser tests: Chrome, a fake microphone and mocked Gemini endpoints. Split into files by topic so they run in parallel; shared setup is in `helpers.js` |
+| `test/e2e/*.e2e.js`, `test/e2e/helpers.js` | Browser tests: Chrome, a fake microphone and mocked Gemini endpoints. Split into files by topic so they run in parallel; shared setup is in `helpers.js`. `a11y.e2e.js` runs axe-core on the main screen and dialogs in both themes |
 | `test/app/desktop.app.js` | Desktop smoke tests (need a display, so not run in CI) |
 | `.github/workflows/release.yml`, `scripts/release-needed.js`, `scripts/next-version.js` | Decide whether a change on `main` affects the shipped app, pick the next version, build the zips and publish a GitHub Release |
 | `scripts/sign-mac.js`, `scripts/verify-mac-signature.js`, `scripts/ci-mac-signing-keychain.sh` | macOS releases are re-signed with a fixed self-signed certificate (electron-builder `afterSign` hook) so the app's identity, and the permissions tied to it, survive updates; the check and the CI keychain setup. `.github/workflows/sign-check.yml` exercises this on pull requests |
@@ -50,7 +50,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 ## Rules
 
 - Add or update tests in the same commit as a behavior change. For a segmentation bug, add the failing case to `test/segmenter.test.js` before fixing it.
-- No new dependencies: zero at runtime; dev dependencies are `playwright-core`, `electron`, `electron-builder` and `@biomejs/biome` only.
+- No new dependencies: zero at runtime; dev dependencies are `playwright-core`, `electron`, `electron-builder`, `@biomejs/biome` and `axe-core` only.
 - The interface must keep running in a plain browser (development and the browser tests rely on it). Desktop-only code lives in `app/`; `src/` only branches on detecting Electron.
 - Some assumptions about the Gemini Live API are unverified against the real service (interim text is the whole utterance so far; one final result per utterance). Check the official documentation instead of guessing when a change depends on API behavior.
 - User-visible text goes through i18n (`t()` or `data-i18n*`; modules without UI throw `MessageError` with a message key). Add every new key to all files in `src/locales/` with the same placeholders; `test/i18n.test.js` checks this.
