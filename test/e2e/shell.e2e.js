@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mockGemini, rows, saved, setup } from './helpers.js';
+import { mockGemini, reload, rows, saved, setup } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -34,7 +34,7 @@ test('in a browser the API key entered in settings stays in memory and never rea
   assert.equal(await page.inputValue('#apiKey'), 'AIza-entered-key', 'kept for the life of the page');
   await page.click('#settings button[value=ok]');
 
-  await page.reload();
+  await reload(page);
   await page.click('#openSettings');
   assert.equal(await page.inputValue('#apiKey'), '', 'gone once the page is closed');
   assert.deepEqual(errors, []);
@@ -241,7 +241,7 @@ test('changing the display language in settings updates the screen at once and i
   );
   await page.click('#settings button[value=ok]');
 
-  await page.reload();
+  await reload(page);
   assert.equal(await page.textContent('#toggle'), '开始翻译');
   assert.equal(await page.textContent('#settings h2'), '设置');
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('rt-settings')));

@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mockGemini, rows, saved, sessionNames, setup, translated } from './helpers.js';
+import { mockGemini, reload, rows, saved, sessionNames, setup, translated } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -15,7 +15,8 @@ test('sessions survive a reload, can be switched, renamed and deleted', async ()
   await saved(page);
   assert.deepEqual(await sessionNames(page), ['First meeting notes.']);
 
-  await page.reload();
+  await reload(page);
+  await page.waitForSelector('#sessionList .session'); // the saved session is restored asynchronously
   assert.deepEqual(await rows(page), [{ live: false, src: 'First meeting notes.', tgt: '訳:First meeting notes.' }]);
   assert.deepEqual(await sessionNames(page), ['First meeting notes.']);
   assert.match(await page.textContent('.seg .time'), /^\d\d:\d\d:\d\d$/);
@@ -47,7 +48,8 @@ test('sessions survive a reload, can be switched, renamed and deleted', async ()
   page.once('dialog', (d) => d.accept());
   await page.locator('#sessionList .session').first().locator('.act').last().click();
   await page.waitForFunction(() => document.querySelectorAll('#sessionList .session').length === 1);
-  await page.reload();
+  await reload(page);
+  await page.waitForSelector('#sessionList .session');
   assert.deepEqual(await sessionNames(page), ['週次定例']);
   assert.equal((await rows(page))[0].src, 'First meeting notes.');
   assert.deepEqual(errors, []);
@@ -90,7 +92,7 @@ test('the audio is recorded, kept across a reload and can be downloaded', async 
   await page.waitForTimeout(1200);
   await page.click('#toggle');
   await saved(page);
-  await page.reload();
+  await reload(page);
 
   await page.click('#export');
   assert.match(await page.textContent('#recordings .rec span'), /^録音 1 ・ .* ・ 00:00:0\d$/);

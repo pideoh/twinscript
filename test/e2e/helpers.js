@@ -75,10 +75,20 @@ export function setup() {
     }, stored);
     if (init) await context.addInitScript(init.script, init.arg);
     await page.goto(`${origin}/${query}`);
+    await ready(page);
     return { page, errors, close: () => context.close() };
   }
 
   return { openApp };
+}
+
+// The page starts asynchronously (stored key and sessions are loaded first); its buttons work
+// once the handlers are attached.
+export const ready = (page) =>
+  page.waitForFunction(() => typeof document.getElementById('toggle')?.onclick === 'function');
+export async function reload(page) {
+  await page.reload();
+  await ready(page);
 }
 
 export const rows = (page) =>

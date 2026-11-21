@@ -101,12 +101,16 @@ const els = Object.fromEntries(
 );
 
 // ---------- settings ----------
+// Returns the known settings only, plus the API key an earlier version kept in the same JSON.
 function loadSettings() {
+  let stored = {};
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('rt-settings') || '{}') };
+    stored = JSON.parse(localStorage.getItem('rt-settings') || '{}') ?? {};
   } catch {
-    return { ...DEFAULTS };
+    /* unreadable: start from the defaults */
   }
+  const known = Object.fromEntries(Object.keys(DEFAULTS).map((name) => [name, stored[name] ?? DEFAULTS[name]]));
+  return { settings: known, legacyKey: typeof stored.apiKey === 'string' ? stored.apiKey : undefined };
 }
 // The API key is not part of the settings: it is never written to localStorage (see secrets.js).
 function saveSettings() {
@@ -116,10 +120,8 @@ function saveSettings() {
     /* private mode */
   }
 }
-const settings = loadSettings();
 // Earlier versions kept the key in the settings JSON: move it out and rewrite the JSON without it.
-const legacyKey = Object.hasOwn(settings, 'apiKey') ? settings.apiKey : undefined;
-delete settings.apiKey;
+const { settings, legacyKey } = loadSettings();
 let { key: apiKey, storage: keyStorage } = await loadApiKey(window.secretStore, legacyKey);
 if (legacyKey !== undefined) saveSettings();
 let captionWindow = null; // always-on-top caption window, when open
