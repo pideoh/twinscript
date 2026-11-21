@@ -21,6 +21,7 @@ const COUNTERS = {
   devanagari: /\p{Script=Devanagari}/gu,
   latin: /\p{Script=Latin}/gu,
 };
+const SHARED = new Set(['latin', 'devanagari']);
 const MIN_LETTERS = 4; // shorter text says too little
 const MIN_HAN_ONLY = 8; // Japanese rarely runs this long without any kana
 const DOMINANT = 0.6;
@@ -53,7 +54,11 @@ export function targetByScript(text, { langA, langB, otherInto }) {
   const a = scriptOf(langA) === cls;
   const b = scriptOf(langB) === cls;
   if (a && b) return null;
-  if (a) return langB;
-  if (b) return langA;
-  return otherInto;
+  if (!a && !b) return otherInto;
+  const written = a ? langA : langB;
+  const other = a ? langB : langA;
+  // Many languages share these writing systems, so the text may also be a third language.
+  // That only matters when a third language would go the other way.
+  if (SHARED.has(cls) && otherInto === written) return null;
+  return other;
 }

@@ -28,6 +28,11 @@ test('the model decides when the writing system does not settle it', () => {
   assert.equal(targetByScript('', jaEn), null);
   assert.equal(targetByScript('Bonjour à tous', { langA: 'English', langB: 'French', otherInto: 'English' }), null);
   assert.equal(targetByScript('会議 mtg 会議', jaEn), null, 'mixed');
+  // French and English look alike; with third languages set to go into English they part ways.
+  const intoEn = { ...jaEn, otherInto: 'English' };
+  assert.equal(targetByScript('Bonjour à tous et bienvenue', intoEn), null);
+  assert.equal(targetByScript('Bonjour à tous et bienvenue', jaEn), 'Japanese', 'either way it goes to Japanese');
+  assert.equal(targetByScript('それでは会議を始めます。', intoEn), 'English', 'kana is only Japanese');
 });
 
 test('writing systems are told apart', () => {
