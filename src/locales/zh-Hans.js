@@ -23,7 +23,7 @@ export default {
   'header.export': '下载',
   'header.settings': '设置',
   'source.mic': '麦克风',
-  'source.system': '电脑音频（标签页/屏幕共享）',
+  'source.system': '电脑音频',
   'source.both': '麦克风 + 电脑音频',
 
   // transcript and caption zone
@@ -76,12 +76,12 @@ export default {
   'settings.title': '设置',
   'settings.apiKey': 'Gemini API 密钥',
   'settings.apiKey.helpBefore': '可在 ',
-  'settings.apiKey.helpAfter': ' 免费获取。密钥仅保存在本设备的浏览器中。',
+  'settings.apiKey.helpAfter': ' 免费获取。密钥仅保存在本设备上。',
   'settings.running': '正在翻译。对 API 密钥、翻译模型、整理、录音、术语表和译入语言的更改，将在下次开始时生效。',
   'settings.model': '翻译模型',
   'settings.interim': '也翻译正在说的句子（实时优先）',
   'settings.smart': '整理转录文本（去除口头禅，句子确定可能稍有延迟）',
-  'settings.record': '录制并保存音频（保存在本设备的浏览器中，每小时约 15 MB）',
+  'settings.record': '录制并保存音频（保存在本设备上，每小时约 15 MB）',
   'settings.otherInto': '说这两种以外的语言时，翻译成',
   'settings.otherInto.left': '{lang}（左侧语言）',
   'settings.otherInto.right': '{lang}（右侧语言）',

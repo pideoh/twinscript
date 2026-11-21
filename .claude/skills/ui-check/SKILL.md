@@ -14,4 +14,4 @@ description: Capture and review screenshots of Twinscript after a visual change 
    - other languages: labels and buttons fit.
 3. Run `npm test` (the design-token test catches literal colors and Unicode icons) and `npm run test:e2e`.
 4. If the change is visible on the main screen, refresh the README image: copy `desktop-light-listening.png` to `docs/screenshot.png`.
-5. Things this does not cover, to mention in the pull request if relevant: real Safari and iPhone, the browser picture-in-picture window, and the desktop caption overlay (`npm run test:app` opens it).
+5. Things this does not cover, to mention in the pull request if relevant: the desktop caption overlay (`npm run test:app` opens it) and the browser picture-in-picture window.

@@ -23,7 +23,7 @@ export default {
   'header.export': 'ダウンロード',
   'header.settings': '設定',
   'source.mic': 'マイク',
-  'source.system': 'PC音声（タブ/画面共有）',
+  'source.system': 'PC音声',
   'source.both': 'マイク＋PC音声',
 
   // transcript and caption zone
@@ -76,12 +76,12 @@ export default {
   'settings.title': '設定',
   'settings.apiKey': 'Gemini APIキー',
   'settings.apiKey.helpBefore': '',
-  'settings.apiKey.helpAfter': ' で無料で発行できます。キーはこの端末のブラウザ内にのみ保存されます。',
+  'settings.apiKey.helpAfter': ' で無料で発行できます。キーはこの端末にのみ保存されます。',
   'settings.running': '翻訳中です。APIキー・翻訳モデル・整形・録音・用語集・訳し先の変更は、次に開始したときから反映されます。',
   'settings.model': '翻訳モデル',
   'settings.interim': '話している途中の文も翻訳する（リアルタイム重視）',
   'settings.smart': '文字起こしを整形する（フィラー除去。確定が少し遅くなることがあります）',
-  'settings.record': '音声を録音して保存する（この端末のブラウザ内。1時間で約15MB）',
+  'settings.record': '音声を録音して保存する（この端末内。1時間で約15MB）',
   'settings.otherInto': '選んだ2言語以外が話されたときの訳し先',
   'settings.otherInto.left': '{lang}（左の言語）',
   'settings.otherInto.right': '{lang}（右の言語）',

@@ -1,8 +1,9 @@
 # Twinscript
 
-Real-time transcription and two-way translation for meetings. A static web app (PWA) with no build
-step and no server: the browser talks to the Gemini API directly. The same code is wrapped as an
-Electron desktop app. Usage and pricing are in README.md; contribution rules are in CONTRIBUTING.md.
+A desktop app for macOS and Windows: real-time transcription and two-way translation for meetings.
+It is built with web technology (plain HTML, CSS and ES modules, no build step, no server) and
+packaged with Electron; the app talks to the Gemini API directly. The same interface also runs in a
+browser, which is used for development and the browser tests. Usage and pricing are in README.md; contribution rules are in CONTRIBUTING.md.
 
 ## Layout
 
@@ -44,7 +45,7 @@ Electron desktop app. Usage and pricing are in README.md; contribution rules are
 
 - Add or update tests in the same commit as a behavior change. For a segmentation bug, add the failing case to `test/segmenter.test.js` before fixing it.
 - No new dependencies: zero at runtime; dev dependencies are `playwright-core`, `electron` and `electron-builder` only.
-- The web app must run in a plain browser. Desktop-only code lives in `app/`; `src/` only branches on detecting Electron.
+- The interface must keep running in a plain browser (development and the browser tests rely on it). Desktop-only code lives in `app/`; `src/` only branches on detecting Electron.
 - Some assumptions about the Gemini Live API are unverified against the real service (interim text is the whole utterance so far; one final result per utterance). Check the official documentation instead of guessing when a change depends on API behavior.
 - User-visible text goes through i18n (`t()` or `data-i18n*`; modules without UI throw `MessageError` with a message key). Add every new key to all files in `src/locales/` with the same placeholders; `test/i18n.test.js` checks this.
 - Code, comments and commit messages are in English.

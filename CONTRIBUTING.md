@@ -6,11 +6,11 @@ Thanks for your interest. Bug reports, fixes, translations and features are all 
 
 ```sh
 npm install
-npm start          # web app at http://localhost:5173 (add ?mock=1 for a demo without an API key)
-npm run app        # desktop app (Electron)
+npm run app        # the desktop app (Electron)
+npm start          # the same interface in a browser, at http://localhost:5173 (add ?mock=1 for a demo without an API key)
 ```
 
-There is no build step for the web app: it is plain HTML, CSS and ES modules.
+The interface is plain HTML, CSS and ES modules with no build step, so it can also be opened in a browser while developing.
 
 ## Before you open a pull request
 
