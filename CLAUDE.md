@@ -27,7 +27,8 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/message-error.js` | Error carrying a message key and params; thrown by `audio.js`, `transcriber.js`, `translator.js` and translated by `app.js` |
 | `app/main.js` | Electron main process: serves the app from `app://rt/`, PC audio, caption overlay |
 | `app/policy.js` | Desktop rules (served files, navigation, `window.open`, permissions). Electron-free |
-| `app/preload.js` | Exposes `window.secretStore` on every platform and the PC audio helper as `window.nativeSystemAudio` on macOS |
+| `app/preload.js` | The page's only bridge to the main process: `window.secretStore`, `window.captionOverlay` (click-through), `window.appShortcuts` (global shortcuts) and, on macOS, `window.nativeSystemAudio` |
+| `app/shortcuts.js` | Global shortcut table, platform labels and registration status. Electron-free |
 | `app/secrets.js` | Desktop secret store: `safeStorage` ciphertext in `userData/secrets.json`, allowlisted names. Electron-free |
 | `app/system-audio.js` | PC audio helper rules (location, caller check, exit reasons, sample framing). Electron-free |
 | `native/mac/system-audio.swift`, `scripts/build-mac-helper.sh` | macOS PC audio helper (ScreenCaptureKit, 48 kHz mono Float32 on stdout) and its build, output in `native/mac/build/` |

@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mockGemini, setup } from './helpers.js';
+import { mockGemini, reload, setup } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -190,6 +190,113 @@ test('the caption zone can be moved into an always-on-top window and comes back 
   assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'false');
   assert.equal(await page.getAttribute('#now', 'style'), '', 'window-only layout is removed');
   await page.click('#toggle');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+// Which lines of the caption zone are on screen, sentence by sentence.
+const shownLines = (page) =>
+  page.locator('#nowList .seg').evaluateAll((segs) =>
+    segs.map((seg) =>
+      ['.src', '.tgt']
+        .map((sel) => seg.querySelector(sel))
+        .filter((el) => el.checkVisibility())
+        .map((el) => el.textContent),
+    ),
+  );
+
+test('translation only hides the source of translated sentences, but shows it until the translation arrives', async () => {
+  const { page, errors, close } = await openApp('', {
+    apiKey: 'test-key',
+    interimTranslate: false,
+    captionContent: 'tgt',
+  });
+  await mockGemini(page, [
+    [3, 'final', 'One.'],
+    [5, 'final', 'Two.'],
+    [7, 'interim', 'Three'],
+  ]);
+  let release;
+  // Registered last, so it is asked first: hold the translation of "Two." back.
+  await page.route(/streamGenerateContent/, async (route) => {
+    if (route.request().postDataJSON().contents[0].parts[0].text.includes('<text>\nTwo.\n</text>'))
+      await new Promise((r) => {
+        release = r;
+      });
+    return route.fallback();
+  });
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.querySelector('#nowList .seg.live .src')?.textContent === 'Three');
+  await page.waitForFunction(() => document.querySelector('#nowList .seg .tgt')?.textContent === '訳:One.');
+  assert.deepEqual(await shownLines(page), [['訳:One.'], ['Two.'], ['Three']], 'no sentence is ever blank');
+
+  release();
+  await page.waitForFunction(() => document.querySelectorAll('#nowList .seg .tgt')[1]?.textContent === '訳:Two.');
+  assert.deepEqual(await shownLines(page), [['訳:One.'], ['訳:Two.'], ['Three']]);
+
+  await page.click('#openSettings');
+  await page.selectOption('#captionContent', 'both');
+  assert.deepEqual(
+    await shownLines(page),
+    [
+      ['One.', '訳:One.'],
+      ['Two.', '訳:Two.'],
+      ['Three', ''],
+    ],
+    'applies immediately, while listening',
+  );
+  await page.click('#settings button[value=ok]');
+  await page.click('#toggle');
+  assert.equal((await page.evaluate(() => JSON.parse(localStorage.getItem('rt-settings')))).captionContent, 'both');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('the caption window has its own text size, applied live and kept; desktop-only options are left out in a browser', async () => {
+  const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
+  await page.evaluate(() => {
+    Object.defineProperty(window, 'documentPictureInPicture', {
+      configurable: true,
+      value: {
+        requestWindow: async () => {
+          const frame = document.createElement('iframe');
+          frame.id = 'fakePip';
+          document.body.append(frame);
+          return frame.contentWindow;
+        },
+      },
+    });
+    document.getElementById('pip').hidden = false;
+  });
+  await page.click('#pip');
+  await page.frameLocator('#fakePip').locator('#now').waitFor({ state: 'attached' });
+  const sizes = () =>
+    page.evaluate(() => [
+      document.documentElement.style.getPropertyValue('--fs'),
+      document.getElementById('fakePip').contentDocument.documentElement.style.getPropertyValue('--fs'),
+    ]);
+  assert.deepEqual(await sizes(), ['18px', '20px'], 'the defaults: main window 18, caption window 20');
+
+  await page.click('#openSettings');
+  assert.ok(await page.locator('#captionFontSize').isVisible());
+  assert.ok(await page.locator('#captionOpacity').isHidden(), 'opacity needs the desktop overlay');
+  assert.ok(await page.locator('#clickThrough').isHidden(), 'click-through needs the desktop overlay');
+  assert.ok(await page.locator('#captionDesktopOnly').isVisible());
+  assert.ok(await page.locator('#shortcutsGroup').isHidden(), 'no global shortcuts in a browser');
+  await page.locator('#captionFontSize').fill('32');
+  assert.equal(await page.textContent('#captionFontSizeOut'), '32 px');
+  assert.deepEqual(await sizes(), ['18px', '32px'], 'only the caption window changes, at once');
+  await page.locator('#fontSize').fill('22');
+  assert.deepEqual(await sizes(), ['22px', '32px']);
+  await page.click('#settings button[value=ok]');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('rt-settings')).captionFontSize === 32);
+
+  await reload(page);
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('rt-settings')));
+  assert.equal(stored.captionFontSize, 32);
+  assert.equal(stored.fontSize, 22);
+  await page.click('#openSettings');
+  assert.equal(await page.inputValue('#captionFontSize'), '32');
   assert.deepEqual(errors, []);
   await close();
 });

@@ -134,10 +134,6 @@
         <label class="form-control"><span class="form-label" data-i18n="settings.otherInto">When a language other than these two is spoken, translate into</span>
           <span class="select-wrap"><select id="otherInto" class="select"><option value="A"></option><option value="B"></option></select></span>
         </label>
-        <label class="form-control"><span class="form-label"><span data-i18n="settings.captionItems">Sentences kept in the area below</span> <output id="captionItemsOut"></output></span>
-          <input id="captionItems" type="range" min="1" max="8" step="1">
-          <small class="caption" data-i18n="settings.captionItems.help">This includes the sentence being spoken. More is easier to re-read, and the area gets taller.</small>
-        </label>
         <label class="form-control"><span class="form-label"><span data-i18n="settings.interimInterval">Interval for re-translating a sentence in progress</span> <output id="interimIntervalOut"></output></span>
           <input id="interimInterval" type="range" min="0.5" max="5" step="0.1">
           <small class="caption" data-i18n="settings.interimInterval.help">Shorter shows translations sooner, but the text changes more often and uses more of the API.</small>
@@ -151,6 +147,40 @@
         <label class="form-control"><span class="form-label" data-i18n="settings.uiLang">Display language</span>
           <span class="select-wrap"><select id="uiLang" class="select"></select></span>
         </label>
+        <fieldset class="settings-group">
+          <legend class="settings-group-title" data-i18n="settings.captions">Captions</legend>
+          <label class="form-control"><span class="form-label" data-i18n="settings.captionContent">Show</span>
+            <span class="select-wrap"><select id="captionContent" class="select">
+              <option value="both" data-i18n="settings.captionContent.both">Source and translation</option>
+              <option value="tgt" data-i18n="settings.captionContent.tgt">Translation only</option>
+            </select></span>
+            <small class="caption" data-i18n="settings.captionContent.help">In the caption area and the caption window. A sentence shows its source until its translation arrives.</small>
+          </label>
+          <label class="form-control"><span class="form-label"><span data-i18n="settings.captionItems">Sentences kept in the area below</span> <output id="captionItemsOut"></output></span>
+            <input id="captionItems" type="range" min="1" max="8" step="1">
+            <small class="caption" data-i18n="settings.captionItems.help">This includes the sentence being spoken. More is easier to re-read, and the area gets taller.</small>
+          </label>
+          <label id="captionFontSizeField" class="form-control"><span class="form-label"><span data-i18n="settings.captionFontSize">Caption window text size</span> <output id="captionFontSizeOut"></output></span>
+            <input id="captionFontSize" type="range" min="14" max="40" step="1">
+          </label>
+          <label id="captionOpacityField" class="form-control"><span class="form-label"><span data-i18n="settings.captionOpacity">Caption window background opacity</span> <output id="captionOpacityOut"></output></span>
+            <input id="captionOpacity" type="range" min="0" max="100" step="5">
+            <small class="caption" data-i18n="settings.captionOpacity.help">Captions keep an outline so they stay readable over any background.</small>
+          </label>
+          <div id="clickThroughField" class="form-control">
+            <label class="check"><input id="clickThrough" type="checkbox"> <span data-i18n="settings.clickThrough">Let clicks pass through the caption window</span></label>
+            <small class="caption" data-i18n="settings.clickThrough.help">While this is on, the caption window cannot be moved or closed with the mouse. Hide it with the caption window button or its shortcut.</small>
+          </div>
+          <small id="captionDesktopOnly" class="caption" data-i18n="settings.captionDesktopOnly" hidden>Background opacity and click-through are available in the desktop app.</small>
+        </fieldset>
+        <fieldset id="shortcutsGroup" class="settings-group" hidden>
+          <legend class="settings-group-title" data-i18n="settings.shortcuts">Shortcuts</legend>
+          <dl id="shortcutList" class="shortcut-list"></dl>
+          <div class="form-control">
+            <label class="check"><input id="globalShortcuts" type="checkbox"> <span data-i18n="settings.shortcuts.enabled">Use these shortcuts from any app</span></label>
+            <small class="caption" data-i18n="settings.shortcuts.help">They work even when Twinscript is in the background.</small>
+          </div>
+        </fieldset>
       </div>
       <footer class="dialog-footer">
         <button class="btn btn-primary" value="ok" data-i18n="settings.save">Save</button>
