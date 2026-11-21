@@ -237,9 +237,17 @@ function onLangChange(changed, other) {
   if (changed.value === other.value) other.value = LANGS.find((l) => l.code !== changed.value).code;
   langsChanged();
 }
+// The choice for a third language is stored as a side (A / B) but means a language, so it
+// follows that language when the two change places.
+function setLangs(a, b) {
+  const target = settings.otherInto === 'B' ? settings.langB : settings.langA;
+  settings.langA = a;
+  settings.langB = b;
+  if (target === a) settings.otherInto = 'A';
+  else if (target === b) settings.otherInto = 'B';
+}
 function langsChanged() {
-  settings.langA = els.langA.value;
-  settings.langB = els.langB.value;
+  setLangs(els.langA.value, els.langB.value);
   saveSettings();
   if (current) {
     current.langA = settings.langA;
@@ -462,8 +470,9 @@ function showSession(sess) {
     LANGS.some((l) => l.code === sess.langB) &&
     sess.langA !== sess.langB
   ) {
-    els.langA.value = settings.langA = sess.langA;
-    els.langB.value = settings.langB = sess.langB;
+    setLangs(sess.langA, sess.langB);
+    els.langA.value = settings.langA;
+    els.langB.value = settings.langB;
     saveSettings();
   }
   els.clock.textContent = formatElapsed(sess.activeMs);

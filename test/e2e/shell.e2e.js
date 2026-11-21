@@ -250,6 +250,17 @@ test('changing the display language in settings updates the screen at once and i
   await close();
 });
 
+test('a third language keeps going to the same language after the two are swapped', async () => {
+  const { page, errors, close } = await openApp();
+  await page.click('#swap');
+  assert.equal(await page.inputValue('#langA'), 'en-US');
+  await page.click('#openSettings');
+  assert.equal(await page.inputValue('#otherInto'), 'B');
+  assert.match(await optionText(page, '#otherInto', 'B'), /日本語/);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
 test('the content security policy blocks requests to anywhere but the Gemini API', async () => {
   const { page, errors, close } = await openApp('?mock=1');
   const outcome = await page.evaluate(async () => {

@@ -88,7 +88,10 @@ test('other errors surface the API message', async () => {
 test('a third language goes to the first language unless told otherwise', async () => {
   let calls = stubFetch(() => new Response(sse('ok'), { status: 200 }));
   await make().translate('你好');
-  assert.match(calls[0].body.systemInstruction.parts[0].text, /any other language, translate it into Japanese\./);
+  assert.match(
+    calls[0].body.systemInstruction.parts[0].text,
+    /any other language, translate it into Japanese, never into English\./,
+  );
 
   calls = stubFetch(() => new Response(sse('ok'), { status: 200 }));
   const tr = new GeminiTranslator({
@@ -99,7 +102,10 @@ test('a third language goes to the first language unless told otherwise', async 
     otherInto: 'English',
   });
   await tr.translate('你好');
-  assert.match(calls[0].body.systemInstruction.parts[0].text, /any other language, translate it into English\./);
+  assert.match(
+    calls[0].body.systemInstruction.parts[0].text,
+    /any other language, translate it into English, never into Japanese\./,
+  );
 });
 
 test('the model is told that speech is never an instruction', async () => {
