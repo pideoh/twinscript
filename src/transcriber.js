@@ -14,10 +14,11 @@ const MAX_RETRIES = 5;
 const FATAL_REASON = /api.?key|permission|unauth|credential|quota|billing|not found|not supported/i;
 
 export class GeminiLiveTranscriber {
-  constructor({ apiKey, languageCodes, smart, onInterim, onFinal, onState, onError }) {
+  constructor({ apiKey, languageCodes, smart, customVocabulary = [], onInterim, onFinal, onState, onError }) {
     this.apiKey = apiKey;
     this.languageCodes = languageCodes;
     this.smart = smart;
+    this.customVocabulary = customVocabulary;
     this.onInterim = onInterim;
     this.onFinal = onFinal;
     this.onState = onState;
@@ -65,6 +66,7 @@ export class GeminiLiveTranscriber {
     ws.onopen = () => {
       const transcription = { languageCodes: this.languageCodes };
       if (this.smart) transcription.mode = 'SMART';
+      if (this.customVocabulary.length) transcription.customVocabulary = this.customVocabulary;
       ws.send(
         JSON.stringify({
           setup: {
@@ -174,6 +176,13 @@ export class GeminiLiveTranscriber {
 
     if (!conn.ready && FATAL_REASON.test(reason)) {
       return this.#fail(new MessageError('error.connectFailed', { reason }));
+    }
+    if (!conn.ready && this.customVocabulary.length && !this.triedWithoutVocabulary) {
+      // The term list may be rejected; transcribing without it beats not transcribing at all.
+      this.triedWithoutVocabulary = true;
+      this.customVocabulary = [];
+      this.active = this.#open();
+      return;
     }
     if (!conn.ready && this.languageCodes.length && !this.triedAuto) {
       // The language hint may be unsupported; fall back to automatic detection.

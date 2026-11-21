@@ -11,6 +11,7 @@ import { store } from './store.js';
 import { GeminiSummarizer } from './summarizer.js';
 import { GeminiLiveTranscriber } from './transcriber.js';
 import { GeminiTranslator, RateLimitError } from './translator.js';
+import { applyReplacements, parseVocabulary } from './vocabulary.js';
 
 // code: what the recognizer is told; display: the tag whose name is shown in the UI language
 // (no region, but the script for Chinese); name: what the translation prompt says.
@@ -40,6 +41,7 @@ const DEFAULTS = {
   smart: false,
   record: true,
   glossary: '',
+  vocabulary: '', // terms for the recognizer and `wrong => right` corrections, one per line
   fontSize: 18,
   otherInto: 'A', // which of the two languages a third language is translated into
   captionItems: 3, // sentences kept in the caption zone, including the one being spoken
@@ -95,6 +97,7 @@ const els = Object.fromEntries(
     'interimTranslate',
     'smart',
     'glossary',
+    'vocabulary',
     'fontSize',
     'otherInto',
     'captionItems',
@@ -264,6 +267,7 @@ function openSettings() {
   els.smart.checked = settings.smart;
   els.record.checked = settings.record;
   els.glossary.value = settings.glossary;
+  els.vocabulary.value = settings.vocabulary;
   els.fontSize.value = settings.fontSize;
   els.uiLang.value = settings.uiLang;
   fillOtherInto();
@@ -347,6 +351,7 @@ els.settings.addEventListener('close', () => {
   settings.smart = els.smart.checked;
   settings.record = els.record.checked;
   settings.glossary = els.glossary.value.trim();
+  settings.vocabulary = els.vocabulary.value.trim();
   settings.fontSize = Number(els.fontSize.value);
   settings.otherInto = els.otherInto.value;
   settings.captionItems = Number(els.captionItems.value);
@@ -994,14 +999,15 @@ async function start() {
   setRunning(true);
   setStatus('connecting');
 
+  const vocabulary = parseVocabulary(settings.vocabulary);
   const handlers = {
     onInterim: (text) => {
       if (DEBUG) console.log('[interim]', text);
-      if (run === r) r.tracker.interim(text);
+      if (run === r) r.tracker.interim(applyReplacements(text, vocabulary.rules));
     },
     onFinal: (text) => {
       if (DEBUG) console.log('[final]', text);
-      if (run === r) r.tracker.final(text);
+      if (run === r) r.tracker.final(applyReplacements(text, vocabulary.rules));
     },
     onState: (state) => run === r && setStatus(state),
     onError: (err) => {
@@ -1027,6 +1033,7 @@ async function start() {
       apiKey,
       languageCodes: [langA.code, langB.code],
       smart: settings.smart,
+      customVocabulary: vocabulary.terms,
       ...handlers,
     });
   }
