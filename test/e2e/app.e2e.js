@@ -412,3 +412,42 @@ test('the caption zone can be moved into an always-on-top window and comes back 
   assert.deepEqual(errors, []);
   await close();
 });
+
+test('PC audio that delivers nothing is reported instead of failing silently', async () => {
+  const { page, close } = await openApp('', { apiKey: 'test-key', source: 'system', record: false });
+  await mockGemini(page, []);
+  // Stand in for a screen share whose audio track exists but never carries a sample.
+  await page.evaluate(() => {
+    navigator.mediaDevices.getDisplayMedia = async () => {
+      const ctx = new AudioContext();
+      return ctx.createMediaStreamDestination().stream;
+    };
+  });
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  assert.ok(await page.locator('#toast').isHidden(), 'no warning right away');
+  await page.waitForFunction(() => document.getElementById('toast').textContent.includes('PC音声が届いていません'), null, { timeout: 15_000 });
+  await page.click('#toggle');
+  await close();
+});
+
+test('PC audio that is playing raises no warning', async () => {
+  const { page, close } = await openApp('', { apiKey: 'test-key', source: 'system', record: false });
+  await mockGemini(page, []);
+  await page.evaluate(() => {
+    navigator.mediaDevices.getDisplayMedia = async () => {
+      const ctx = new AudioContext();
+      const out = ctx.createMediaStreamDestination();
+      const tone = ctx.createOscillator();
+      tone.connect(out);
+      tone.start();
+      return out.stream;
+    };
+  });
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  await page.waitForTimeout(10_000);
+  assert.ok(await page.locator('#toast').isHidden());
+  await page.click('#toggle');
+  await close();
+});

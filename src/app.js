@@ -32,6 +32,7 @@ const DEFAULTS = {
 };
 const INTERIM_COOLDOWN_MS = 60_000;
 const HISTORY_LINES = 3;
+const SILENT_SYSTEM_AUDIO_MS = 8000; // how long PC audio may deliver nothing before the user is told
 const MOCK = new URLSearchParams(location.search).has('mock');
 const DEBUG = new URLSearchParams(location.search).has('debug'); // log raw recognizer output to the console
 
@@ -525,6 +526,7 @@ async function start() {
     if (!MOCK && settings.record && canRecord()) startRecording(r);
     r.transcriber.start();
     r.ticker = setInterval(() => { els.clock.textContent = formatElapsed(elapsedNow()); }, 500);
+    if (r.capture && r.capture.systemLevel() !== null) watchSystemAudio(r);
     r.autosave = setInterval(() => markDirty(sess), 5000); // keeps elapsed time and recording length current
     requestWakeLock();
   } catch (err) {
@@ -533,6 +535,21 @@ async function start() {
     toast(denied ? 'マイク/画面共有の許可が必要です。ブラウザの設定を確認してください。' : err.message, 10000);
     stop();
   }
+}
+
+// PC audio that never delivers a sample fails silently (on macOS this is what a missing
+// "System Audio Recording" permission looks like), so say so instead of just showing nothing.
+function watchSystemAudio(r) {
+  const since = Date.now();
+  r.systemWatch = setInterval(() => {
+    if (r.capture.systemLevel() > 0) return clearInterval(r.systemWatch);
+    if (Date.now() - since < SILENT_SYSTEM_AUDIO_MS) return;
+    clearInterval(r.systemWatch);
+    const isMacApp = /Electron/.test(navigator.userAgent) && /Mac/.test(navigator.userAgent);
+    toast(isMacApp
+      ? 'PC音声が届いていません。音を再生しても反応しない場合は、システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Realtime Translate を許可し、アプリを開き直してください。'
+      : 'PC音声が届いていません。音を再生しても反応しない場合は、共有するときに音声の共有をオンにしたか確認してください。', 20000);
+  }, 1000);
 }
 
 function startRecording(r) {
@@ -564,6 +581,7 @@ function stop() {
   trimCaptions(0);
   clearTimeout(r.interim.timer);
   clearInterval(r.ticker);
+  clearInterval(r.systemWatch);
   clearInterval(r.autosave);
   if (r.startedAt) r.session.activeMs = elapsedNow();
   if (r.recording) r.recording.durationMs = Date.now() - r.recording.startedAt;

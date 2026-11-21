@@ -19,6 +19,7 @@ export class AudioCapture {
     this.onLevel = onLevel;
     this.onEnded = onEnded;
     this.streams = [];
+    this.systemStream = this.systemProbe = null;
   }
 
   // source: 'mic' | 'system' | 'both'
@@ -32,6 +33,7 @@ export class AudioCapture {
           systemAudio: 'include',
         });
         this.streams.push(display);
+        this.systemStream = display;
         if (!display.getAudioTracks().length) {
           throw new Error('共有した画面/タブに音声が含まれていません。共有ダイアログで「音声も共有」をオンにしてください。');
         }
@@ -61,6 +63,11 @@ export class AudioCapture {
         const source = this.ctx.createMediaStreamSource(new MediaStream(stream.getAudioTracks()));
         source.connect(this.node);
         source.connect(mix);
+        if (stream === this.systemStream) {
+          this.systemProbe = this.ctx.createAnalyser();
+          this.systemProbe.fftSize = 2048;
+          source.connect(this.systemProbe);
+        }
       }
       // Keep the graph pulling without playing anything back.
       const mute = this.ctx.createGain();
@@ -71,6 +78,17 @@ export class AudioCapture {
       this.stop();
       throw err;
     }
+  }
+
+  // Peak level (0..1) of the system audio right now, or null when it is not being captured.
+  // Exactly 0 means no samples are arriving at all, which is how a missing OS permission shows up.
+  systemLevel() {
+    if (!this.systemProbe) return null;
+    const samples = new Float32Array(this.systemProbe.fftSize);
+    this.systemProbe.getFloatTimeDomainData(samples);
+    let peak = 0;
+    for (const v of samples) peak = Math.max(peak, Math.abs(v));
+    return peak;
   }
 
   stop() {
