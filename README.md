@@ -5,6 +5,8 @@ English | [日本語](README.ja.md)
 A web app (PWA) for real-time transcription and two-way translation in meetings.
 Choose two languages and press "Start translating": the app detects which language is spoken, transcribes it and translates it into the other one.
 
+![Twinscript showing a Japanese and English meeting side by side](docs/screenshot.png)
+
 - PC (Chrome / Edge): besides the microphone, it can capture the audio of a tab or screen share (the other participants in Zoom / Teams / Meet)
 - iPhone (Safari): microphone input. Use "Add to Home Screen" in the share menu to use it like an app
 - A static site with no build step. Nothing runs on a server
