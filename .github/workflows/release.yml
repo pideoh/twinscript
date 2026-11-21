@@ -95,10 +95,29 @@ jobs:
           key: mac-helper-${{ hashFiles('native/mac/system-audio.swift', 'scripts/build-mac-helper.sh') }}
       - run: sh scripts/build-mac-helper.sh
         if: runner.os == 'macOS' && steps.helper.outputs.cache-hit != 'true'
+      # The macOS app is signed with a fixed self-signed certificate so that its identity, and with it
+      # the permissions users granted, stays the same from release to release (scripts/sign-mac.js).
+      - name: Set up the macOS signing certificate
+        if: runner.os == 'macOS'
+        env:
+          MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: sh scripts/ci-mac-signing-keychain.sh setup
       # --publish never: electron-builder only builds; the release job below does the publishing.
       # bash on every runner: PowerShell splits a "--config.key=value" argument at the dot.
       - run: npx electron-builder ${{ matrix.args }} --publish never --config.extraMetadata.version=${{ needs.version.outputs.version }}
         shell: bash
+      # Fails unless the app in the zip has a valid signature whose identity is the certificate, not
+      # a per-build hash.
+      - name: Check the macOS signature
+        if: runner.os == 'macOS'
+        run: |
+          mkdir "$RUNNER_TEMP/unzipped"
+          ditto -x -k dist/*.zip "$RUNNER_TEMP/unzipped"
+          node scripts/verify-mac-signature.js "$RUNNER_TEMP/unzipped/Twinscript.app" io.github.pideoh.twinscript
+      - name: Remove the signing keychain
+        if: always() && runner.os == 'macOS'
+        run: sh scripts/ci-mac-signing-keychain.sh cleanup
       - uses: actions/upload-artifact@v7
         with:
           name: zips-${{ matrix.name }}
