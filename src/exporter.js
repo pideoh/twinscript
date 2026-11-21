@@ -29,12 +29,43 @@ export const DEFAULT_LABELS = {
   source: 'Source',
   translation: 'Translation',
   separator: '   ',
+  // Summary section, written above the transcript in txt and md when a summary is passed in.
+  transcript: 'Transcript',
+  summary: 'Summary',
+  overview: 'Overview',
+  keyPoints: 'Key points',
+  decisions: 'Decisions',
+  actionItems: 'Action items',
+  owner: 'Owner',
+  due: 'Due',
+  summaryTruncated: 'This summary covers only part of a long transcript.',
 };
 
+// The summary as titled blocks: [{ heading, paragraph } | { heading, items }], empty parts left out.
+function summaryBlocks(summary, L) {
+  const action = (a) => {
+    const details = [a.owner && `${L.owner}: ${oneLine(a.owner)}`, a.due && `${L.due}: ${oneLine(a.due)}`].filter(
+      Boolean,
+    );
+    return details.length ? `${oneLine(a.task)} (${details.join(', ')})` : oneLine(a.task);
+  };
+  return [
+    summary.overview && { heading: L.overview, paragraph: oneLine(summary.overview) },
+    summary.keyPoints?.length && { heading: L.keyPoints, items: summary.keyPoints.map(oneLine) },
+    summary.decisions?.length && { heading: L.decisions, items: summary.decisions.map(oneLine) },
+    summary.actionItems?.length && { heading: L.actionItems, items: summary.actionItems.map(action) },
+  ].filter(Boolean);
+}
+
 // session: { title, createdAt, activeMs, langA, langB, segments: [{ elapsed, src, tgt }] }
-// options: { format: 'txt' | 'md' | 'csv' | 'srt', content: 'both' | 'src' | 'tgt', langLabel(code), labels }
+// options: { format: 'txt' | 'md' | 'csv' | 'srt', content: 'both' | 'src' | 'tgt', langLabel(code), labels,
+//   summary: { overview, keyPoints, decisions, actionItems: [{ task, owner, due }], truncated } }
+// The summary, when given, opens txt and md files; csv and srt never include it.
 // Returns { text, ext, mime }.
-export function buildTranscript(session, { format = 'txt', content = 'both', langLabel = (c) => c, labels } = {}) {
+export function buildTranscript(
+  session,
+  { format = 'txt', content = 'both', langLabel = (c) => c, labels, summary } = {},
+) {
   const L = { ...DEFAULT_LABELS, ...labels };
   const rows = session.segments
     .map((seg) => ({ time: seg.elapsed || 0, src: oneLine(seg.src), tgt: oneLine(seg.tgt) }))
@@ -46,6 +77,8 @@ export function buildTranscript(session, { format = 'txt', content = 'both', lan
     `${L.languages}: ${langLabel(session.langA)} ⇄ ${langLabel(session.langB)}`,
     `${L.duration}: ${formatElapsed(session.activeMs || rows.at(-1)?.time || 0)}`,
   ];
+  const blocks = summary ? summaryBlocks(summary, L) : [];
+  const note = summary?.truncated ? [L.summaryTruncated, ''] : [];
 
   if (format === 'md') {
     // Backslashes first, so a "\|" already in the text cannot end the cell.
@@ -56,11 +89,27 @@ export function buildTranscript(session, { format = 'txt', content = 'both', lan
       const cells = content === 'both' ? [r.src, r.tgt] : lines(r);
       return `| ${formatElapsed(r.time)} | ${cells.map(cell).join(' | ')} |`;
     });
+    const summaryPart = blocks.length
+      ? [
+          `## ${L.summary}`,
+          '',
+          ...note,
+          ...blocks.flatMap((b) => [
+            `### ${b.heading}`,
+            '',
+            ...(b.items ? b.items.map((i) => `- ${i}`) : [b.paragraph]),
+            '',
+          ]),
+          `## ${L.transcript}`,
+          '',
+        ]
+      : [];
     const text = [
       `# ${title}`,
       '',
       meta.join(' / '),
       '',
+      ...summaryPart,
       `| ${head.join(' | ')} |`,
       `|${head.map(() => ' --- ').join('|')}|`,
       ...body,
@@ -96,7 +145,24 @@ export function buildTranscript(session, { format = 'txt', content = 'both', lan
     const [first, ...rest] = lines(r);
     return [`[${formatElapsed(r.time)}] ${first}`, ...rest.map((t) => `${indent}→ ${t}`)].join('\n');
   });
-  const text = [title, meta.join(L.separator), '', body.join(content === 'both' ? '\n\n' : '\n'), ''].join('\n');
+  const summaryPart = blocks.length
+    ? [
+        L.summary,
+        '',
+        ...note,
+        ...blocks.flatMap((b) => [b.heading, ...(b.items ? b.items.map((i) => `- ${i}`) : [b.paragraph]), '']),
+        L.transcript,
+        '',
+      ]
+    : [];
+  const text = [
+    title,
+    meta.join(L.separator),
+    '',
+    ...summaryPart,
+    body.join(content === 'both' ? '\n\n' : '\n'),
+    '',
+  ].join('\n');
   return { text, ext: 'txt', mime: 'text/plain' };
 }
 

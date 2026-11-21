@@ -36,6 +36,24 @@ export default {
   'caption.title': '字幕',
   'caption.close': '字幕ウィンドウを閉じる',
 
+  // セッションの要約
+  'summary.label': 'セッションの要約',
+  'summary.title': '要約',
+  'summary.none': 'このセッションの概要、決定事項、アクションアイテムをまとめます',
+  'summary.summarize': '要約する',
+  'summary.update': '要約を更新',
+  'summary.working': '要約しています…',
+  'summary.generated': '{date} に作成',
+  'summary.stale': '古い要約',
+  'summary.staleHelp': 'この要約の作成後に発言が追加されました',
+  'summary.truncated': '長い文字起こしのため、この要約は一部のみを対象にしています。',
+  'summary.overview': '概要',
+  'summary.keyPoints': '主なポイント',
+  'summary.decisions': '決定事項',
+  'summary.actionItems': 'アクションアイテム',
+  'summary.owner': '担当',
+  'summary.due': '期限',
+
   // status bar
   'status.idle': '停止中',
   'status.connecting': '接続中…',
@@ -71,6 +89,7 @@ export default {
   'file.source': '原文',
   'file.translation': '訳文',
   'file.separator': '　',
+  'file.transcript': '文字起こし',
 
   // settings dialog
   'settings.title': '設定',
@@ -124,6 +143,7 @@ export default {
   'toast.rateLimited': 'レート制限のため、途中経過の翻訳を1分間停止します（確定文の翻訳は継続）',
   'toast.storageUnavailable': 'ブラウザの保存領域が使えないため、このタブを閉じると内容は消えます',
   'toast.demo': 'デモモード: 実際の音声認識・翻訳は行いません',
+  'toast.summaryFailed': '要約できませんでした: {message}',
 
   // errors reported by audio.js, transcriber.js and translator.js
   'error.windowBlocked': 'ウィンドウがブロックされました',
@@ -137,4 +157,7 @@ export default {
   'error.disconnectedCode': '接続が切れました（コード {code}）',
   'error.rateLimit': '翻訳APIのレート制限に達しました',
   'error.translate': '翻訳エラー ({status}): {message}',
+  'error.summarize': '要約エラー ({status}): {message}',
+  'error.summaryRateLimit': 'APIのレート制限に達しました。1分ほど待ってから再度お試しください。',
+  'error.summaryInvalid': '応答を要約として読み取れませんでした。再度お試しください。',
 };

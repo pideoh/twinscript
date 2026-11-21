@@ -42,6 +42,9 @@
           },
           {
             "context": "analyze"
+          },
+          {
+            "context": "CodeQL"
           }
         ]
       }

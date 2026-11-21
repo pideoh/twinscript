@@ -13,6 +13,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/segmenter.js` | Turns recognizer results (interim / final) into sentence-sized segments. DOM-free |
 | `src/transcriber.js` | Gemini Live API (`gemini-3.5-transcribe-live`) WebSocket, reconnects, rotation before the 10-minute session limit |
 | `src/translator.js` | Streaming translation with `gemini-3.5-flash-lite` |
+| `src/summarizer.js` | Summary of a finished session (overview, key points, decisions, action items) as structured JSON from the translation model. DOM-free |
 | `src/audio.js`, `src/pcm-worklet.js` | Microphone / tab audio capture, 16 kHz PCM in 100 ms chunks, mix for recording |
 | `src/auto-gain.js` | Raises quiet PC audio to a usable level (not applied to the microphone). Pure class |
 | `src/recorder.js` | Records with MediaRecorder, handing over a chunk every 5 seconds |
