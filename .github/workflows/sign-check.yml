@@ -1,0 +1,45 @@
+# Builds and signs the macOS app the way a release does, without publishing anything, whenever the
+# signing setup changes. Uses the repository's certificate when the run has access to the secrets
+# and a throwaway one otherwise (pull requests from forks), and prints the resulting identity.
+name: sign-check
+on:
+  pull_request:
+    paths:
+      - scripts/sign-mac.js
+      - scripts/verify-mac-signature.js
+      - scripts/ci-mac-signing-keychain.sh
+      - scripts/build-mac-helper.sh
+      - native/**
+      - package.json
+      - .github/workflows/release.yml
+      - .github/workflows/sign-check.yml
+permissions:
+  contents: read
+jobs:
+  mac:
+    runs-on: macos-latest
+    env:
+      ELECTRON_BUILDER_COMPRESSION_LEVEL: 1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: sh scripts/build-mac-helper.sh
+      - name: Set up the signing certificate
+        env:
+          MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: sh scripts/ci-mac-signing-keychain.sh setup --throwaway
+      - run: npx electron-builder --mac zip --arm64 --publish never
+      - name: Check the signature of the app in the zip
+        run: |
+          mkdir "$RUNNER_TEMP/unzipped"
+          ditto -x -k dist/*.zip "$RUNNER_TEMP/unzipped"
+          node scripts/verify-mac-signature.js "$RUNNER_TEMP/unzipped/Twinscript.app" io.github.pideoh.twinscript
+          codesign -dv "$RUNNER_TEMP/unzipped/Twinscript.app/Contents/Resources/system-audio" 2>&1 | grep -E "^(Identifier|Signature)"
+      - name: Remove the signing keychain
+        if: always()
+        run: sh scripts/ci-mac-signing-keychain.sh cleanup

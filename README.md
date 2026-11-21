@@ -23,7 +23,7 @@ Download the zip for your computer from [Releases](../../releases):
 | `twinscript-<version>-mac-x64.zip` | Mac with an Intel processor |
 | `twinscript-<version>-win-x64.zip` | Windows (64-bit) |
 
-The app is not signed or notarized, so the operating system warns the first time you open it.
+The app is not notarized by Apple or signed with a Windows publisher certificate, so the operating system warns the first time you open it.
 
 - **macOS**: unzip it, move "Twinscript.app" to the Applications folder and open it.
   It shows "\"Twinscript\" Not Opened". Do not move it to the Trash; press "Done", then scroll to the bottom of
@@ -48,7 +48,13 @@ Each release also has a `SHA256SUMS.txt` to check the download against. See the 
 
 On macOS, PC audio needs macOS 13 or later and a permission: allow Twinscript in
 System Settings → Privacy & Security → "Screen & System Audio Recording", then reopen the app.
-If the permission is missing, the app explains it and stops. After an update, macOS may ask for the permissions again.
+If the permission is missing, the app explains it and stops.
+
+The permissions you grant are kept when you update: every release is signed with the same certificate, so macOS
+recognizes the new version as the same app. The one exception is the first update to a version signed this way
+(releases before it had a different identity each time). If PC audio stays silent or macOS keeps asking after that
+update, remove Twinscript from the list under "Screen & System Audio Recording" (and "Microphone") with the − button,
+then open the app and allow it again.
 
 ### Captions on top of other apps
 

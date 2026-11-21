@@ -35,6 +35,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `test/e2e/*.e2e.js`, `test/e2e/helpers.js` | Browser tests: Chrome, a fake microphone and mocked Gemini endpoints. Split into files by topic so they run in parallel; shared setup is in `helpers.js` |
 | `test/app/desktop.app.js` | Desktop smoke tests (need a display, so not run in CI) |
 | `.github/workflows/release.yml`, `scripts/release-needed.js`, `scripts/next-version.js` | Decide whether a change on `main` affects the shipped app, pick the next version, build the zips and publish a GitHub Release |
+| `scripts/sign-mac.js`, `scripts/verify-mac-signature.js`, `scripts/ci-mac-signing-keychain.sh` | macOS releases are re-signed with a fixed self-signed certificate (electron-builder `afterSign` hook) so the app's identity, and the permissions tied to it, survive updates; the check and the CI keychain setup. `.github/workflows/sign-check.yml` exercises this on pull requests |
 
 ## Commands
 
