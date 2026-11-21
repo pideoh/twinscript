@@ -24,9 +24,7 @@ body:
       options:
         - Desktop app (macOS)
         - Desktop app (Windows)
-        - Browser (Chrome / Edge)
-        - Browser (Safari)
-        - iPhone / iPad
+        - In a browser while developing (npm start)
     validations:
       required: true
   - type: dropdown

@@ -13,5 +13,5 @@ paths:
 - Rules that can be expressed without Electron live in `app/policy.js` and `app/system-audio.js` so they are unit-tested; `app/main.js` stays thin.
 - IPC handlers check the caller (`isSystemAudioCaller`): main window, top frame, `app://rt`.
 - PC audio on macOS goes through the native helper, not through Electron's loopback capture, which delivers no samples on current macOS (electron/electron#52738). Windows uses Electron's loopback.
-- The web app must keep working in a plain browser: code under `src/` may detect Electron but must not depend on it.
+- The interface must keep working in a plain browser, which development and the browser tests rely on: code under `src/` may detect Electron but must not depend on it.
 - Run `npm run test:app` after changes here. It opens windows and is not part of CI.

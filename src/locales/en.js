@@ -24,7 +24,7 @@ export default {
   'header.export': 'Download',
   'header.settings': 'Settings',
   'source.mic': 'Microphone',
-  'source.system': 'PC audio (tab/screen share)',
+  'source.system': 'PC audio',
   'source.both': 'Microphone + PC audio',
 
   // transcript and caption zone
@@ -77,12 +77,12 @@ export default {
   'settings.title': 'Settings',
   'settings.apiKey': 'Gemini API key',
   'settings.apiKey.helpBefore': 'Get one for free at ',
-  'settings.apiKey.helpAfter': '. The key is stored only in this browser on this device.',
+  'settings.apiKey.helpAfter': '. The key is stored only on this device.',
   'settings.running': 'Translation is running. Changes to the API key, translation model, cleanup, recording, glossary and target language take effect the next time you start.',
   'settings.model': 'Translation model',
   'settings.interim': 'Translate sentences while they are being spoken (favors real-time)',
   'settings.smart': 'Clean up the transcript (removes fillers; sentences may take a little longer to finalize)',
-  'settings.record': 'Record and save the audio (in this browser on this device; about 15 MB per hour)',
+  'settings.record': 'Record and save the audio (on this device; about 15 MB per hour)',
   'settings.otherInto': 'When a language other than these two is spoken, translate into',
   'settings.otherInto.left': '{lang} (left language)',
   'settings.otherInto.right': '{lang} (right language)',
