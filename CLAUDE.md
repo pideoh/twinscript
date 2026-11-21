@@ -60,7 +60,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 ## Releases
 
 Any change to the app on `main` (`app/`, `src/`, `native/`, `icons/`, `index.html`, `styles.css`,
-`manifest.webmanifest`, `package.json`) is built and published automatically. The version bump comes
+`package.json`) is built and published automatically. The version bump comes
 from the commit subjects since the last release; the table is in CONTRIBUTING.md. In short: start a
 subject with `Add` or `feat` only for a new feature, never bump `version` in `package.json` by hand,
 and mark breaking changes with `BREAKING CHANGE` in the body.

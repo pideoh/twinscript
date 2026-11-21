@@ -3,8 +3,7 @@
 // through window.nativeSystemAudio (app/preload.js) instead of a screen share.
 import { MessageError } from './message-error.js';
 
-export const canCaptureSystemAudio = () =>
-  !!navigator.mediaDevices?.getDisplayMedia && !/iPhone|iPad|Android/i.test(navigator.userAgent);
+export const canCaptureSystemAudio = () => !!navigator.mediaDevices?.getDisplayMedia;
 
 function toBase64(buffer) {
   const bytes = new Uint8Array(buffer);
