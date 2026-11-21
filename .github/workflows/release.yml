@@ -80,15 +80,25 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write       # for the build provenance attestation
+      attestations: write
     steps:
       - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt
+      # Lets anyone verify that a zip was built by this workflow from this repository
+      # (`gh attestation verify <zip> --repo OWNER/REPO`). Not available to private repositories.
+      - uses: actions/attest-build-provenance@v4
+        if: github.event.repository.private == false
+        with:
+          subject-path: dist/*.zip
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          gh release create "v$VERSION" dist/*.zip --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+          gh release create "v$VERSION" dist/*.zip dist/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "v$VERSION" --generate-notes
