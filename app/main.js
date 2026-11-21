@@ -2,7 +2,7 @@
 // cannot do on its own: system audio without the share dialog and a caption overlay that floats
 // above full-screen apps. The rules themselves live in policy.js and system-audio.js (unit-tested
 // without Electron).
-import { app, BrowserWindow, desktopCapturer, ipcMain, protocol, screen, session, shell } from 'electron';
+import { app, BrowserWindow, desktopCapturer, ipcMain, nativeTheme, protocol, screen, session, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -135,7 +135,8 @@ function createMainWindow() {
     minWidth: 360,
     minHeight: 420,
     title: 'Twinscript',
-    backgroundColor: '#0b1120',
+    // Primer bgColor-default of the light / dark theme, so the window does not flash before the page paints.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0d1117' : '#ffffff',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

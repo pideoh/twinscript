@@ -4,7 +4,7 @@ export default {
 
   // sidebar and session list
   'sidebar.label': '会话',
-  'sidebar.newSession': '＋ 新建会话',
+  'sidebar.newSession': '新建会话',
   'session.when': '{date} ・ {duration}',
   'session.rename': '重命名',
   'session.delete': '删除',
@@ -29,7 +29,7 @@ export default {
   // transcript and caption zone
   'empty.main': '选择两种语言，然后点击“开始翻译”。',
   'empty.sub': '无论说哪种语言，都会自动识别并翻译成另一种语言。',
-  'log.jump': '最新 ↓',
+  'log.jump': '最新',
   'now.label': '正在说的句子',
   'now.head': '当前',
   'now.empty': '开始翻译后，字幕会显示在这里',

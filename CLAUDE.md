@@ -17,6 +17,7 @@
 | `src/store.js` | IndexedDB。`sessions`（文字起こし込み）と `audio`（録音チャンク） |
 | `src/exporter.js` | 文字起こしの書き出し（txt / md / csv / srt）。純粋関数 |
 | `src/mock.js` | `?mock=1` デモ用ダミー |
+| `src/icons.js` | 実行時に作るボタン用の Octicons（SVG） |
 | `src/i18n.js` | UI 言語の決定（`resolveLocale`）、`t(key, params)`、静的 HTML への適用（`data-i18n*`）。言語の登録はここの `LOCALES` だけ |
 | `src/locales/*.js` | UI 文言のカタログ（`en` が基準兼フォールバック、`ja`、`zh-Hans`）。キーはドット区切り |
 | `src/message-error.js` | 文言キー＋値を持つエラー。`audio.js`・`transcriber.js`・`translator.js` が投げ、`app.js` が訳して表示する |
@@ -47,6 +48,13 @@
 - マージ済みブランチに積まない。`main` から新しいブランチを切って PR を出す
 - UI 文言は直書きせず i18n を通す（`t()` か `data-i18n*`。UI を持たないモジュールは `MessageError` で文言キーを投げる）。新しいキーは `src/locales/` の全ファイルに同じキー・同じ `{placeholder}` で足す（`test/i18n.test.js` が検査する）
 - コード・コメント・コミットメッセージは英語
+
+## デザイン
+
+- 見た目の基準は GitHub Primer（https://primer.style/product/）。部品は Primer の構成・寸法に合わせる（Button / IconButton / Select / TextInput / Dialog / NavList / Banner / Label）
+- トークンは `styles.css` 冒頭のブロックにだけ置く（`@primer/primitives` からコピーし、Primer のトークン名のまま。版はそこのコメント）。それ以外の CSS は `var(--…)` で参照し、色・余白・角丸・文字サイズを直書きしない（例外は字幕オーバーレイの半透明の背景だけ）
+- アイコンは Octicons の 16px を SVG で埋め込む（`aria-hidden="true"`、`fill="currentColor"`、ボタン側に翻訳済みの `aria-label`）。実行時に作るものは `src/icons.js`。記号文字をアイコン代わりにしない
+- 新しい部品やトークンを足したら `THIRD-PARTY-NOTICES.md` の版も合わせる
 
 ## リリース
 
