@@ -121,3 +121,7 @@ npm run test:app  # デスクトップアプリの起動確認。実際にウィ
 ```
 
 どちらも Gemini の API は模擬しているので、APIキーは不要です。
+
+## ライセンス
+
+[MIT](LICENSE)
