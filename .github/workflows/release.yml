@@ -24,6 +24,10 @@ on:
         options: [auto, patch, minor, major]
         default: auto
 
+# Jobs get read-only access unless they ask for more (only the release job does).
+permissions:
+  contents: read
+
 concurrency:
   group: release
   cancel-in-progress: false
