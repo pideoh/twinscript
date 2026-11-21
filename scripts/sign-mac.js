@@ -11,7 +11,10 @@
 // alone. Without MAC_SIGN_IDENTITY (local builds, pull requests from forks) nothing is done and
 // the ad hoc signature stays. The zip is made after this hook, from the re-signed app.
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
+// The hook only ever runs on macOS, but its plan is unit-tested on every platform: POSIX paths.
+import { posix } from 'node:path';
+
+const { join } = posix;
 
 // The codesign calls, innermost first. `--deep` covers the frameworks and helper apps inside the
 // bundle, but not a bare executable in Resources, which is sealed as a resource of the app and so
