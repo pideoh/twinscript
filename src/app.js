@@ -8,6 +8,7 @@ import { Recorder, canRecord } from './recorder.js';
 import { buildTranscript, formatElapsed, formatDateTime, safeFileName } from './exporter.js';
 import { t, setLocale, getLocale, resolveLocale, applyTranslations, availableLocales } from './i18n.js';
 import { MessageError } from './message-error.js';
+import { octicon } from './icons.js';
 
 // code: what the recognizer is told; display: the tag whose name is shown in the UI language
 // (no region, but the script for Chinese); name: what the translation prompt says.
@@ -200,8 +201,10 @@ const isEmpty = (sess) => !sess.segments.length && !sess.recordings.length;
 // Errors from audio.js, transcriber.js and translator.js carry a message key.
 const errorText = (err) => (err?.key ? t(err.key, err.params) : err?.message ?? String(err));
 
-function toast(message, ms = 6000) {
+// Shown as an inline banner above the transcript. variant: 'info', 'warning' or 'critical'.
+function toast(message, ms = 6000, variant = 'info') {
   els.toast.textContent = message;
+  els.toast.dataset.variant = variant;
   els.toast.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { els.toast.hidden = true; }, ms);
@@ -240,7 +243,7 @@ function flushSaves() {
       sessions.unshift(sess);
       store.requestPersistence();
     }
-    store.saveSession(serialize(sess)).catch((err) => toast(t('toast.saveFailed', { message: err.message })));
+    store.saveSession(serialize(sess)).catch((err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'));
   }
   dirty.clear();
   renderSidebar();
@@ -271,6 +274,7 @@ function renderSidebar() {
     row.className = `session${sess === current ? ' current' : ''}`;
     const open = document.createElement('button');
     open.className = 'open';
+    if (sess === current) open.setAttribute('aria-current', 'true');
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = sess.title;
@@ -279,22 +283,22 @@ function renderSidebar() {
     when.textContent = t('session.when', { date: formatDateTime(sess.createdAt), duration: formatElapsed(sess.activeMs) });
     open.append(name, when);
     open.onclick = () => { if (canSwitch()) showSession(sess); };
-    const action = (label, title, fn) => {
+    const action = (icon, title, fn) => {
       const b = document.createElement('button');
-      b.className = 'act';
-      b.textContent = label;
+      b.className = 'act icon-btn';
+      b.append(octicon(icon));
       b.title = title;
       b.setAttribute('aria-label', title);
       b.onclick = fn;
       return b;
     };
-    row.append(open, action('✎', t('session.rename'), () => renameSession(sess)), action('✕', t('session.delete'), () => deleteSession(sess)));
+    row.append(open, action('pencil', t('session.rename'), () => renameSession(sess)), action('trash', t('session.delete'), () => deleteSession(sess)));
     return row;
   }));
 }
 
 function canSwitch() {
-  if (run) toast(t('toast.stopToSwitch'));
+  if (run) toast(t('toast.stopToSwitch'), 6000, 'warning');
   return !run;
 }
 
@@ -307,11 +311,11 @@ function renameSession(sess) {
 }
 
 async function deleteSession(sess) {
-  if (run?.session === sess) return toast(t('toast.stopToDelete'));
+  if (run?.session === sess) return toast(t('toast.stopToDelete'), 6000, 'warning');
   if (!confirm(t('session.deleteConfirm', { title: sess.title }))) return;
   dirty.delete(sess);
   sessions = sessions.filter((x) => x !== sess);
-  await store.deleteSession(sess.id).catch((err) => toast(t('toast.deleteFailed', { message: err.message })));
+  await store.deleteSession(sess.id).catch((err) => toast(t('toast.deleteFailed', { message: err.message }), 6000, 'critical'));
   if (sess === current) showSession(sessions[0] ?? blankSession());
   else renderSidebar();
 }
@@ -405,7 +409,7 @@ els.pip.onclick = async () => {
   try {
     ({ win, overlay } = await openCaptionWindow());
   } catch (err) {
-    return toast(t('toast.captionWindowFailed', { message: errorText(err) }));
+    return toast(t('toast.captionWindowFailed', { message: errorText(err) }), 6000, 'critical');
   }
   captionWindow = win;
   const css = win.document.createElement('link');
@@ -418,7 +422,7 @@ els.pip.onclick = async () => {
   // stylesheet in the new window is slow to load or an older cached copy.
   win.document.body.style.cssText = overlay
     ? 'margin:0;display:block;height:100vh;background:transparent;overflow:hidden'
-    : 'margin:0;display:block;height:100vh;background:var(--panel, #131c2e)';
+    : 'margin:0;display:block;height:100vh;background:var(--bgColor-default, Canvas)';
   els.now.style.cssText = 'display:flex;width:100%;height:100vh;min-height:0;max-height:none;border-top:0';
   applyFontSize();
   const home = document.createComment('caption zone');
@@ -428,10 +432,10 @@ els.pip.onclick = async () => {
   if (overlay) {
     // The overlay has no title bar, so it needs its own way to close.
     closeBtn = win.document.createElement('button');
-    closeBtn.className = 'overlay-close';
+    closeBtn.className = 'overlay-close icon-btn';
     closeBtn.title = t('caption.close');
     closeBtn.setAttribute('aria-label', closeBtn.title);
-    closeBtn.textContent = '×';
+    closeBtn.append(octicon('x', win.document));
     closeBtn.onclick = () => win.close();
     win.document.body.append(closeBtn);
   }
@@ -466,11 +470,13 @@ els.export.onclick = () => {
     info.textContent = t('export.recording', { n: i + 1, date: formatDateTime(rec.startedAt), length });
     const save = document.createElement('button');
     save.type = 'button';
-    save.className = 'plain';
-    save.textContent = t('export.save');
+    save.className = 'btn';
+    const label = document.createElement('span');
+    label.textContent = t('export.save');
+    save.append(octicon('download'), label);
     save.onclick = async () => {
       const chunks = await store.getAudioChunks(sess.id, rec.id).catch(() => []);
-      if (!chunks.length) return toast(t('toast.recordingMissing'));
+      if (!chunks.length) return toast(t('toast.recordingMissing'), 6000, 'critical');
       const ext = rec.mime.includes('mp4') ? 'm4a' : 'webm';
       download(new Blob(chunks, { type: rec.mime }), `${safeFileName(sess.title)}-${i + 1}.${ext}`);
     };
@@ -525,7 +531,7 @@ els.toggle.onclick = () => (run ? stop() : start());
 
 async function start() {
   if (!MOCK && !settings.apiKey) {
-    toast(t('toast.apiKeyFirst'));
+    toast(t('toast.apiKeyFirst'), 6000, 'warning');
     return openSettings();
   }
   const langA = LANGS.find((l) => l.code === settings.langA);
@@ -546,7 +552,7 @@ async function start() {
     onInterim: (text) => { if (DEBUG) console.log('[interim]', text); if (run === r) r.tracker.interim(text); },
     onFinal: (text) => { if (DEBUG) console.log('[final]', text); if (run === r) r.tracker.final(text); },
     onState: (state) => run === r && setStatus(state),
-    onError: (err) => { if (run === r) { toast(errorText(err), 10000); stop(); } },
+    onError: (err) => { if (run === r) { toast(errorText(err), 10000, 'critical'); stop(); } },
   };
   if (MOCK) {
     r.translator = new MockTranslator();
@@ -567,7 +573,7 @@ async function start() {
       r.capture = new AudioCapture({
         onChunk: (b64) => r.transcriber.sendAudio(b64),
         onLevel: (rms) => { els.level.style.width = `${Math.min(100, rms * 400)}%`; },
-        onEnded: (err) => { if (run === r) { toast(err ? errorText(err) : t('toast.audioEnded'), err ? 20000 : 6000); stop(); } },
+        onEnded: (err) => { if (run === r) { toast(err ? errorText(err) : t('toast.audioEnded'), err ? 20000 : 6000, err ? 'critical' : 'info'); stop(); } },
       });
       await r.capture.start(settings.source);
       if (run !== r) return r.capture.stop(); // stopped while the permission prompt was open
@@ -582,7 +588,7 @@ async function start() {
   } catch (err) {
     if (run !== r) return;
     const denied = err.name === 'NotAllowedError' || err.name === 'SecurityError';
-    toast(denied ? t('toast.permissionNeeded') : errorText(err), 10000);
+    toast(denied ? t('toast.permissionNeeded') : errorText(err), 10000, 'critical');
     stop();
   }
 }
@@ -596,7 +602,7 @@ function watchSystemAudio(r) {
     if (Date.now() - since < SILENT_SYSTEM_AUDIO_MS) return;
     clearInterval(r.systemWatch);
     const isMacApp = /Electron/.test(navigator.userAgent) && /Mac/.test(navigator.userAgent);
-    toast(t(isMacApp ? 'toast.systemAudioSilentMac' : 'toast.systemAudioSilent'), 20000);
+    toast(t(isMacApp ? 'toast.systemAudioSilentMac' : 'toast.systemAudioSilent'), 20000, 'warning');
   }, 1000);
 }
 
@@ -606,7 +612,7 @@ function startRecording(r) {
   try {
     r.recorder = new Recorder(r.capture.stream, (blob) => {
       store.addAudioChunk(sess.id, rec.id, blob).catch(() => {
-        if (!r.recordWarned) toast(t('toast.recordSaveFailed'));
+        if (!r.recordWarned) toast(t('toast.recordSaveFailed'), 6000, 'warning');
         r.recordWarned = true;
       });
     });
@@ -616,7 +622,7 @@ function startRecording(r) {
     sess.recordings.push(rec);
     markDirty(sess);
   } catch {
-    toast(t('toast.recordUnsupported'));
+    toast(t('toast.recordUnsupported'), 6000, 'warning');
   }
 }
 
@@ -701,7 +707,7 @@ function scheduleInterimTranslation(s) {
     } catch (err) {
       if (err instanceof RateLimitError) {
         it.pausedUntil = Date.now() + INTERIM_COOLDOWN_MS;
-        toast(t('toast.rateLimited'));
+        toast(t('toast.rateLimited'), 6000, 'warning');
       }
     } finally {
       it.busy = false;
@@ -768,7 +774,7 @@ els.toggle.textContent = t('toggle.start');
 try {
   sessions = (await store.listSessions()).sort((a, b) => b.createdAt - a.createdAt);
 } catch {
-  toast(t('toast.storageUnavailable'));
+  toast(t('toast.storageUnavailable'), 6000, 'warning');
 }
 let lastId = null;
 try { lastId = localStorage.getItem('rt-current'); } catch { /* private mode */ }
