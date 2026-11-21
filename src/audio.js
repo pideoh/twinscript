@@ -1,5 +1,6 @@
 // Captures microphone and/or system (tab / screen share) audio and delivers
-// base64 16 kHz PCM chunks.
+// base64 16 kHz PCM chunks. In the macOS desktop app, system audio comes from a native helper
+// through window.nativeSystemAudio (app/preload.js) instead of a screen share.
 
 export const canCaptureSystemAudio = () =>
   !!navigator.mediaDevices?.getDisplayMedia && !/iPhone|iPad|Android/i.test(navigator.userAgent);
@@ -13,6 +14,18 @@ function toBase64(buffer) {
   return btoa(bin);
 }
 
+const NATIVE_RATE = 48000; // what the native helper delivers
+const PERMISSION_MESSAGE = 'PC音声を取り込む許可がありません。システム設定 → プライバシーとセキュリティ →「画面収録とシステムオーディオ録音」で Realtime Translate を許可し、アプリを開き直してください。';
+const NATIVE_ERROR_MESSAGE = 'PC音声を取り込めませんでした。';
+
+// Whole Float32 samples from an ArrayBuffer or a typed array, copied so they can be transferred.
+function toFloat32(data) {
+  const bytes = ArrayBuffer.isView(data)
+    ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+    : new Uint8Array(data);
+  return new Float32Array(bytes.slice(0, bytes.byteLength - (bytes.byteLength % 4)).buffer);
+}
+
 export class AudioCapture {
   constructor({ onChunk, onLevel, onEnded }) {
     this.onChunk = onChunk;
@@ -24,8 +37,9 @@ export class AudioCapture {
 
   // source: 'mic' | 'system' | 'both'
   async start(source) {
+    const native = source !== 'mic' ? window.nativeSystemAudio ?? null : null;
     try {
-      if (source !== 'mic') {
+      if (source !== 'mic' && !native) {
         // Ask for this first: the picker needs the click's user activation.
         const display = await navigator.mediaDevices.getDisplayMedia({
           video: true,
@@ -49,7 +63,9 @@ export class AudioCapture {
       }
 
       const Ctx = window.AudioContext || window.webkitAudioContext;
-      this.ctx = new Ctx({ latencyHint: 'interactive' });
+      this.ctx = native
+        ? new Ctx({ latencyHint: 'interactive', sampleRate: NATIVE_RATE })
+        : new Ctx({ latencyHint: 'interactive' });
       await this.ctx.audioWorklet.addModule(new URL('./pcm-worklet.js', import.meta.url));
       this.node = new AudioWorkletNode(this.ctx, 'pcm-processor', { numberOfOutputs: 1 });
       this.node.port.onmessage = (e) => {
@@ -69,6 +85,7 @@ export class AudioCapture {
           source.connect(this.systemProbe);
         }
       }
+      if (native) await this.startNative(native, mix);
       // Keep the graph pulling without playing anything back.
       const mute = this.ctx.createGain();
       mute.gain.value = 0;
@@ -77,6 +94,35 @@ export class AudioCapture {
     } catch (err) {
       this.stop();
       throw err;
+    }
+  }
+
+  // Plays the helper's samples through a worklet connected where a screen share would be.
+  async startNative(native, mix) {
+    const feeder = new AudioWorkletNode(this.ctx, 'pcm-feeder', {
+      numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1],
+    });
+    this.feeder = feeder;
+    feeder.connect(this.node);
+    feeder.connect(mix);
+    this.systemProbe = this.ctx.createAnalyser();
+    this.systemProbe.fftSize = 2048;
+    feeder.connect(this.systemProbe);
+    this.native = native;
+    native.onData((data) => {
+      if (this.feeder !== feeder) return;
+      const samples = toFloat32(data);
+      feeder.port.postMessage(samples, [samples.buffer]);
+    });
+    native.onEnd((reason) => {
+      if (this.native !== native) return;
+      this.stop();
+      this.onEnded?.(new Error(reason === 'permission' ? PERMISSION_MESSAGE : NATIVE_ERROR_MESSAGE));
+    });
+    try {
+      await native.start();
+    } catch {
+      throw new Error(NATIVE_ERROR_MESSAGE);
     }
   }
 
@@ -94,6 +140,14 @@ export class AudioCapture {
   stop() {
     for (const s of this.streams) s.getTracks().forEach((t) => t.stop());
     this.streams = [];
+    if (this.native) {
+      const native = this.native;
+      this.native = null;
+      native.onData(null);
+      native.onEnd(null);
+      native.stop()?.catch?.(() => {});
+    }
+    if (this.feeder) { this.feeder.disconnect(); this.feeder = null; }
     if (this.node) { this.node.port.onmessage = null; this.node.disconnect(); this.node = null; }
     if (this.ctx) { this.ctx.close().catch(() => {}); this.ctx = null; }
   }

@@ -517,7 +517,7 @@ async function start() {
       r.capture = new AudioCapture({
         onChunk: (b64) => r.transcriber.sendAudio(b64),
         onLevel: (rms) => { els.level.style.width = `${Math.min(100, rms * 400)}%`; },
-        onEnded: () => { if (run === r) { toast('音声入力が終了しました'); stop(); } },
+        onEnded: (err) => { if (run === r) { toast(err?.message ?? '音声入力が終了しました', err ? 20000 : 6000); stop(); } },
       });
       await r.capture.start(settings.source);
       if (run !== r) return r.capture.stop(); // stopped while the permission prompt was open

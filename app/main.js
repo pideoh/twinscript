@@ -1,13 +1,16 @@
 // Electron main process: serves the static web app from app://rt/ and adds what a browser tab
 // cannot do on its own: system audio without the share dialog and a caption overlay that floats
-// above full-screen apps. The rules themselves live in policy.js (unit-tested without Electron).
-import { app, BrowserWindow, desktopCapturer, protocol, screen, session, shell } from 'electron';
+// above full-screen apps. The rules themselves live in policy.js and system-audio.js (unit-tested
+// without Electron).
+import { app, BrowserWindow, desktopCapturer, ipcMain, protocol, screen, session, shell } from 'electron';
+import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   SCHEME, START_URL, CAPTION_WINDOW, resolveAppFile, isAppUrl, isExternalUrl, windowOpenAction, allowPermission,
 } from './policy.js';
+import { helperPath, endReason, isSystemAudioCaller, createSampleFramer } from './system-audio.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -55,10 +58,69 @@ function handleDisplayMedia(ses) {
     } catch {
       callback(null);
     }
-  // On macOS, let the system's own picker drive the capture: with an app-chosen source the
-  // loopback audio track never delivers samples there (electron/electron#52738). Where the
-  // system picker is unavailable, the handler above is used.
-  }, { useSystemPicker: process.platform === 'darwin' });
+  });
+}
+
+// macOS: Electron's loopback audio delivers no samples there, so "PC音声" comes from a native
+// helper (ScreenCaptureKit) instead, streamed to the page through the preload script.
+let helper = null; // { proc, contents }
+
+function stopSystemAudio() {
+  if (!helper) return;
+  const { proc } = helper;
+  helper = null; // an exit we asked for is not reported to the page
+  proc.stdin.destroy();
+  proc.kill('SIGTERM');
+}
+
+function startSystemAudio(contents) {
+  stopSystemAudio();
+  const file = helperPath({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, appRoot: ROOT });
+  const proc = spawn(file, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+  const current = { proc, contents };
+  helper = current;
+  const frame = createSampleFramer();
+  let stderr = '';
+  proc.stdout.on('data', (chunk) => {
+    const samples = frame(chunk);
+    if (samples && helper === current && !contents.isDestroyed()) contents.send('system-audio:data', samples);
+  });
+  proc.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-1000); });
+  proc.stdin.on('error', () => {}); // the helper may exit before we close its stdin
+  const ended = (code) => {
+    if (helper !== current) return;
+    helper = null;
+    if (stderr.trim()) console.error(`system-audio: ${stderr.trim()}`);
+    if (!contents.isDestroyed()) contents.send('system-audio:end', endReason(code));
+  };
+  proc.on('exit', (code) => ended(code));
+  // Not starting at all (e.g. the helper is missing) rejects start(); a later failure is an end.
+  let spawned = false;
+  return new Promise((resolve, reject) => {
+    proc.once('spawn', () => { spawned = true; resolve(); });
+    proc.once('error', (err) => {
+      if (spawned) return ended(null);
+      if (helper === current) helper = null;
+      reject(err);
+    });
+  });
+}
+
+function handleSystemAudio() {
+  const allowed = (event) => isSystemAudioCaller({
+    url: event.senderFrame?.url,
+    isMainFrame: event.senderFrame === event.sender.mainFrame,
+    isMainWindow: !!mainWindow && event.sender === mainWindow.webContents,
+  });
+  ipcMain.handle('system-audio:start', async (event) => {
+    if (!allowed(event)) throw new Error('not allowed');
+    await startSystemAudio(event.sender);
+  });
+  ipcMain.handle('system-audio:stop', (event) => {
+    if (!allowed(event)) throw new Error('not allowed');
+    stopSystemAudio();
+  });
+  app.on('will-quit', stopSystemAudio);
 }
 
 function openCaptionOverlay(win) {
@@ -74,9 +136,17 @@ function createMainWindow() {
     minHeight: 420,
     title: 'Realtime Translate',
     backgroundColor: '#0b1120',
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      ...(process.platform === 'darwin' && { preload: join(ROOT, 'app', 'preload.js') }),
+    },
   });
   const contents = mainWindow.webContents;
+  // A reload or a crashed page no longer listens to the capture it started.
+  contents.on('did-navigate', stopSystemAudio);
+  contents.on('render-process-gone', stopSystemAudio);
   contents.setWindowOpenHandler((details) => {
     const action = windowOpenAction(details);
     if (action === 'external') shell.openExternal(details.url);
@@ -103,6 +173,7 @@ function createMainWindow() {
     if (details.frameName === CAPTION_WINDOW) openCaptionOverlay(win);
   });
   mainWindow.on('closed', () => {
+    stopSystemAudio();
     // The overlay holds the caption zone of this page; it has nothing to show without it.
     for (const win of BrowserWindow.getAllWindows()) win.close();
     mainWindow = null;
@@ -127,6 +198,7 @@ app.whenReady().then(() => {
   serveAppFiles(ses);
   guardPermissions(ses);
   handleDisplayMedia(ses);
+  if (process.platform === 'darwin') handleSystemAudio();
   createMainWindow();
   app.on('activate', () => { if (!mainWindow) createMainWindow(); });
 });

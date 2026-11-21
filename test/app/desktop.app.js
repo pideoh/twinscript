@@ -30,6 +30,14 @@ test('serves only the app files from app://rt/', async () => {
   assert.equal(await status('app/main.js'), 404);
 });
 
+test('on macOS the page gets the native PC audio bridge and nothing else from the preload', async () => {
+  const page = await app.firstWindow();
+  const keys = await page.evaluate(() => (window.nativeSystemAudio ? Object.keys(window.nativeSystemAudio).sort() : null));
+  if (process.platform === 'darwin') assert.deepEqual(keys, ['onData', 'onEnd', 'start', 'stop']);
+  else assert.equal(keys, null);
+  assert.equal(await page.evaluate(() => typeof require), 'undefined');
+});
+
 test('runs the demo and moves the captions into an overlay window and back', async () => {
   const page = await app.firstWindow();
   const errors = [];

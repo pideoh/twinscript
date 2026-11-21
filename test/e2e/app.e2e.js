@@ -30,12 +30,13 @@ before(async () => {
 });
 after(async () => { await browser?.close(); server?.close(); });
 
-async function openApp(query = '', settings) {
+async function openApp(query = '', settings, init) {
   const context = await browser.newContext({ permissions: ['microphone'] });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   if (settings) await context.addInitScript((s) => localStorage.setItem('rt-settings', JSON.stringify(s)), settings);
+  if (init) await context.addInitScript(init.script, init.arg);
   await page.goto(`${origin}/${query}`);
   return { page, errors, close: () => context.close() };
 }
@@ -449,5 +450,75 @@ test('PC audio that is playing raises no warning', async () => {
   await page.waitForTimeout(10_000);
   assert.ok(await page.locator('#toast').isHidden());
   await page.click('#toggle');
+  await close();
+});
+
+// Stands in for the macOS desktop app's preload (app/preload.js): a 440 Hz tone at 48 kHz, sent
+// in 20 ms chunks once started, or the helper ending with `endWith` shortly after it starts.
+function fakeNativeSystemAudio({ endWith }) {
+  const calls = { start: 0, stop: 0, displayMedia: 0 };
+  window.nativeCalls = calls;
+  navigator.mediaDevices.getDisplayMedia = async () => { calls.displayMedia++; throw new Error('not expected'); };
+  let onData = null;
+  let onEnd = null;
+  let timer = null;
+  let phase = 0;
+  window.nativeSystemAudio = {
+    start: async () => {
+      calls.start++;
+      if (endWith) { setTimeout(() => onEnd?.(endWith), 200); return; }
+      timer = setInterval(() => {
+        const samples = new Float32Array(960);
+        for (let i = 0; i < samples.length; i++) samples[i] = 0.5 * Math.sin(2 * Math.PI * 440 * (phase++) / 48000);
+        onData?.(samples.buffer); // the real preload hands over an ArrayBuffer
+      }, 20);
+    },
+    stop: async () => { calls.stop++; clearInterval(timer); },
+    onData: (cb) => { onData = cb; },
+    onEnd: (cb) => { onEnd = cb; },
+  };
+}
+
+test('the desktop app on macOS takes PC audio from the native helper instead of a screen share', async () => {
+  const { page, errors, close } = await openApp('', { apiKey: 'test-key', source: 'system', record: false },
+    { script: fakeNativeSystemAudio, arg: {} });
+  const seen = { chunks: 0, peak: 0, bytes: 0 };
+  await page.routeWebSocket(/generativelanguage/, (ws) => {
+    ws.onMessage((raw) => {
+      const msg = JSON.parse(raw);
+      if (msg.setup) ws.send(JSON.stringify({ setupComplete: {} }));
+      if (!msg.realtimeInput?.audio) return;
+      const pcm = Buffer.from(msg.realtimeInput.audio.data, 'base64');
+      seen.chunks++;
+      seen.bytes = pcm.length;
+      for (let i = 0; i < pcm.length; i += 2) seen.peak = Math.max(seen.peak, Math.abs(pcm.readInt16LE(i)));
+    });
+  });
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  await page.waitForTimeout(1500);
+  assert.ok(seen.chunks >= 5, `audio chunks should be streamed, got ${seen.chunks}`);
+  assert.equal(seen.bytes, 3200, '100 ms of 16 kHz 16-bit mono');
+  assert.ok(seen.peak > 0x7fff * 0.3, `the tone should come through, peak ${seen.peak}`);
+  await page.click('#toggle');
+  const calls = await page.evaluate(() => window.nativeCalls);
+  assert.deepEqual(calls, { start: 1, stop: 1, displayMedia: 0 });
+  assert.ok(await page.locator('#toast').isHidden(), 'no silent-audio warning');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('the desktop app on macOS explains a missing Screen Recording permission and stops', async () => {
+  const { page, errors, close } = await openApp('', { apiKey: 'test-key', source: 'system', record: false },
+    { script: fakeNativeSystemAudio, arg: { endWith: 'permission' } });
+  await mockGemini(page, []);
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.getElementById('toast').textContent.includes('画面収録とシステムオーディオ録音'));
+  assert.match(await page.textContent('#toast'), /Realtime Translate を許可し、アプリを開き直してください/);
+  assert.equal(await page.textContent('#toggle'), '翻訳開始');
+  assert.equal(await page.textContent('#statusText'), '停止中');
+  const calls = await page.evaluate(() => window.nativeCalls);
+  assert.deepEqual(calls, { start: 1, stop: 1, displayMedia: 0 });
+  assert.deepEqual(errors, []);
   await close();
 });

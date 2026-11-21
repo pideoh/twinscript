@@ -11,8 +11,9 @@
     "test": "node --test test/*.test.js",
     "test:e2e": "node --test test/e2e/*.e2e.js",
     "test:app": "node --test test/app/*.app.js",
-    "app": "electron .",
-    "dist:mac": "electron-builder --mac zip --arm64 --x64",
+    "app": "node -e \"process.platform === 'darwin' && require('node:child_process').execFileSync('sh', ['scripts/build-mac-helper.sh'], { stdio: 'inherit' })\" && electron .",
+    "build:mac-helper": "sh scripts/build-mac-helper.sh",
+    "dist:mac": "sh scripts/build-mac-helper.sh && electron-builder --mac zip --arm64 --x64",
     "dist:win": "electron-builder --win zip --x64"
   },
   "type": "module",
@@ -41,6 +42,7 @@
       "icon": "icons/icon-512.png",
       "identity": "-",
       "hardenedRuntime": false,
+      "extraResources": [{ "from": "native/mac/build/system-audio", "to": "system-audio" }],
       "notarize": false,
       "extendInfo": {
         "NSMicrophoneUsageDescription": "会議の音声を文字起こしするためにマイクを使います。",

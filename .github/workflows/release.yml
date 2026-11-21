@@ -7,6 +7,7 @@ on:
     paths:
       - 'app/**'
       - 'src/**'
+      - 'native/**'
       - 'icons/**'
       - index.html
       - styles.css
@@ -15,6 +16,7 @@ on:
       # so that a fix to the release process itself is released
       - .github/workflows/release.yml
       - scripts/next-version.js
+      - scripts/build-mac-helper.sh
   workflow_dispatch:
     inputs:
       bump:
@@ -61,6 +63,8 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      # dist:mac first builds the PC audio helper (native/mac) with the runner's Xcode Swift;
+      # dist:win does not need it.
       # --publish never: electron-builder only builds; the release job below does the publishing.
       # bash on both runners: PowerShell splits a "-c.key=value" argument at the dot.
       - run: npm run ${{ matrix.script }} -- --publish never --config.extraMetadata.version=${{ needs.version.outputs.version }}

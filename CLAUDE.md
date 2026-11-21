@@ -18,6 +18,9 @@
 | `src/mock.js` | `?mock=1` デモ用ダミー |
 | `app/main.js` | デスクトップ版（Electron）のメインプロセス。`app://rt/` で配信、PC音声、字幕オーバーレイ |
 | `app/policy.js` | デスクトップ版の規則（配信するファイル、遷移・window.open・権限の許可）。Electron 非依存 |
+| `app/preload.js` | macOS 版のみ。PC音声ヘルパーの開始/停止と受信を `window.nativeSystemAudio` として画面に渡す |
+| `app/system-audio.js` | PC音声ヘルパーの規則（置き場所、呼び出し元の確認、終了理由、サンプル単位への区切り）。Electron 非依存 |
+| `native/mac/system-audio.swift`, `scripts/build-mac-helper.sh` | macOS の PC音声ヘルパー（ScreenCaptureKit、48kHz モノラル Float32 を標準出力へ）とそのビルド。`native/mac/build/` に出力 |
 | `test/*.test.js` | 単体テスト（node:test、依存なし） |
 | `test/e2e/app.e2e.js` | Chrome＋偽マイク＋模擬エンドポイントの通しテスト |
 | `test/app/desktop.app.js` | デスクトップ版の起動確認（画面が要るので CI では動かさない） |
@@ -29,7 +32,7 @@
 - `npm run test:e2e` — `src/app.js`・`src/audio.js`・HTML/CSS を触ったときだけ
 - `npm start` — http://localhost:5173 （`?mock=1` でキーなしデモ、`?debug=1` で認識結果の生ログ）
 - `npm run app` — デスクトップ版を起動。`npm run test:app` は `app/` か字幕ウィンドウを触ったときだけ
-- `npm run dist:mac` / `npm run dist:win` — `dist/` に zip を作る
+- `npm run dist:mac` / `npm run dist:win` — `dist/` に zip を作る（`dist:mac` と macOS での `npm run app` は PC音声ヘルパーも Swift でビルドする）
 
 ## 作業ルール
 
@@ -42,7 +45,7 @@
 
 ## リリース
 
-`main` にアプリ本体の変更（`app/` `src/` `icons/` `index.html` `styles.css` `manifest.webmanifest` `package.json`）が入ると、
+`main` にアプリ本体の変更（`app/` `src/` `native/` `icons/` `index.html` `styles.css` `manifest.webmanifest` `package.json`）が入ると、
 `.github/workflows/release.yml` が Mac / Windows の zip をビルドして GitHub Releases に公開する。
 バージョンは前回リリース以降のコミットから `scripts/next-version.js` が決める。コミットの件名はこの規則に合わせる。
 
