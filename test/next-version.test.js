@@ -1,9 +1,12 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { bumpFor, nextVersion } from '../scripts/next-version.js';
 
 test('fixes and other changes are a patch', () => {
-  assert.equal(bumpFor(['Fix sentences shown twice', 'Default the interval to 1.5 seconds', 'docs: update README']), 'patch');
+  assert.equal(
+    bumpFor(['Fix sentences shown twice', 'Default the interval to 1.5 seconds', 'docs: update README']),
+    'patch',
+  );
   assert.equal(bumpFor([]), 'patch');
 });
 

@@ -1,15 +1,7 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(npm test)",
-      "Bash(npm run test:e2e)",
-      "Bash(node --test *)"
-    ],
-    "deny": [
-      "Read(node_modules/**)",
-      "Read(package-lock.json)",
-      "Read(icons/*.png)"
-    ]
+    "allow": ["Bash(npm test)", "Bash(npm run test:e2e)", "Bash(node --test *)"],
+    "deny": ["Read(node_modules/**)", "Read(package-lock.json)", "Read(icons/*.png)"]
   },
   "bashOutputMaxChars": 10000,
   "env": {

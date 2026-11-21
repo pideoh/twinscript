@@ -1,13 +1,16 @@
-import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { afterEach, test } from 'node:test';
 import { GeminiTranslator, RateLimitError } from '../src/translator.js';
 
 const realFetch = globalThis.fetch;
-afterEach(() => { globalThis.fetch = realFetch; });
+afterEach(() => {
+  globalThis.fetch = realFetch;
+});
 
-const sse = (...texts) => texts
-  .map((t) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: t }] } }] })}\n\n`).join('');
-const make = () => new GeminiTranslator({ apiKey: 'KEY', model: 'm-1', langA: 'Japanese', langB: 'English', glossary: 'Acme = アクメ' });
+const sse = (...texts) =>
+  texts.map((t) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: t }] } }] })}\n\n`).join('');
+const make = () =>
+  new GeminiTranslator({ apiKey: 'KEY', model: 'm-1', langA: 'Japanese', langB: 'English', glossary: 'Acme = アクメ' });
 
 function stubFetch(...responses) {
   const calls = [];
@@ -50,7 +53,10 @@ test('thought parts are not shown', async () => {
 
 test('drops the thinking option for good when the model rejects it', async () => {
   const calls = stubFetch(
-    () => new Response(JSON.stringify({ error: { message: 'Unknown field thinkingLevel in thinkingConfig' } }), { status: 400 }),
+    () =>
+      new Response(JSON.stringify({ error: { message: 'Unknown field thinkingLevel in thinkingConfig' } }), {
+        status: 400,
+      }),
     () => new Response(sse('Hi'), { status: 200 }),
     () => new Response(sse('Bye'), { status: 200 }),
   );
@@ -64,7 +70,10 @@ test('drops the thinking option for good when the model rejects it', async () =>
 
 test('429 is reported as a rate limit', async () => {
   stubFetch(() => new Response('{}', { status: 429 }));
-  await assert.rejects(make().translate('やあ'), (err) => err instanceof RateLimitError && err.key === 'error.rateLimit');
+  await assert.rejects(
+    make().translate('やあ'),
+    (err) => err instanceof RateLimitError && err.key === 'error.rateLimit',
+  );
 });
 
 test('other errors surface the API message', async () => {
@@ -82,7 +91,13 @@ test('a third language goes to the first language unless told otherwise', async 
   assert.match(calls[0].body.systemInstruction.parts[0].text, /any other language, translate it into Japanese\./);
 
   calls = stubFetch(() => new Response(sse('ok'), { status: 200 }));
-  const tr = new GeminiTranslator({ apiKey: 'K', model: 'm', langA: 'Japanese', langB: 'English', otherInto: 'English' });
+  const tr = new GeminiTranslator({
+    apiKey: 'K',
+    model: 'm',
+    langA: 'Japanese',
+    langB: 'English',
+    otherInto: 'English',
+  });
   await tr.translate('你好');
   assert.match(calls[0].body.systemInstruction.parts[0].text, /any other language, translate it into English\./);
 });

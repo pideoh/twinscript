@@ -15,7 +15,7 @@ const LOCALES = [
   { id: 'zh-Hans', messages: zhHans, aliases: ['zh', 'zh-CN', 'zh-SG'] },
 ];
 
-const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+const hasOwn = (obj, key) => Object.hasOwn(obj, key);
 const catalog = (id) => LOCALES.find((l) => l.id === id)?.messages;
 
 // [{ id, name }], each language named in itself.
@@ -67,7 +67,8 @@ export function t(key, params) {
 export function applyTranslations(root = document) {
   for (const el of root.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
   for (const attr of ['title', 'aria-label', 'placeholder']) {
-    for (const el of root.querySelectorAll(`[data-i18n-${attr}]`)) el.setAttribute(attr, t(el.getAttribute(`data-i18n-${attr}`)));
+    for (const el of root.querySelectorAll(`[data-i18n-${attr}]`))
+      el.setAttribute(attr, t(el.getAttribute(`data-i18n-${attr}`)));
   }
   (root.documentElement ?? root.ownerDocument?.documentElement)?.setAttribute('lang', active);
 }

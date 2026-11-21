@@ -1,7 +1,8 @@
 // Browser tests: caption zone, caption window, settings that affect them, language pair.
-import { test } from 'node:test';
+
 import assert from 'node:assert/strict';
-import { setup, mockGemini } from './helpers.js';
+import { test } from 'node:test';
+import { mockGemini, setup } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -18,8 +19,11 @@ test('the two languages can never be the same', async () => {
 test('finished sentences stay in the caption zone while the next ones are spoken', async () => {
   const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
   await mockGemini(page, [
-    [3, 'interim', 'One is'], [5, 'final', 'One is done.'], [7, 'final', 'Two is done.'],
-    [9, 'final', 'Three is done.'], [11, 'interim', 'Four'],
+    [3, 'interim', 'One is'],
+    [5, 'final', 'One is done.'],
+    [7, 'final', 'Two is done.'],
+    [9, 'final', 'Three is done.'],
+    [11, 'interim', 'Four'],
   ]);
   const zone = () => page.locator('#nowList .seg .src').allTextContents();
   const history = () => page.locator('#log .seg .src').allTextContents();
@@ -46,15 +50,24 @@ test('the translation on screen is swapped once, not restarted, when the sentenc
   let ws;
   await page.routeWebSocket(/generativelanguage/, (socket) => {
     ws = socket;
-    socket.onMessage((raw) => { if (JSON.parse(raw).setup) socket.send(JSON.stringify({ setupComplete: {} })); });
+    socket.onMessage((raw) => {
+      if (JSON.parse(raw).setup) socket.send(JSON.stringify({ setupComplete: {} }));
+    });
   });
   const send = (field, text) => ws.send(JSON.stringify({ serverContent: { [field]: { text } } }));
   const sse = (t) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: t }] } }] })}\n\n`;
   let release;
   await page.route(/streamGenerateContent/, async (route) => {
     const prompt = route.request().postDataJSON().contents[0].parts[0].text;
-    if (prompt.includes('It is raining today.')) await new Promise((r) => { release = r; }); // hold the final translation
-    route.fulfill({ status: 200, contentType: 'text/event-stream', body: sse(prompt.includes('today.') ? '今日は雨です。' : '雨が') });
+    if (prompt.includes('It is raining today.'))
+      await new Promise((r) => {
+        release = r;
+      }); // hold the final translation
+    route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: sse(prompt.includes('today.') ? '今日は雨です。' : '雨が'),
+    });
   });
   await page.click('#toggle');
   await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
@@ -63,7 +76,11 @@ test('the translation on screen is swapped once, not restarted, when the sentenc
   send('inputTranscription', 'It is raining today.');
   await page.waitForFunction(() => !document.querySelector('.seg.live'));
   await page.waitForTimeout(300);
-  assert.equal(await page.textContent('.seg .tgt'), '雨が', 'the earlier translation stays while the final one is in flight');
+  assert.equal(
+    await page.textContent('.seg .tgt'),
+    '雨が',
+    'the earlier translation stays while the final one is in flight',
+  );
   release();
   await page.waitForFunction(() => document.querySelector('.seg .tgt')?.textContent === '今日は雨です。');
   await page.click('#toggle');
@@ -74,12 +91,18 @@ test('scrolling up to re-read offers a button back to the latest sentence', asyn
   const { page, close } = await openApp('?mock=1');
   await page.setViewportSize({ width: 900, height: 420 });
   await page.click('#toggle');
-  await page.waitForFunction(() => {
-    const log = document.getElementById('log');
-    return log.scrollHeight > log.clientHeight + 200;
-  }, null, { timeout: 30_000 });
+  await page.waitForFunction(
+    () => {
+      const log = document.getElementById('log');
+      return log.scrollHeight > log.clientHeight + 200;
+    },
+    null,
+    { timeout: 30_000 },
+  );
   assert.ok(await page.locator('#jump').isHidden(), 'follows the latest sentence by default');
-  await page.evaluate(() => { document.getElementById('log').scrollTop = 0; });
+  await page.evaluate(() => {
+    document.getElementById('log').scrollTop = 0;
+  });
   await page.waitForSelector('#jump:not([hidden])');
   await page.click('#jump');
   await page.waitForSelector('#jump', { state: 'hidden' });
@@ -89,7 +112,12 @@ test('scrolling up to re-read offers a button back to the latest sentence', asyn
 
 test('the number of sentences kept in the caption zone can be changed while listening', async () => {
   const { page, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
-  await mockGemini(page, [[3, 'final', 'One.'], [5, 'final', 'Two.'], [7, 'final', 'Three.'], [9, 'interim', 'Four']]);
+  await mockGemini(page, [
+    [3, 'final', 'One.'],
+    [5, 'final', 'Two.'],
+    [7, 'final', 'Three.'],
+    [9, 'interim', 'Four'],
+  ]);
   const zone = () => page.locator('#nowList .seg .src').allTextContents();
   await page.click('#toggle');
   await page.waitForFunction(() => document.querySelector('#nowList .seg.live .src')?.textContent === 'Four');
@@ -128,7 +156,10 @@ test('the caption zone can be moved into an always-on-top window and comes back 
     });
     document.getElementById('pip').hidden = false;
   });
-  await mockGemini(page, [[3, 'final', 'Shown in the window.'], [6, 'interim', 'Still talking']]);
+  await mockGemini(page, [
+    [3, 'final', 'Shown in the window.'],
+    [6, 'interim', 'Still talking'],
+  ]);
   await page.click('#pip');
   const inWindow = page.frameLocator('#fakePip');
   await inWindow.locator('#now').waitFor({ state: 'attached' });
@@ -142,18 +173,23 @@ test('the caption zone can be moved into an always-on-top window and comes back 
   assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'true');
 
   await page.click('#toggle');
-  await page.waitForFunction(() => document.getElementById('fakePip').contentDocument
-    .querySelector('.seg.live .src')?.textContent === 'Still talking');
+  await page.waitForFunction(
+    () =>
+      document.getElementById('fakePip').contentDocument.querySelector('.seg.live .src')?.textContent ===
+      'Still talking',
+  );
   assert.deepEqual(await inWindow.locator('.seg .src').allTextContents(), ['Shown in the window.', 'Still talking']);
   assert.equal(await inWindow.locator('.seg .tgt').first().textContent(), '訳:Shown in the window.');
 
   await page.evaluate(() => document.getElementById('fakePip').contentWindow.dispatchEvent(new Event('pagehide')));
   assert.deepEqual(await page.locator('#now .seg .src').allTextContents(), ['Shown in the window.', 'Still talking']);
-  assert.ok(await page.locator('#now').evaluate((n) => n.previousElementSibling.classList.contains('log-wrap')), 'back in its place under the transcript');
+  assert.ok(
+    await page.locator('#now').evaluate((n) => n.previousElementSibling.classList.contains('log-wrap')),
+    'back in its place under the transcript',
+  );
   assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'false');
   assert.equal(await page.getAttribute('#now', 'style'), '', 'window-only layout is removed');
   await page.click('#toggle');
   assert.deepEqual(errors, []);
   await close();
 });
-

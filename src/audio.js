@@ -36,7 +36,7 @@ export class AudioCapture {
 
   // source: 'mic' | 'system' | 'both'
   async start(source) {
-    const native = source !== 'mic' ? window.nativeSystemAudio ?? null : null;
+    const native = source !== 'mic' ? (window.nativeSystemAudio ?? null) : null;
     try {
       if (source !== 'mic' && !native) {
         // Ask for this first: the picker needs the click's user activation.
@@ -50,7 +50,9 @@ export class AudioCapture {
         if (!display.getAudioTracks().length) {
           throw new MessageError('error.noSharedAudio');
         }
-        display.getVideoTracks().forEach((t) => { t.enabled = false; });
+        display.getVideoTracks().forEach((t) => {
+          t.enabled = false;
+        });
         display.getAudioTracks()[0].addEventListener('ended', () => this.onEnded?.());
       }
       if (source !== 'system') {
@@ -100,7 +102,9 @@ export class AudioCapture {
   // Plays the helper's samples through a worklet connected where a screen share would be.
   async startNative(native, mix) {
     const feeder = new AudioWorkletNode(this.ctx, 'pcm-feeder', {
-      numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1],
+      numberOfInputs: 0,
+      numberOfOutputs: 1,
+      outputChannelCount: [1],
     });
     this.feeder = feeder;
     const heard = this.#levelled(feeder);
@@ -118,7 +122,9 @@ export class AudioCapture {
     native.onEnd((reason) => {
       if (this.native !== native) return;
       this.stop();
-      this.onEnded?.(new MessageError(reason === 'permission' ? 'error.systemAudioPermission' : 'error.systemAudioFailed'));
+      this.onEnded?.(
+        new MessageError(reason === 'permission' ? 'error.systemAudioPermission' : 'error.systemAudioFailed'),
+      );
     });
     try {
       await native.start();
@@ -130,7 +136,11 @@ export class AudioCapture {
   // PC audio can be very quiet (it follows the playing app's own volume), so its level is evened
   // out before it is transcribed and recorded. The probe keeps measuring the raw signal.
   #levelled(source) {
-    const gain = new AudioWorkletNode(this.ctx, 'auto-gain', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+    const gain = new AudioWorkletNode(this.ctx, 'auto-gain', {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [1],
+    });
     source.connect(gain);
     this.gains.push(gain);
     return gain;
@@ -148,7 +158,7 @@ export class AudioCapture {
   }
 
   stop() {
-    for (const s of this.streams) s.getTracks().forEach((t) => t.stop());
+    for (const s of this.streams) for (const track of s.getTracks()) track.stop();
     this.streams = [];
     if (this.native) {
       const native = this.native;
@@ -157,10 +167,20 @@ export class AudioCapture {
       native.onEnd(null);
       native.stop()?.catch?.(() => {});
     }
-    if (this.feeder) { this.feeder.disconnect(); this.feeder = null; }
-    this.gains.forEach((g) => g.disconnect());
+    if (this.feeder) {
+      this.feeder.disconnect();
+      this.feeder = null;
+    }
+    for (const gain of this.gains) gain.disconnect();
     this.gains = [];
-    if (this.node) { this.node.port.onmessage = null; this.node.disconnect(); this.node = null; }
-    if (this.ctx) { this.ctx.close().catch(() => {}); this.ctx = null; }
+    if (this.node) {
+      this.node.port.onmessage = null;
+      this.node.disconnect();
+      this.node = null;
+    }
+    if (this.ctx) {
+      this.ctx.close().catch(() => {});
+      this.ctx = null;
+    }
   }
 }

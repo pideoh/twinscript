@@ -2,11 +2,11 @@
 // uses, which can be far too low for recognition; a microphone already has the browser's own
 // gain control, so this is only applied to PC audio.
 
-const TARGET = 0.2;      // level the louder moments are brought to (the estimate follows peaks)
+const TARGET = 0.2; // level the louder moments are brought to (the estimate follows peaks)
 const MAX_GAIN = 30;
-const SILENCE = 0.0005;  // below this (about -66 dBFS) nothing is playing; the estimate is held
-const ATTACK_S = 0.02;   // how fast the level estimate rises (gain comes down quickly)
-const RELEASE_S = 0.5;   // how slowly it falls (gain comes up gradually, so pauses do not pump)
+const SILENCE = 0.0005; // below this (about -66 dBFS) nothing is playing; the estimate is held
+const ATTACK_S = 0.02; // how fast the level estimate rises (gain comes down quickly)
+const RELEASE_S = 0.5; // how slowly it falls (gain comes up gradually, so pauses do not pump)
 
 export class AutoGain {
   constructor(sampleRate) {

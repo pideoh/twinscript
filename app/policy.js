@@ -29,10 +29,18 @@ const ALLOWED = [
 // Returns { path, type } or null when the request must be answered with 404.
 export function resolveAppFile(url) {
   let u;
-  try { u = new URL(url); } catch { return null; }
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
   if (u.protocol !== `${SCHEME}:` || u.host !== HOST) return null;
   let path;
-  try { path = decodeURIComponent(u.pathname); } catch { return null; }
+  try {
+    path = decodeURIComponent(u.pathname);
+  } catch {
+    return null;
+  }
   path = path.replace(/^\/+/, '') || 'index.html';
   if (path.includes('..') || path.includes('\\') || path.includes('\0')) return null;
   if (!ALLOWED.some((re) => re.test(path))) return null;
@@ -43,11 +51,17 @@ export function isAppUrl(url) {
   try {
     const u = new URL(url);
     return u.protocol === `${SCHEME}:` && u.host === HOST;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 export function isExternalUrl(url) {
-  try { return ['http:', 'https:'].includes(new URL(url).protocol); } catch { return false; }
+  try {
+    return ['http:', 'https:'].includes(new URL(url).protocol);
+  } catch {
+    return false;
+  }
 }
 
 // What to do with window.open / target=_blank: 'captions' opens the caption overlay, 'external'

@@ -3,7 +3,10 @@
 const SCRIPT = [
   ['それでは本日の定例会議を始めます。', "Let's begin today's regular meeting."],
   ['まず先週の進捗について共有をお願いします。', "First, please share last week's progress."],
-  ['Sure. We finished the API integration and started load testing on Friday.', 'はい。API連携が完了し、金曜日から負荷テストを始めました。'],
+  [
+    'Sure. We finished the API integration and started load testing on Friday.',
+    'はい。API連携が完了し、金曜日から負荷テストを始めました。',
+  ],
   ['負荷テストの結果はいつ頃出そうですか？', 'When do you expect the load test results?'],
   ['We should have the full report by Wednesday.', '水曜日までには完全なレポートをお出しできる見込みです。'],
 ];
@@ -28,7 +31,9 @@ export class MockTranscriber {
       await sleep(1200);
     }
   }
-  stop() { this.running = false; }
+  stop() {
+    this.running = false;
+  }
   sendAudio() {}
 }
 

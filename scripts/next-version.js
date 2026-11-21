@@ -39,7 +39,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (bump === 'auto') {
     const range = last ? [`${last}..HEAD`] : [];
     const log = git('log', '--no-merges', '--format=%B%x00', ...range);
-    bump = bumpFor(log.split('\0').map((m) => m.trim()).filter(Boolean));
+    bump = bumpFor(
+      log
+        .split('\0')
+        .map((m) => m.trim())
+        .filter(Boolean),
+    );
   }
   if (!LEVELS.includes(bump)) throw new Error(`Unknown bump: ${bump}`);
   console.log(nextVersion(last, bump));

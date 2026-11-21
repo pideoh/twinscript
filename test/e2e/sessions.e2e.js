@@ -1,7 +1,8 @@
 // Browser tests: saved sessions, export, recording and persistence.
-import { test } from 'node:test';
+
 import assert from 'node:assert/strict';
-import { setup, rows, sessionNames, mockGemini, translated, saved } from './helpers.js';
+import { test } from 'node:test';
+import { mockGemini, rows, saved, sessionNames, setup, translated } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -33,7 +34,12 @@ test('sessions survive a reload, can be switched, renamed and deleted', async ()
 
   await page.locator('#sessionList .open').nth(1).click();
   assert.equal((await rows(page))[0].src, 'First meeting notes.');
-  assert.ok(await page.locator('#sessionList .session').nth(1).evaluate((n) => n.classList.contains('current')));
+  assert.ok(
+    await page
+      .locator('#sessionList .session')
+      .nth(1)
+      .evaluate((n) => n.classList.contains('current')),
+  );
 
   page.once('dialog', (d) => d.accept('週次定例'));
   await page.locator('#sessionList .session').nth(1).locator('.act').first().click();
@@ -121,8 +127,11 @@ test('PC audio that delivers nothing is reported instead of failing silently', a
   await page.click('#toggle');
   await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
   assert.ok(await page.locator('#toast').isHidden(), 'no warning right away');
-  await page.waitForFunction(() => document.getElementById('toast').textContent.includes('PC音声が届いていません'), null, { timeout: 15_000 });
+  await page.waitForFunction(
+    () => document.getElementById('toast').textContent.includes('PC音声が届いていません'),
+    null,
+    { timeout: 15_000 },
+  );
   await page.click('#toggle');
   await close();
 });
-

@@ -3,7 +3,8 @@
 // a fresh one is opened in the background and audio is switched over at a pause.
 import { MessageError } from './message-error.js';
 
-const WS_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
+const WS_URL =
+  'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 const MODEL = 'models/gemini-3.5-transcribe-live';
 const ROTATE_SOFT_MS = 8.5 * 60 * 1000; // rotate at the next pause after this
 const ROTATE_HARD_MS = 9.5 * 60 * 1000; // rotate regardless
@@ -40,7 +41,10 @@ export class GeminiLiveTranscriber {
     this.active = null;
     this.pending = [];
     if (conn) this.#retire(conn);
-    if (this.next) { this.#retire(this.next); this.next = null; }
+    if (this.next) {
+      this.#retire(this.next);
+      this.next = null;
+    }
   }
 
   sendAudio(base64) {
@@ -61,13 +65,15 @@ export class GeminiLiveTranscriber {
     ws.onopen = () => {
       const transcription = { languageCodes: this.languageCodes };
       if (this.smart) transcription.mode = 'SMART';
-      ws.send(JSON.stringify({
-        setup: {
-          model: MODEL,
-          generationConfig: { responseModalities: ['TEXT'] },
-          inputAudioTranscription: transcription,
-        },
-      }));
+      ws.send(
+        JSON.stringify({
+          setup: {
+            model: MODEL,
+            generationConfig: { responseModalities: ['TEXT'] },
+            inputAudioTranscription: transcription,
+          },
+        }),
+      );
       // setupComplete normally arrives right away; don't hang if it doesn't.
       conn.timers.push(setTimeout(() => this.#markReady(conn), READY_FALLBACK_MS));
     };
@@ -77,7 +83,9 @@ export class GeminiLiveTranscriber {
       try {
         const text = typeof event.data === 'string' ? event.data : new TextDecoder().decode(event.data);
         msg = JSON.parse(text);
-      } catch { return; }
+      } catch {
+        return;
+      }
 
       if (msg.setupComplete) this.#markReady(conn);
       if (msg.goAway && conn === this.active) this.#rotate();
@@ -96,7 +104,10 @@ export class GeminiLiveTranscriber {
     ws.onclose = (event) => {
       conn.timers.forEach(clearTimeout);
       if (conn.retired || !this.running) return;
-      if (conn === this.next) { this.next = null; return; } // background rotation failed; hard timer or drop will retry
+      if (conn === this.next) {
+        this.next = null;
+        return;
+      } // background rotation failed; hard timer or drop will retry
       this.#handleDrop(conn, event);
     };
     ws.onerror = () => {}; // onclose follows with details
@@ -107,7 +118,11 @@ export class GeminiLiveTranscriber {
     if (conn.ready || conn.retired || conn.ws.readyState !== WebSocket.OPEN) return;
     conn.ready = true;
     conn.softAt = Date.now() + ROTATE_SOFT_MS;
-    conn.timers.push(setTimeout(() => { if (conn === this.active) this.#rotate(); }, ROTATE_HARD_MS));
+    conn.timers.push(
+      setTimeout(() => {
+        if (conn === this.active) this.#rotate();
+      }, ROTATE_HARD_MS),
+    );
 
     if (conn === this.next) {
       // Switch audio over to the fresh session, let the old one flush its last result.
@@ -120,7 +135,7 @@ export class GeminiLiveTranscriber {
       this.retries = 0;
       const queued = this.pending;
       this.pending = [];
-      queued.forEach((chunk) => this.sendAudio(chunk));
+      for (const chunk of queued) this.sendAudio(chunk);
       this.onState('listening');
     }
   }
@@ -134,15 +149,28 @@ export class GeminiLiveTranscriber {
     conn.retired = true;
     conn.timers.forEach(clearTimeout);
     try {
-      if (conn.ws.readyState === WebSocket.OPEN) conn.ws.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
-    } catch { /* socket already gone */ }
-    const close = () => { try { conn.ws.close(); } catch { /* ignore */ } };
-    if (delay) setTimeout(close, delay); else close();
+      if (conn.ws.readyState === WebSocket.OPEN)
+        conn.ws.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
+    } catch {
+      /* socket already gone */
+    }
+    const close = () => {
+      try {
+        conn.ws.close();
+      } catch {
+        /* ignore */
+      }
+    };
+    if (delay) setTimeout(close, delay);
+    else close();
   }
 
   #handleDrop(conn, event) {
     const reason = event.reason || '';
-    if (this.next) { this.#retire(this.next); this.next = null; }
+    if (this.next) {
+      this.#retire(this.next);
+      this.next = null;
+    }
 
     if (!conn.ready && FATAL_REASON.test(reason)) {
       return this.#fail(new MessageError('error.connectFailed', { reason }));
@@ -155,15 +183,20 @@ export class GeminiLiveTranscriber {
       return;
     }
     if (++this.retries > MAX_RETRIES) {
-      return this.#fail(reason
-        ? new MessageError('error.disconnected', { reason })
-        : new MessageError('error.disconnectedCode', { code: event.code }));
+      return this.#fail(
+        reason
+          ? new MessageError('error.disconnected', { reason })
+          : new MessageError('error.disconnectedCode', { code: event.code }),
+      );
     }
     this.onState('reconnecting');
     this.active = null;
-    this.retryTimer = setTimeout(() => {
-      if (this.running) this.active = this.#open();
-    }, Math.min(500 * 2 ** (this.retries - 1), 8000));
+    this.retryTimer = setTimeout(
+      () => {
+        if (this.running) this.active = this.#open();
+      },
+      Math.min(500 * 2 ** (this.retries - 1), 8000),
+    );
   }
 
   #fail(error) {

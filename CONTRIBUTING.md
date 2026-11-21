@@ -15,6 +15,7 @@ The interface is plain HTML, CSS and ES modules with no build step, so it can al
 ## Before you open a pull request
 
 ```sh
+npm run lint       # formatting and lint rules (npm run format fixes what it can)
 npm test           # unit tests, no dependencies
 npm run test:e2e   # browser tests (needs Chrome); the Gemini API is mocked
 npm run test:app   # desktop smoke tests (opens windows)

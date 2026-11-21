@@ -21,8 +21,14 @@ function srtTime(ms) {
 // Words used in the header and the Markdown table; the app passes them in the UI language.
 // CSV column ids are machine-readable and stay English.
 export const DEFAULT_LABELS = {
-  title: 'Transcript', date: 'Date', languages: 'Languages', duration: 'Duration',
-  time: 'Time', source: 'Source', translation: 'Translation', separator: '   ',
+  title: 'Transcript',
+  date: 'Date',
+  languages: 'Languages',
+  duration: 'Duration',
+  time: 'Time',
+  source: 'Source',
+  translation: 'Translation',
+  separator: '   ',
 };
 
 // session: { title, createdAt, activeMs, langA, langB, segments: [{ elapsed, src, tgt }] }
@@ -43,18 +49,29 @@ export function buildTranscript(session, { format = 'txt', content = 'both', lan
 
   if (format === 'md') {
     const cell = (t) => t.replace(/\|/g, '\\|');
-    const head = content === 'both' ? [L.time, L.source, L.translation] : [L.time, content === 'src' ? L.source : L.translation];
+    const head =
+      content === 'both' ? [L.time, L.source, L.translation] : [L.time, content === 'src' ? L.source : L.translation];
     const body = rows.map((r) => {
       const cells = content === 'both' ? [r.src, r.tgt] : lines(r);
       return `| ${formatElapsed(r.time)} | ${cells.map(cell).join(' | ')} |`;
     });
-    const text = [`# ${title}`, '', meta.join(' / '), '', `| ${head.join(' | ')} |`, `|${head.map(() => ' --- ').join('|')}|`, ...body, ''].join('\n');
+    const text = [
+      `# ${title}`,
+      '',
+      meta.join(' / '),
+      '',
+      `| ${head.join(' | ')} |`,
+      `|${head.map(() => ' --- ').join('|')}|`,
+      ...body,
+      '',
+    ].join('\n');
     return { text, ext: 'md', mime: 'text/markdown' };
   }
 
   if (format === 'csv') {
     const quote = (t) => `"${t.replace(/"/g, '""')}"`;
-    const head = content === 'both' ? ['time', 'source', 'translation'] : ['time', content === 'src' ? 'source' : 'translation'];
+    const head =
+      content === 'both' ? ['time', 'source', 'translation'] : ['time', content === 'src' ? 'source' : 'translation'];
     const body = rows.map((r) => {
       const cells = content === 'both' ? [r.src, r.tgt] : lines(r);
       return [formatElapsed(r.time), ...cells.map(quote)].join(',');
@@ -83,5 +100,10 @@ export function buildTranscript(session, { format = 'txt', content = 'both', lan
 }
 
 export function safeFileName(title) {
-  return (title || 'transcript').replace(/[\\/:*?"<>|\n\r]+/g, ' ').trim().slice(0, 60) || 'transcript';
+  return (
+    (title || 'transcript')
+      .replace(/[\\/:*?"<>|\n\r]+/g, ' ')
+      .trim()
+      .slice(0, 60) || 'transcript'
+  );
 }
