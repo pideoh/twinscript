@@ -37,6 +37,24 @@ export default {
   'caption.title': 'Captions',
   'caption.close': 'Close the caption window',
 
+  // summary of a session
+  'summary.label': 'Session summary',
+  'summary.title': 'Summary',
+  'summary.none': 'Get an overview, decisions and action items for this session',
+  'summary.summarize': 'Summarize',
+  'summary.update': 'Update summary',
+  'summary.working': 'Summarizing…',
+  'summary.generated': 'Generated {date}',
+  'summary.stale': 'Outdated',
+  'summary.staleHelp': 'Speech was added after this summary was generated',
+  'summary.truncated': 'This summary covers only part of a long transcript.',
+  'summary.overview': 'Overview',
+  'summary.keyPoints': 'Key points',
+  'summary.decisions': 'Decisions',
+  'summary.actionItems': 'Action items',
+  'summary.owner': 'Owner',
+  'summary.due': 'Due',
+
   // status bar
   'status.idle': 'Stopped',
   'status.connecting': 'Connecting…',
@@ -72,6 +90,7 @@ export default {
   'file.source': 'Source',
   'file.translation': 'Translation',
   'file.separator': '   ',
+  'file.transcript': 'Transcript',
 
   // settings dialog
   'settings.title': 'Settings',
@@ -128,6 +147,7 @@ export default {
     'Rate limit reached. Translation of sentences in progress is paused for 1 minute (finished sentences are still translated).',
   'toast.storageUnavailable': 'Browser storage is unavailable, so the content is lost when this tab is closed',
   'toast.demo': 'Demo mode: no real speech recognition or translation',
+  'toast.summaryFailed': 'Could not summarize: {message}',
 
   // errors reported by audio.js, transcriber.js and translator.js
   'error.windowBlocked': 'The window was blocked',
@@ -140,4 +160,7 @@ export default {
   'error.disconnectedCode': 'Disconnected (code {code})',
   'error.rateLimit': 'The translation API rate limit was reached',
   'error.translate': 'Translation error ({status}): {message}',
+  'error.summarize': 'Summary error ({status}): {message}',
+  'error.summaryRateLimit': 'The API rate limit was reached. Try again in a minute.',
+  'error.summaryInvalid': 'The response could not be read as a summary. Try again.',
 };

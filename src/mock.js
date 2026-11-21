@@ -49,3 +49,23 @@ export class MockTranslator {
     return full;
   }
 }
+
+// A fixed summary of the demo meeting, whatever the session contains.
+export class MockSummarizer {
+  async summarize() {
+    await sleep(800);
+    return {
+      summary: {
+        overview:
+          'The weekly meeting reviewed last week’s progress. The API integration is finished and load testing started on Friday.',
+        keyPoints: ['The API integration is complete.', 'Load testing began on Friday.'],
+        decisions: ['The full load test report will be shared by Wednesday.'],
+        actionItems: [
+          { task: 'Share the full load test report', owner: 'Engineering team', due: 'Wednesday' },
+          { task: 'Review the load test results', owner: null, due: null },
+        ],
+      },
+      truncated: false,
+    };
+  }
+}

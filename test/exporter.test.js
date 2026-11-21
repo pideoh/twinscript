@@ -136,6 +136,102 @@ test('labels default to English and the CSV header never changes', () => {
   assert.ok(buildTranscript(untitled, { format: 'csv', labels }).text.startsWith('\ufefftime,source,translation\r\n'));
 });
 
+const summary = {
+  overview: 'The team reviewed progress.',
+  keyPoints: ['API integration is done.', 'Load testing | started.'],
+  decisions: [],
+  actionItems: [
+    { task: 'Send the report', owner: 'Ana', due: 'Wednesday' },
+    { task: 'Book a room', owner: null, due: 'Friday' },
+    { task: 'Check logs', owner: null, due: null },
+  ],
+  truncated: false,
+};
+
+test('a text file opens with the summary when there is one', () => {
+  const lines = buildTranscript(session, { langLabel, summary }).text.split('\n');
+  assert.deepEqual(lines.slice(2, 19), [
+    '',
+    'Summary',
+    '',
+    'Overview',
+    'The team reviewed progress.',
+    '',
+    'Key points',
+    '- API integration is done.',
+    '- Load testing | started.',
+    '',
+    'Action items',
+    '- Send the report (Owner: Ana, Due: Wednesday)',
+    '- Book a room (Due: Friday)',
+    '- Check logs',
+    '',
+    'Transcript',
+    '',
+  ]);
+  assert.equal(lines[19], '[00:00:03] こんにちは。');
+  assert.ok(!lines.includes('Decisions'), 'an empty section is left out');
+  const without = buildTranscript(session, { langLabel, labels }).text;
+  assert.ok(!without.includes('Summary') && !without.includes('Transcript'), 'no summary, no extra headings');
+});
+
+test('a markdown file opens with the summary in the UI language, and notes a truncated transcript', () => {
+  const jaLabels = {
+    ...labels,
+    summary: '要約',
+    overview: '概要',
+    keyPoints: '主なポイント',
+    actionItems: 'アクションアイテム',
+    owner: '担当',
+    due: '期限',
+    transcript: '文字起こし',
+    summaryTruncated: '一部のみ',
+  };
+  const lines = buildTranscript(session, {
+    format: 'md',
+    langLabel,
+    labels: jaLabels,
+    summary: { ...summary, truncated: true },
+  }).text.split('\n');
+  assert.deepEqual(lines.slice(3, 24), [
+    '',
+    '## 要約',
+    '',
+    '一部のみ',
+    '',
+    '### 概要',
+    '',
+    'The team reviewed progress.',
+    '',
+    '### 主なポイント',
+    '',
+    '- API integration is done.',
+    '- Load testing | started.',
+    '',
+    '### アクションアイテム',
+    '',
+    '- Send the report (担当: Ana, 期限: Wednesday)',
+    '- Book a room (期限: Friday)',
+    '- Check logs',
+    '',
+    '## 文字起こし',
+  ]);
+  assert.equal(lines[25], '| 時間 | 原文 | 訳文 |');
+  assert.equal(
+    buildTranscript(session, { format: 'md', langLabel, labels }).text.split('\n')[4],
+    '| 時間 | 原文 | 訳文 |',
+  );
+});
+
+test('csv and srt never include the summary', () => {
+  for (const format of ['csv', 'srt']) {
+    assert.equal(
+      buildTranscript(session, { format, langLabel, summary }).text,
+      buildTranscript(session, { format, langLabel }).text,
+    );
+  }
+});
+
 test('safeFileName strips characters that are invalid in file names', () => {
   assert.equal(safeFileName('a/b:c*?"<>|d'), 'a b c d');
   assert.equal(safeFileName(''), 'transcript');

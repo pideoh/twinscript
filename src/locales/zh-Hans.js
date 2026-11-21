@@ -36,6 +36,24 @@ export default {
   'caption.title': '字幕',
   'caption.close': '关闭字幕窗口',
 
+  // 会话摘要
+  'summary.label': '会话摘要',
+  'summary.title': '摘要',
+  'summary.none': '为本次会话整理概述、决定事项和待办事项',
+  'summary.summarize': '生成摘要',
+  'summary.update': '更新摘要',
+  'summary.working': '正在生成摘要…',
+  'summary.generated': '生成于 {date}',
+  'summary.stale': '已过时',
+  'summary.staleHelp': '生成此摘要后又新增了发言',
+  'summary.truncated': '由于转录文本较长，此摘要只涵盖其中一部分。',
+  'summary.overview': '概述',
+  'summary.keyPoints': '要点',
+  'summary.decisions': '决定事项',
+  'summary.actionItems': '待办事项',
+  'summary.owner': '负责人',
+  'summary.due': '截止',
+
   // status bar
   'status.idle': '已停止',
   'status.connecting': '正在连接…',
@@ -71,6 +89,7 @@ export default {
   'file.source': '原文',
   'file.translation': '译文',
   'file.separator': '　',
+  'file.transcript': '转录文本',
 
   // settings dialog
   'settings.title': '设置',
@@ -122,6 +141,7 @@ export default {
   'toast.rateLimited': '已达到速率限制，未说完句子的翻译暂停 1 分钟（已确定的句子仍会翻译）',
   'toast.storageUnavailable': '浏览器存储不可用，关闭此标签页后内容将丢失',
   'toast.demo': '演示模式：不进行实际的语音识别和翻译',
+  'toast.summaryFailed': '无法生成摘要：{message}',
 
   // errors reported by audio.js, transcriber.js and translator.js
   'error.windowBlocked': '窗口被拦截',
@@ -134,4 +154,7 @@ export default {
   'error.disconnectedCode': '连接已断开（代码 {code}）',
   'error.rateLimit': '已达到翻译 API 的速率限制',
   'error.translate': '翻译错误（{status}）：{message}',
+  'error.summarize': '摘要错误（{status}）：{message}',
+  'error.summaryRateLimit': '已达到 API 的速率限制，请约 1 分钟后重试。',
+  'error.summaryInvalid': '无法将响应读取为摘要，请重试。',
 };

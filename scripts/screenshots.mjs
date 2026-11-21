@@ -69,6 +69,10 @@ const shot = async (page, name) => {
   await page.screenshot({ path: join(out, `${name}.png`) });
   console.log(name);
 };
+async function summarize(page) {
+  await page.click('#summarize');
+  await page.waitForFunction(() => document.querySelector('#summaryContent h3'), null, { timeout: 10_000 });
+}
 async function listen(page) {
   await page.click('#toggle');
   await page.waitForFunction(() => document.querySelectorAll('#log .seg').length >= 3, null, { timeout: 30_000 });
@@ -83,6 +87,10 @@ for (const scheme of ['light', 'dark']) {
     await page.click('#toggle');
     await page.waitForTimeout(400);
     if (wanted(`desktop-${scheme}`)) await shot(page, `desktop-${scheme}-stopped`);
+    if (wanted(`desktop-${scheme}`)) {
+      await summarize(page);
+      await shot(page, `desktop-${scheme}-summary`);
+    }
     await page.click('#openSettings');
     if (wanted(`settings-${scheme}`)) await shot(page, `settings-${scheme}`);
     await page.keyboard.press('Escape');
@@ -95,6 +103,8 @@ for (const scheme of ['light', 'dark']) {
     await listen(page);
     await shot(page, `phone-${scheme}-listening`);
     await page.click('#toggle');
+    await summarize(page);
+    await shot(page, `phone-${scheme}-summary`);
     await page.click('#menu');
     await page.waitForTimeout(300);
     await shot(page, `phone-${scheme}-drawer`);

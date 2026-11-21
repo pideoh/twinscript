@@ -40,6 +40,20 @@
 
     <div id="toast" class="banner" role="status" data-variant="info" hidden></div>
 
+    <section id="summary" class="summary" aria-label="Session summary" data-i18n-aria-label="summary.label" hidden>
+      <div class="summary-bar">
+        <button id="summaryToggle" type="button" class="summary-toggle" aria-expanded="true" aria-controls="summaryBody" hidden><svg class="octicon chevron" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M12.78 5.22a.749.749 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.06 0L3.22 6.28a.749.749 0 1 1 1.06-1.06L8 8.939l3.72-3.719a.749.749 0 0 1 1.06 0Z"/></svg><span data-i18n="summary.title">Summary</span></button>
+        <span id="summaryStale" class="label label-attention" data-i18n="summary.stale" data-i18n-title="summary.staleHelp" title="Speech was added after this summary was generated" hidden>Outdated</span>
+        <span id="summaryMeta" class="summary-meta"></span>
+        <span id="summaryStatus" class="summary-meta" role="status"></span>
+        <button id="summarize" type="button" class="btn btn-small summarize"><svg class="octicon icon-rest" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M7.53 1.282a.5.5 0 0 1 .94 0l.478 1.306a7.492 7.492 0 0 0 4.464 4.464l1.305.478a.5.5 0 0 1 0 .94l-1.305.478a7.492 7.492 0 0 0-4.464 4.464l-.478 1.305a.5.5 0 0 1-.94 0l-.478-1.305a7.492 7.492 0 0 0-4.464-4.464L1.282 8.47a.5.5 0 0 1 0-.94l1.306-.478a7.492 7.492 0 0 0 4.464-4.464Z"/></svg><svg class="spinner" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-opacity="0.25" stroke-width="2" vector-effect="non-scaling-stroke"/><path d="M15 8a7.002 7.002 0 0 0-7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg><span id="summarizeLabel" data-i18n="summary.summarize">Summarize</span></button>
+      </div>
+      <div id="summaryBody" class="summary-body" hidden>
+        <p id="summaryTruncated" class="summary-note" data-i18n="summary.truncated" hidden>This summary covers only part of a long transcript.</p>
+        <div id="summaryContent"></div>
+      </div>
+    </section>
+
     <div class="log-wrap">
       <main id="log" aria-live="polite">
         <div id="empty" class="empty">

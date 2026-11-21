@@ -3,11 +3,12 @@ import { buildTranscript, formatDateTime, formatElapsed, safeFileName } from './
 import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './i18n.js';
 import { octicon } from './icons.js';
 import { MessageError } from './message-error.js';
-import { MockTranscriber, MockTranslator } from './mock.js';
+import { MockSummarizer, MockTranscriber, MockTranslator } from './mock.js';
 import { canRecord, Recorder } from './recorder.js';
 import { loadApiKey, saveApiKey } from './secrets.js';
 import { UtteranceTracker } from './segmenter.js';
 import { store } from './store.js';
+import { GeminiSummarizer } from './summarizer.js';
 import { GeminiLiveTranscriber } from './transcriber.js';
 import { GeminiTranslator, RateLimitError } from './translator.js';
 
@@ -97,6 +98,16 @@ const els = Object.fromEntries(
     'interimIntervalOut',
     'settingsRunning',
     'uiLang',
+    'summary',
+    'summaryToggle',
+    'summaryStale',
+    'summaryMeta',
+    'summaryStatus',
+    'summarize',
+    'summarizeLabel',
+    'summaryBody',
+    'summaryTruncated',
+    'summaryContent',
   ].map((id) => [id, $(id)]),
 );
 
@@ -158,6 +169,7 @@ function relocalize() {
   setStatus(statusState);
   els.toggle.textContent = t(run ? 'toggle.stop' : 'toggle.start');
   renderSidebar();
+  renderSummary();
   if (captionWindow) {
     applyTranslations(captionWindow.document); // the caption zone lives there while it is open
     captionWindow.document.title = t('caption.title');
@@ -294,7 +306,9 @@ els.settings.addEventListener('close', () => {
 
 // ---------- sessions (saved conversations) ----------
 // { id, title, customTitle, createdAt, updatedAt, langA, langB, activeMs,
-//   segments: [{ id, at, elapsed, src, tgt }], recordings: [{ id, startedAt, elapsedStart, durationMs, mime }] }
+//   segments: [{ id, at, elapsed, src, tgt }], recordings: [{ id, startedAt, elapsedStart, durationMs, mime }],
+//   summary?: { overview, keyPoints, decisions, actionItems: [{ task, owner, due }], truncated,
+//               generatedAt, model, segmentCount } }
 let sessions = []; // saved sessions, newest first
 let current = null; // the session on screen
 let run = null; // the live capture/translation in progress, if any
@@ -396,6 +410,7 @@ function showSession(sess) {
   els.log.scrollTop = els.log.scrollHeight;
   document.body.classList.remove('drawer');
   renderSidebar();
+  renderSummary();
 }
 
 function renderSidebar() {
@@ -649,14 +664,152 @@ els.exportTranscript.onclick = () => {
     format: els.exportFormat.value,
     content: els.exportContent.value,
     langLabel,
-    labels: Object.fromEntries(
-      ['title', 'date', 'languages', 'duration', 'time', 'source', 'translation', 'separator'].map((k) => [
-        k,
-        t(`file.${k}`),
-      ]),
-    ),
+    summary: current.summary,
+    labels: {
+      ...Object.fromEntries(
+        ['title', 'date', 'languages', 'duration', 'time', 'source', 'translation', 'separator', 'transcript'].map(
+          (k) => [k, t(`file.${k}`)],
+        ),
+      ),
+      ...Object.fromEntries(
+        ['overview', 'keyPoints', 'decisions', 'actionItems', 'owner', 'due'].map((k) => [k, t(`summary.${k}`)]),
+      ),
+      summary: t('summary.title'),
+      summaryTruncated: t('summary.truncated'),
+    },
   });
   download(new Blob([text], { type: `${mime};charset=utf-8` }), `${safeFileName(current.title)}.${ext}`);
+};
+
+// ---------- summary ----------
+// One summary request at a time. The panel is hidden while capturing, so it never moves the
+// caption zone; whether it is expanded is remembered for the user, not per session.
+let summarizing = null; // { session } while a request is in flight
+let summaryOpen = true;
+try {
+  summaryOpen = localStorage.getItem('rt-summary-open') !== 'false';
+} catch {
+  /* private mode */
+}
+const hasFinished = (sess) => sess.segments.some((seg) => seg.src);
+const isStale = (sess) => sess.segments.length > (sess.summary?.segmentCount ?? 0);
+// The summary is written in the display language; the model is told its English name.
+const uiLanguageName = () => LANGS.find((l) => l.display === getLocale())?.name ?? 'English';
+const langName = (code) => LANGS.find((l) => l.code === code)?.name;
+
+function renderSummary() {
+  const sess = current;
+  if (!sess) return;
+  const sum = sess.summary && typeof sess.summary === 'object' ? sess.summary : null;
+  const busy = summarizing?.session === sess;
+  els.summary.hidden = !!run || !hasFinished(sess);
+  els.summarize.setAttribute('aria-busy', String(busy));
+  els.summarize.setAttribute('aria-disabled', String(!!summarizing));
+  els.summarizeLabel.textContent = t(sum ? 'summary.update' : 'summary.summarize');
+  els.summaryStatus.textContent = busy ? t('summary.working') : '';
+  els.summaryMeta.textContent = busy
+    ? ''
+    : sum
+      ? t('summary.generated', { date: formatDateTime(sum.generatedAt) })
+      : t('summary.none');
+  els.summaryToggle.hidden = !sum;
+  els.summaryToggle.setAttribute('aria-expanded', String(summaryOpen));
+  els.summaryStale.hidden = !sum || !isStale(sess);
+  els.summaryBody.hidden = !sum || !summaryOpen;
+  els.summaryTruncated.hidden = !sum?.truncated;
+  els.summaryContent.replaceChildren(...(sum ? summaryNodes(sum) : []));
+}
+
+function summaryNodes(sum) {
+  const section = (key, ...content) => {
+    const box = document.createElement('section');
+    const heading = document.createElement('h3');
+    heading.textContent = t(key);
+    box.append(heading, ...content);
+    return box;
+  };
+  const list = (items, fill) => {
+    const ul = document.createElement('ul');
+    for (const item of items) {
+      const li = document.createElement('li');
+      fill(li, item);
+      ul.append(li);
+    }
+    return ul;
+  };
+  const nodes = [];
+  if (sum.overview) {
+    const p = document.createElement('p');
+    p.textContent = sum.overview;
+    nodes.push(section('summary.overview', p));
+  }
+  for (const key of ['keyPoints', 'decisions']) {
+    if (sum[key]?.length)
+      nodes.push(
+        section(
+          `summary.${key}`,
+          list(sum[key], (li, text) => {
+            li.textContent = text;
+          }),
+        ),
+      );
+  }
+  if (sum.actionItems?.length) {
+    const items = list(sum.actionItems, (li, item) => {
+      li.textContent = item.task;
+      const details = [
+        item.owner && `${t('summary.owner')}: ${item.owner}`,
+        item.due && `${t('summary.due')}: ${item.due}`,
+      ].filter(Boolean);
+      if (!details.length) return;
+      const detail = document.createElement('span');
+      detail.className = 'summary-detail';
+      detail.textContent = details.join(' ・ ');
+      li.append(detail);
+    });
+    nodes.push(section('summary.actionItems', items));
+  }
+  return nodes;
+}
+
+els.summaryToggle.onclick = () => {
+  summaryOpen = !summaryOpen;
+  try {
+    localStorage.setItem('rt-summary-open', String(summaryOpen));
+  } catch {
+    /* private mode */
+  }
+  renderSummary();
+};
+
+els.summarize.onclick = async () => {
+  const sess = current;
+  if (run || summarizing || !hasFinished(sess)) return;
+  if (!MOCK && !apiKey) {
+    toast(t('toast.apiKeyFirst'), 6000, 'warning');
+    return openSettings();
+  }
+  const segments = sess.segments.map(({ elapsed, src, tgt }) => ({ elapsed, src, tgt }));
+  const model = MOCK ? 'demo' : settings.translateModel;
+  const summarizer = MOCK ? new MockSummarizer() : new GeminiSummarizer({ apiKey, model });
+  summarizing = { session: sess };
+  renderSummary();
+  try {
+    const { summary, truncated } = await summarizer.summarize(segments, {
+      language: uiLanguageName(),
+      langA: langName(sess.langA),
+      langB: langName(sess.langB),
+    });
+    sess.summary = { ...summary, truncated, generatedAt: Date.now(), model, segmentCount: segments.length };
+    markDirty(sess);
+  } catch (err) {
+    // The previous summary, if any, stays as it was.
+    if (err instanceof RateLimitError) toast(errorText(err), 10000, 'warning');
+    else toast(t('toast.summaryFailed', { message: errorText(err) }), 10000, 'critical');
+  } finally {
+    summarizing = null;
+    renderSummary();
+  }
 };
 
 // ---------- live run ----------
@@ -685,6 +838,7 @@ function setRunning(running) {
     setStatus('idle');
     els.level.style.width = '0';
   }
+  renderSummary();
 }
 
 els.toggle.onclick = () => (run ? stop() : start());

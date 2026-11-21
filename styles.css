@@ -380,6 +380,7 @@ input[type="range"]:focus-visible {
 }
 
 .btn:disabled,
+.btn[aria-disabled="true"],
 .icon-btn:disabled {
   cursor: not-allowed;
   box-shadow: none;
@@ -390,7 +391,8 @@ input[type="range"]:focus-visible {
 .icon-btn:disabled {
   background: transparent;
 }
-.btn:disabled .octicon {
+.btn:disabled .octicon,
+.btn[aria-disabled="true"] .octicon {
   color: inherit;
 }
 .btn-primary:disabled {
@@ -651,6 +653,157 @@ input[type="range"] {
 #toast {
   flex: none;
   margin: var(--base-size-8) var(--base-size-16) 0;
+}
+
+/* ---------- Label ---------- */
+.label {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: var(--base-size-20);
+  padding: 0 var(--base-size-6);
+  border: var(--borderWidth-default) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-full);
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+  font-weight: var(--base-text-weight-medium);
+  line-height: var(--base-text-lineHeight-tight);
+  white-space: nowrap;
+}
+.label-attention {
+  color: var(--fgColor-attention);
+  border-color: var(--borderColor-attention-emphasis);
+}
+.label[hidden] {
+  display: none;
+}
+
+/* ---------- Session summary: a slim bar above the transcript, expanding into the summary ---------- */
+.summary {
+  flex: none;
+  margin: var(--base-size-8) var(--base-size-16) 0;
+  border: var(--borderWidth-default) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-muted);
+}
+.summary[hidden] {
+  display: none;
+}
+.summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--base-size-4) var(--base-size-8);
+  padding: var(--base-size-4) var(--base-size-4) var(--base-size-4) var(--base-size-12);
+}
+.summary-bar:has(.summary-toggle:not([hidden])) {
+  padding-left: var(--base-size-4);
+}
+.summary-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--base-size-4);
+  height: var(--control-medium-size);
+  padding: 0 var(--base-size-8);
+  border: 0;
+  border-radius: var(--borderRadius-medium);
+  background: transparent;
+  color: var(--fgColor-default);
+  font-weight: var(--base-text-weight-semibold);
+}
+.summary-toggle:hover {
+  background: var(--button-invisible-bgColor-hover);
+}
+.summary-toggle:active {
+  background: var(--button-invisible-bgColor-active);
+}
+.summary-toggle .chevron {
+  color: var(--fgColor-muted);
+}
+.summary-toggle[aria-expanded="false"] .chevron {
+  transform: rotate(-90deg);
+}
+.summary-toggle[hidden] {
+  display: none;
+}
+.summary-meta {
+  min-width: 0;
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+  line-height: var(--base-text-lineHeight-tight);
+}
+.summary-meta:empty {
+  display: none;
+}
+.summarize {
+  margin-left: auto;
+}
+.summarize .spinner {
+  display: none;
+  flex: none;
+}
+.summarize[aria-busy="true"] .icon-rest {
+  display: none;
+}
+.summarize[aria-busy="true"] .spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .summarize[aria-busy="true"] .spinner {
+    animation-duration: 3s;
+  }
+}
+.summary-body {
+  display: grid;
+  gap: var(--base-size-12);
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: var(--base-size-12) var(--base-size-16) var(--base-size-16);
+  border-top: var(--borderWidth-default) solid var(--borderColor-default);
+  line-height: var(--text-body-lineHeight-medium);
+}
+.summary-body[hidden],
+.summary-note[hidden] {
+  display: none;
+}
+.summary-body h3 {
+  margin: 0 0 var(--base-size-4);
+  color: var(--fgColor-default);
+  font-size: var(--text-body-size-small);
+  font-weight: var(--base-text-weight-semibold);
+  line-height: var(--base-text-lineHeight-tight);
+}
+.summary-body p,
+.summary-body ul {
+  margin: 0;
+}
+.summary-body ul {
+  padding-left: var(--base-size-20);
+}
+.summary-body li + li {
+  margin-top: var(--base-size-2);
+}
+#summaryContent {
+  display: grid;
+  gap: var(--base-size-12);
+}
+.summary-note,
+.summary-detail {
+  color: var(--fgColor-muted);
+}
+.summary-note {
+  margin: 0;
+  font-size: var(--text-body-size-small);
+}
+.summary-detail {
+  display: block;
+  font-size: var(--text-body-size-small);
 }
 
 /* ---------- Transcript ---------- */
@@ -1086,6 +1239,10 @@ body.running #log .seg .tgt {
   }
   #toggle {
     height: var(--control-minTarget-coarse);
+  }
+  /* Leave most of a phone screen to the transcript; the summary scrolls inside its panel. */
+  .summary-body {
+    max-height: 30vh;
   }
   /* Primer uses 16px text in form controls on small screens so iOS does not zoom on focus. */
   .select,
