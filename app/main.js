@@ -55,7 +55,10 @@ function handleDisplayMedia(ses) {
     } catch {
       callback(null);
     }
-  });
+  // On macOS, let the system's own picker drive the capture: with an app-chosen source the
+  // loopback audio track never delivers samples there (electron/electron#52738). Where the
+  // system picker is unavailable, the handler above is used.
+  }, { useSystemPicker: process.platform === 'darwin' });
 }
 
 function openCaptionOverlay(win) {
