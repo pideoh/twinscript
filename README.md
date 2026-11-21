@@ -98,6 +98,9 @@ Twinscript has no server. Audio and text go directly from your computer to Googl
 which is stored on your computer, encrypted by the operating system (the Keychain on macOS, DPAPI on Windows). If the
 system cannot encrypt it, the key is not saved and the app asks for it again the next time.
 
+On macOS the encryption key lives in the Keychain, in an item named "Twinscript Safe Storage". If macOS asks whether
+Twinscript may use it, choose "Always Allow"; the app uses it only to read and save your API key.
+
 - On Gemini's free tier, what you send is used to improve Google's products. Use a paid key for confidential meetings.
 - Recording or transcribing other people may require their consent.
 
