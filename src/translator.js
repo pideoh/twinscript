@@ -1,5 +1,6 @@
 // Streaming text translation with a small Gemini model.
 import { MessageError } from './message-error.js';
+import { targetByScript } from './script-hint.js';
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -15,6 +16,7 @@ export class GeminiTranslator {
     this.apiKey = apiKey;
     this.model = model;
     this.useThinkingConfig = true;
+    this.langs = { langA, langB, otherInto };
     this.system = [
       `You are a professional real-time interpreter in a meeting between ${langA} and ${langB} speakers.`,
       `The user message contains a speech transcript inside <text>. If it is in ${langA}, translate it into ${langB}; if it is in ${langB}, translate it into ${langA}.`,
@@ -33,9 +35,19 @@ export class GeminiTranslator {
   // history: [{src, tgt}], onDelta(fullTextSoFar). Resolves with the full translation.
   async translate(text, { history = [], onDelta, signal } = {}) {
     const context = history.map((h) => `${plain(h.src)}\n=> ${plain(h.tgt)}`).join('\n');
+    // Where the writing system settles the direction, the model is told instead of asked.
+    const into = targetByScript(text, this.langs);
     const prompt = `${context ? `<context>\n${context}\n</context>\n` : ''}<text>\n${plain(text)}\n</text>`;
     const body = {
-      systemInstruction: { parts: [{ text: this.system }] },
+      systemInstruction: {
+        parts: [
+          {
+            text: into
+              ? `${this.system}\nThe transcript in this request is not in ${into}: translate it into ${into}.`
+              : this.system,
+          },
+        ],
+      },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
     };
