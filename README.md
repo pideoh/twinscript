@@ -124,6 +124,10 @@ npm run test:app  # desktop app smoke test. It opens real windows, so run it on 
 
 The Gemini API is mocked in both, so no API key is needed.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). To report a security problem, see [SECURITY.md](SECURITY.md).
+
 ## License
 
 [MIT](LICENSE)

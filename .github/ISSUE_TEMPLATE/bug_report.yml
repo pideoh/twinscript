@@ -1,0 +1,51 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release version (e.g. v0.1.0) or commit.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does it happen?
+      multiple: true
+      options:
+        - Desktop app (macOS)
+        - Desktop app (Windows)
+        - Browser (Chrome / Edge)
+        - Browser (Safari)
+        - iPhone / iPad
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Audio source
+      options:
+        - Microphone
+        - PC audio
+        - Microphone + PC audio
+        - Not related to audio
+  - type: input
+    id: os
+    attributes:
+      label: OS and browser versions
+      placeholder: e.g. macOS 26.6, Chrome 142
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output
+      description: Optional. Opening the app with ?debug=1 logs the raw recognizer output.
+      render: text
