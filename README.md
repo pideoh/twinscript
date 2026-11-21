@@ -59,7 +59,7 @@ Mac（Apple シリコン / Intel）と Windows 用が自動でビルドされ、
 
 ## デスクトップアプリ（macOS / Windows）
 
-同じコードを Electron で包んだデスクトップ版もあります。Google へのログインは不要で、APIキーはアプリ内（localStorage）に保存されます。
+同じコードを Electron で包んだデスクトップ版もあります。APIキーはアプリ内（localStorage）に保存されます。
 ブラウザ版との違いは次の2つです。
 
 - 「PC音声」で共有ダイアログが出ず、メイン画面の音声をそのまま取り込みます
