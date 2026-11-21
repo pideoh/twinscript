@@ -1,6 +1,8 @@
 // English UI strings. This is the fallback for keys missing in other locales.
 // Every key here must exist in every other locale file, with the same {placeholders}.
 export default {
+  // the page's top-level heading, read by screen readers (the product name is not translated)
+  'app.name': 'Twinscript',
   'language.name': 'English',
 
   // sidebar and session list

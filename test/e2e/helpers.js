@@ -49,8 +49,9 @@ export function setup() {
   // An `apiKey` goes into the settings the way older versions stored it, which the app moves into
   // memory and removes from storage (in a browser the key lasts only as long as the page). So it is
   // put back on every load, as if the user entered the key again after each reload.
-  async function openApp(query = '', settings, init, { locale = 'en-US' } = {}) {
-    const context = await browser.newContext({ permissions: ['microphone'], locale });
+  // `colorScheme` ('light' or 'dark') is what the page sees as prefers-color-scheme.
+  async function openApp(query = '', settings, init, { locale = 'en-US', colorScheme = 'light' } = {}) {
+    const context = await browser.newContext({ permissions: ['microphone'], locale, colorScheme });
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));

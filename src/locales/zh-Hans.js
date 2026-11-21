@@ -1,5 +1,7 @@
 // Simplified Chinese UI strings. Keys and {placeholders} must match src/locales/en.js.
 export default {
+  // the page's top-level heading, read by screen readers (the product name is not translated)
+  'app.name': 'Twinscript',
   'language.name': '简体中文',
 
   // sidebar and session list
