@@ -76,7 +76,10 @@ export default {
   'settings.title': '設定',
   'settings.apiKey': 'Gemini APIキー',
   'settings.apiKey.helpBefore': '',
-  'settings.apiKey.helpAfter': ' で無料で発行できます。キーはこの端末にのみ保存されます。',
+  'settings.apiKey.helpAfter': ' で無料で発行できます。',
+  'settings.apiKey.storage.device': 'キーはこの端末に暗号化して保存されます。',
+  'settings.apiKey.storage.page': 'キーはこのページを閉じるまでの間だけ保持されます。',
+  'settings.apiKey.storage.none': 'この端末ではキーを保存できません。次回また入力が必要です。',
   'settings.running':
     '翻訳中です。APIキー・翻訳モデル・整形・録音・用語集・訳し先の変更は、次に開始したときから反映されます。',
   'settings.model': '翻訳モデル',

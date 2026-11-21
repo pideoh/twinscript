@@ -46,6 +46,9 @@ export function setup() {
 
   // The UI is Japanese unless the test says otherwise (most assertions read Japanese text).
   // Settings are seeded on the first load of the tab only, so what the app saves survives a reload.
+  // An `apiKey` goes into the settings the way older versions stored it, which the app moves into
+  // memory and removes from storage (in a browser the key lasts only as long as the page). So it is
+  // put back on every load, as if the user entered the key again after each reload.
   async function openApp(query = '', settings, init, { locale = 'en-US' } = {}) {
     const context = await browser.newContext({ permissions: ['microphone'], locale });
     const page = await context.newPage();
@@ -58,9 +61,14 @@ export function setup() {
     const stored = { uiLang: 'ja', ...settings };
     await context.addInitScript((s) => {
       try {
-        if (window !== top || sessionStorage.getItem('e2e-seeded')) return;
-        sessionStorage.setItem('e2e-seeded', '1');
-        localStorage.setItem('rt-settings', JSON.stringify(s));
+        if (window !== top) return;
+        if (!sessionStorage.getItem('e2e-seeded')) {
+          sessionStorage.setItem('e2e-seeded', '1');
+          localStorage.setItem('rt-settings', JSON.stringify(s));
+        } else if (s.apiKey !== undefined) {
+          const saved = JSON.parse(localStorage.getItem('rt-settings') || '{}');
+          localStorage.setItem('rt-settings', JSON.stringify({ ...saved, apiKey: s.apiKey }));
+        }
       } catch {
         /* a frame without storage */
       }

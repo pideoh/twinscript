@@ -67,7 +67,8 @@ on top of everything else, including full-screen slides and meeting apps. Drag i
 ## Privacy
 
 Twinscript has no server. Audio and text go directly from your computer to Google's Gemini API with your own API key,
-which is stored on your computer.
+which is stored on your computer, encrypted by the operating system (the Keychain on macOS, DPAPI on Windows). If the
+system cannot encrypt it, the key is not saved and the app asks for it again the next time.
 
 - On Gemini's free tier, what you send is used to improve Google's products. Use a paid key for confidential meetings.
 - Recording or transcribing other people may require their consent.
@@ -113,7 +114,8 @@ npm start          # http://localhost:5173
 ```
 
 `http://localhost:5173/?mock=1` is a demo mode that needs no API key. In a browser, PC audio comes from sharing a tab or
-screen with its audio, and the caption window is a picture-in-picture window (Chrome and Edge).
+screen with its audio, and the caption window is a picture-in-picture window (Chrome and Edge). The API key entered
+there is kept in memory only, until the page is closed.
 
 ### Tests
 

@@ -80,6 +80,15 @@ test('markdown is a table with escaped pipes', () => {
   assert.equal(lines[7], '| 00:01:05 | He said "go" \\| now, right? | 彼は「行け」と言った。 |');
 });
 
+test('markdown keeps backslashes and pipes inside their cell', () => {
+  const tricky = { ...session, segments: [{ elapsed: 0, src: 'C:\\temp | a\\|b', tgt: 'x' }] };
+  const { text } = buildTranscript(tricky, { format: 'md', langLabel, labels });
+  const row = text.split('\n')[6];
+  assert.equal(row, '| 00:00:00 | C:\\\\temp \\| a\\\\\\|b | x |');
+  // Unescaped pipes (not preceded by an odd number of backslashes) are exactly the 4 cell borders.
+  assert.equal(row.match(/(?<!\\)(?:\\\\)*\|/g).length, 4);
+});
+
 test('csv quotes fields and starts with a BOM', () => {
   const { text, ext } = buildTranscript(session, { format: 'csv', langLabel });
   assert.equal(ext, 'csv');

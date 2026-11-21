@@ -5,6 +5,7 @@ import { octicon } from './icons.js';
 import { MessageError } from './message-error.js';
 import { MockTranscriber, MockTranslator } from './mock.js';
 import { canRecord, Recorder } from './recorder.js';
+import { loadApiKey, saveApiKey } from './secrets.js';
 import { UtteranceTracker } from './segmenter.js';
 import { store } from './store.js';
 import { GeminiLiveTranscriber } from './transcriber.js';
@@ -32,7 +33,6 @@ const DEFAULTS = {
   langA: 'ja-JP',
   langB: 'en-US',
   source: 'mic',
-  apiKey: '',
   uiLang: 'auto',
   translateModel: 'gemini-3.5-flash-lite',
   interimTranslate: true,
@@ -84,6 +84,7 @@ const els = Object.fromEntries(
     'toggle',
     'settings',
     'apiKey',
+    'apiKeyStorage',
     'translateModel',
     'interimTranslate',
     'smart',
@@ -107,6 +108,7 @@ function loadSettings() {
     return { ...DEFAULTS };
   }
 }
+// The API key is not part of the settings: it is never written to localStorage (see secrets.js).
 function saveSettings() {
   try {
     localStorage.setItem('rt-settings', JSON.stringify(settings));
@@ -115,6 +117,11 @@ function saveSettings() {
   }
 }
 const settings = loadSettings();
+// Earlier versions kept the key in the settings JSON: move it out and rewrite the JSON without it.
+const legacyKey = Object.hasOwn(settings, 'apiKey') ? settings.apiKey : undefined;
+delete settings.apiKey;
+let { key: apiKey, storage: keyStorage } = await loadApiKey(window.secretStore, legacyKey);
+if (legacyKey !== undefined) saveSettings();
 let captionWindow = null; // always-on-top caption window, when open
 let languageNames = null; // Intl.DisplayNames for the UI language
 
@@ -145,6 +152,7 @@ function relocalize() {
   els.uiLang.options[0].text = t('settings.uiLang.auto');
   fillOtherInto();
   showTuning();
+  showKeyStorage();
   setStatus(statusState);
   els.toggle.textContent = t(run ? 'toggle.stop' : 'toggle.start');
   renderSidebar();
@@ -215,7 +223,8 @@ els.source.onchange = () => {
 
 els.openSettings.onclick = openSettings;
 function openSettings() {
-  els.apiKey.value = settings.apiKey;
+  els.apiKey.value = apiKey;
+  showKeyStorage();
   els.translateModel.value = settings.translateModel;
   els.interimTranslate.checked = settings.interimTranslate;
   els.smart.checked = settings.smart;
@@ -230,6 +239,9 @@ function openSettings() {
   showTuning();
   els.settingsRunning.hidden = !run;
   els.settings.showModal();
+}
+function showKeyStorage() {
+  els.apiKeyStorage.textContent = t(`settings.apiKey.storage.${keyStorage}`);
 }
 function fillOtherInto() {
   els.otherInto.options[0].text = t('settings.otherInto.left', { lang: langLabel(settings.langA) });
@@ -258,7 +270,14 @@ els.interimInterval.oninput = () => {
   showTuning();
 };
 els.settings.addEventListener('close', () => {
-  settings.apiKey = els.apiKey.value.trim();
+  const key = els.apiKey.value.trim();
+  if (key !== apiKey) {
+    apiKey = key;
+    saveApiKey(window.secretStore, key).then((storage) => {
+      keyStorage = storage;
+      showKeyStorage();
+    });
+  }
   settings.translateModel = els.translateModel.value.trim() || DEFAULTS.translateModel;
   settings.interimTranslate = els.interimTranslate.checked;
   settings.smart = els.smart.checked;
@@ -282,7 +301,10 @@ let toastTimer;
 const dirty = new Set();
 let saveTimer;
 
-const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+// randomUUID needs a secure context; the fallback takes 128 bits from the same CSPRNG.
+const uid = () =>
+  crypto.randomUUID?.() ??
+  [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
 const isEmpty = (sess) => !sess.segments.length && !sess.recordings.length;
 // Errors from audio.js, transcriber.js and translator.js carry a message key.
 const errorText = (err) => (err?.key ? t(err.key, err.params) : (err?.message ?? String(err)));
@@ -666,7 +688,7 @@ function setRunning(running) {
 els.toggle.onclick = () => (run ? stop() : start());
 
 async function start() {
-  if (!MOCK && !settings.apiKey) {
+  if (!MOCK && !apiKey) {
     toast(t('toast.apiKeyFirst'), 6000, 'warning');
     return openSettings();
   }
@@ -708,7 +730,7 @@ async function start() {
     r.transcriber = new MockTranscriber(handlers);
   } else {
     r.translator = new GeminiTranslator({
-      apiKey: settings.apiKey,
+      apiKey,
       model: settings.translateModel,
       langA: langA.name,
       langB: langB.name,
@@ -716,7 +738,7 @@ async function start() {
       otherInto: (settings.otherInto === 'B' ? langB : langA).name,
     });
     r.transcriber = new GeminiLiveTranscriber({
-      apiKey: settings.apiKey,
+      apiKey,
       languageCodes: [langA.code, langB.code],
       smart: settings.smart,
       ...handlers,

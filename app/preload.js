@@ -1,6 +1,14 @@
-// Preload of the main window (macOS only). Exposes the native system-audio capture and nothing
-// else; see startSystemAudio in main.js. Sandboxed preloads run as plain scripts, hence require().
+// Preload of the main window. Exposes the secret store (the API key, encrypted by the main
+// process; see app/secrets.js) on every platform and, on macOS, the native system-audio capture
+// (see startSystemAudio in main.js). Nothing else. Sandboxed preloads run as plain scripts, hence
+// require().
 const { contextBridge, ipcRenderer } = require('electron');
+
+// get(name) -> { value, available }; set(name, value) -> { persisted }. An empty value deletes.
+contextBridge.exposeInMainWorld('secretStore', {
+  get: (name) => ipcRenderer.invoke('secret:get', name),
+  set: (name, value) => ipcRenderer.invoke('secret:set', name, value),
+});
 
 if (process.platform === 'darwin') {
   let onData = null;

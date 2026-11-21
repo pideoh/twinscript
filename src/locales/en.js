@@ -77,7 +77,10 @@ export default {
   'settings.title': 'Settings',
   'settings.apiKey': 'Gemini API key',
   'settings.apiKey.helpBefore': 'Get one for free at ',
-  'settings.apiKey.helpAfter': '. The key is stored only on this device.',
+  'settings.apiKey.helpAfter': '. ',
+  'settings.apiKey.storage.device': 'The key is stored encrypted on this device.',
+  'settings.apiKey.storage.page': 'The key is kept only until this page is closed.',
+  'settings.apiKey.storage.none': 'The key cannot be saved on this device; you will be asked for it again next time.',
   'settings.running':
     'Translation is running. Changes to the API key, translation model, cleanup, recording, glossary and target language take effect the next time you start.',
   'settings.model': 'Translation model',

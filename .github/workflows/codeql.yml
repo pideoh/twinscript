@@ -21,4 +21,5 @@ jobs:
       - uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript, actions
+          queries: security-extended,security-and-quality
       - uses: github/codeql-action/analyze@v4
