@@ -1,99 +1,65 @@
-# twinscript
+# Twinscript
 
-会議向けリアルタイム文字起こし＋双方向翻訳の静的 Web アプリ（PWA）。ビルドなし・サーバーなし。
-ブラウザが Gemini API に直接つなぐ。使い方と料金は README.md（日本語版は README.ja.md）。
+Real-time transcription and two-way translation for meetings. A static web app (PWA) with no build
+step and no server: the browser talks to the Gemini API directly. The same code is wrapped as an
+Electron desktop app. Usage and pricing are in README.md; contribution rules are in CONTRIBUTING.md.
 
-## 構成（探索せずここを見る）
+## Layout
 
-| ファイル | 役割 |
+| File | Role |
 | --- | --- |
-| `src/app.js` | 画面、設定、保存済みセッションの一覧/切替、開始/停止、翻訳制御、ダウンロード |
-| `src/segmenter.js` | 認識結果（途中経過/確定）を表示用の文単位に区切る。DOM 非依存 |
-| `src/transcriber.js` | Gemini Live API (`gemini-3.5-transcribe-live`) の WebSocket、再接続、10分制限前の接続切り替え |
-| `src/translator.js` | `gemini-3.5-flash-lite` でのストリーミング翻訳 |
-| `src/audio.js`, `src/pcm-worklet.js` | マイク/タブ音声の取り込み、16kHz PCM 100ms チャンク化、録音用ミックス |
-| `src/auto-gain.js` | 小さい PC 音声を聞き取れる音量まで自動で上げる（マイクには掛けない）。純粋なクラス |
-| `src/recorder.js` | MediaRecorder で録音し 5 秒ごとにチャンクを渡す |
-| `src/store.js` | IndexedDB。`sessions`（文字起こし込み）と `audio`（録音チャンク） |
-| `src/exporter.js` | 文字起こしの書き出し（txt / md / csv / srt）。純粋関数 |
-| `src/mock.js` | `?mock=1` デモ用ダミー |
-| `src/icons.js` | 実行時に作るボタン用の Octicons（SVG） |
-| `src/i18n.js` | UI 言語の決定（`resolveLocale`）、`t(key, params)`、静的 HTML への適用（`data-i18n*`）。言語の登録はここの `LOCALES` だけ |
-| `src/locales/*.js` | UI 文言のカタログ（`en` が基準兼フォールバック、`ja`、`zh-Hans`）。キーはドット区切り |
-| `src/message-error.js` | 文言キー＋値を持つエラー。`audio.js`・`transcriber.js`・`translator.js` が投げ、`app.js` が訳して表示する |
-| `app/main.js` | デスクトップ版（Electron）のメインプロセス。`app://rt/` で配信、PC音声、字幕オーバーレイ |
-| `app/policy.js` | デスクトップ版の規則（配信するファイル（`src/locales/` を含む）、遷移・window.open・権限の許可）。Electron 非依存 |
-| `app/preload.js` | macOS 版のみ。PC音声ヘルパーの開始/停止と受信を `window.nativeSystemAudio` として画面に渡す |
-| `app/system-audio.js` | PC音声ヘルパーの規則（置き場所、呼び出し元の確認、終了理由、サンプル単位への区切り）。Electron 非依存 |
-| `native/mac/system-audio.swift`, `scripts/build-mac-helper.sh` | macOS の PC音声ヘルパー（ScreenCaptureKit、48kHz モノラル Float32 を標準出力へ）とそのビルド。`native/mac/build/` に出力 |
-| `test/*.test.js` | 単体テスト（node:test、依存なし） |
-| `test/e2e/app.e2e.js` | Chrome＋偽マイク＋模擬エンドポイントの通しテスト |
-| `test/app/desktop.app.js` | デスクトップ版の起動確認（画面が要るので CI では動かさない） |
-| `.github/workflows/release.yml`, `scripts/next-version.js` | `main` への反映時に zip をビルドし、次のバージョンを決めて GitHub Releases に公開 |
+| `src/app.js` | UI, settings, saved sessions (list / switch), start / stop, translation flow, downloads |
+| `src/segmenter.js` | Turns recognizer results (interim / final) into sentence-sized segments. DOM-free |
+| `src/transcriber.js` | Gemini Live API (`gemini-3.5-transcribe-live`) WebSocket, reconnects, rotation before the 10-minute session limit |
+| `src/translator.js` | Streaming translation with `gemini-3.5-flash-lite` |
+| `src/audio.js`, `src/pcm-worklet.js` | Microphone / tab audio capture, 16 kHz PCM in 100 ms chunks, mix for recording |
+| `src/auto-gain.js` | Raises quiet PC audio to a usable level (not applied to the microphone). Pure class |
+| `src/recorder.js` | Records with MediaRecorder, handing over a chunk every 5 seconds |
+| `src/store.js` | IndexedDB: `sessions` (with transcripts) and `audio` (recording chunks) |
+| `src/exporter.js` | Transcript export (txt / md / csv / srt). Pure functions |
+| `src/mock.js` | Stand-in engines for the `?mock=1` demo |
+| `src/i18n.js` | Display-language resolution (`resolveLocale`), `t(key, params)`, applying `data-i18n*` to static HTML. Languages are registered only in its `LOCALES` array |
+| `src/locales/*.js` | Message catalogs (`en` is the reference and fallback, `ja`, `zh-Hans`). Dotted keys |
+| `src/icons.js` | Octicons (SVG) for buttons that are created at runtime |
+| `src/message-error.js` | Error carrying a message key and params; thrown by `audio.js`, `transcriber.js`, `translator.js` and translated by `app.js` |
+| `app/main.js` | Electron main process: serves the app from `app://rt/`, PC audio, caption overlay |
+| `app/policy.js` | Desktop rules (served files, navigation, `window.open`, permissions). Electron-free |
+| `app/preload.js` | macOS only: exposes the PC audio helper to the page as `window.nativeSystemAudio` |
+| `app/system-audio.js` | PC audio helper rules (location, caller check, exit reasons, sample framing). Electron-free |
+| `native/mac/system-audio.swift`, `scripts/build-mac-helper.sh` | macOS PC audio helper (ScreenCaptureKit, 48 kHz mono Float32 on stdout) and its build, output in `native/mac/build/` |
+| `test/*.test.js` | Unit tests (`node:test`, no dependencies) |
+| `test/e2e/app.e2e.js` | Browser tests: Chrome, a fake microphone and mocked Gemini endpoints |
+| `test/app/desktop.app.js` | Desktop smoke tests (need a display, so not run in CI) |
+| `.github/workflows/release.yml`, `scripts/next-version.js` | Build the zips, pick the next version and publish a GitHub Release when the app changes on `main` |
 
-## コマンド
+## Commands
 
-- `npm test` — 単体テスト。ロジック変更後は必ず実行
-- `npm run test:e2e` — `src/app.js`・`src/audio.js`・HTML/CSS を触ったときだけ
-- `npm start` — http://localhost:5173 （`?mock=1` でキーなしデモ、`?debug=1` で認識結果の生ログ）
-- `npm run app` — デスクトップ版を起動。`npm run test:app` は `app/` か字幕ウィンドウを触ったときだけ
-- `npm run dist:mac` / `npm run dist:win` — `dist/` に zip を作る（`dist:mac` と macOS での `npm run app` は PC音声ヘルパーも Swift でビルドする）
+- `npm test`: unit tests. Run after every logic change.
+- `npm run test:e2e`: only when `src/app.js`, `src/audio.js`, HTML or CSS changed.
+- `npm start`: http://localhost:5173 (`?mock=1` for a demo without a key, `?debug=1` to log raw recognizer output).
+- `npm run app`: start the desktop app. `npm run test:app` only when `app/` or the caption window changed.
+- `npm run dist:mac` / `npm run dist:win`: build zips into `dist/` (`dist:mac`, and `npm run app` on macOS, also build the Swift helper).
 
-## 作業ルール
+## Rules
 
-- 挙動を変えたらテストを同じコミットで追加・更新する。区切りの不具合は `test/segmenter.test.js` に再現ケースを足してから直す
-- 依存パッケージを増やさない（実行時依存ゼロ、devDependency は `playwright-core`・`electron`・`electron-builder` のみ）
-- Web 版はブラウザでそのまま動くこと。デスクトップ版専用の処理は `app/` に置き、`src/` では Electron 判定での分岐に留める
-- 実 API では未検証の前提がある（途中経過は発話全体の累積、確定は発話の切れ目で1回）。API の仕様に関わる変更は推測で書かず公式ドキュメントを確認する
-- マージ済みブランチに積まない。`main` から新しいブランチを切って PR を出す
-- UI 文言は直書きせず i18n を通す（`t()` か `data-i18n*`。UI を持たないモジュールは `MessageError` で文言キーを投げる）。新しいキーは `src/locales/` の全ファイルに同じキー・同じ `{placeholder}` で足す（`test/i18n.test.js` が検査する）
-- コード・コメント・コミットメッセージは英語
+- Add or update tests in the same commit as a behavior change. For a segmentation bug, add the failing case to `test/segmenter.test.js` before fixing it.
+- No new dependencies: zero at runtime; dev dependencies are `playwright-core`, `electron` and `electron-builder` only.
+- The web app must run in a plain browser. Desktop-only code lives in `app/`; `src/` only branches on detecting Electron.
+- Some assumptions about the Gemini Live API are unverified against the real service (interim text is the whole utterance so far; one final result per utterance). Check the official documentation instead of guessing when a change depends on API behavior.
+- User-visible text goes through i18n (`t()` or `data-i18n*`; modules without UI throw `MessageError` with a message key). Add every new key to all files in `src/locales/` with the same placeholders; `test/i18n.test.js` checks this.
+- Code, comments and commit messages are in English.
 
-## デザイン
+## Design
 
-- 見た目の基準は GitHub Primer（https://primer.style/product/）。部品は Primer の構成・寸法に合わせる（Button / IconButton / Select / TextInput / Dialog / NavList / Banner / Label）
-- トークンは `styles.css` 冒頭のブロックにだけ置く（`@primer/primitives` からコピーし、Primer のトークン名のまま。版はそこのコメント）。それ以外の CSS は `var(--…)` で参照し、色・余白・角丸・文字サイズを直書きしない（例外は字幕オーバーレイの半透明の背景だけ）
-- アイコンは Octicons の 16px を SVG で埋め込む（`aria-hidden="true"`、`fill="currentColor"`、ボタン側に翻訳済みの `aria-label`）。実行時に作るものは `src/icons.js`。記号文字をアイコン代わりにしない
-- 新しい部品やトークンを足したら `THIRD-PARTY-NOTICES.md` の版も合わせる
+- The visual reference is GitHub Primer (https://primer.style/product/). Components follow Primer's anatomy and sizes (Button / IconButton / Select / TextInput / Dialog / NavList / Banner / Label).
+- Tokens live only in the block at the top of `styles.css` (copied from `@primer/primitives` under Primer's token names; the version is in the comment there). All other CSS refers to them with `var(--…)`: no literal colors, spacing, radii or font sizes. The one exception is the translucent backdrop of the caption overlay.
+- Icons are 16px Octicons embedded as SVG (`aria-hidden="true"`, `fill="currentColor"`, with a translated `aria-label` on the button). Icons created at runtime come from `src/icons.js`. Do not use Unicode symbols as icons.
+- When you add a component or token from Primer, keep the versions in `THIRD-PARTY-NOTICES.md` in step.
 
-## リリース
+## Releases
 
-`main` にアプリ本体の変更（`app/` `src/` `native/` `icons/` `index.html` `styles.css` `manifest.webmanifest` `package.json`）が入ると、
-`.github/workflows/release.yml` が Mac / Windows の zip をビルドして GitHub Releases に公開する。
-バージョンは前回リリース以降のコミットから `scripts/next-version.js` が決める。コミットの件名はこの規則に合わせる。
-
-| 上がる桁 | 条件 | 例 |
-| --- | --- | --- |
-| メジャー | 本文に `BREAKING CHANGE`、または件名が `種類!:` | 保存形式を変えて既存の記録が読めなくなる |
-| マイナー | 件名が `Add` または `feat` で始まる | `Add an always-on-top caption window` |
-| パッチ | それ以外 | `Fix ...`、`Default ...`、文言の修正 |
-
-- 機能追加でない変更の件名を `Add` で始めない（`Add tests ...` は `Test ...` などにする）
-- `package.json` の `version` は手で上げない（ビルド時に上書きされる）
-- 手動で出すときは Actions の release を実行し、上げる桁を選ぶ
-
-## トークン節約
-
-- 上の表で場所が分かるものは検索しない。ファイルは必要な範囲だけ読み、読んだものを読み直さない
-- Web 検索は、ここと README に答えがないときだけ使う
-- テストは対象を絞って実行し（`node --test test/segmenter.test.js`）、出力は失敗分と集計だけ見る
-- `node_modules/`、`package-lock.json`、`icons/*.png` は読まない（settings.json で拒否済み）
-- スクリーンショットは見た目を変えたときだけ撮る
-- 返答は結論と変更点を短く。経過の説明やコードの再掲はしない
-
-### モデルの使い分け
-
-メインのセッションは設計・判断・難しい不具合の切り分けに使い、切り出せる作業は安いモデルのサブエージェントに渡す。
-`.claude/agents/` に定義済み。
-
-| エージェント | モデル | 渡す作業 |
-| --- | --- | --- |
-| `implementer` | Opus | 仕様が決まった複数ファイルの実装、リファクタ、差分レビュー |
-| `test-writer` | Sonnet | 既存モジュールへのテスト追加、定型的な修正、ドキュメント更新 |
-| `runner` | Haiku | テスト実行と失敗の要約、ファイルや記述の検索 |
-
-- 渡すのは、仕様を数行で書き切れて、結果を差分かテストで確かめられる作業だけ
-- 1 ファイルの小さな修正は自分でやる（依頼文と結果の受け渡しのほうが高くつく）
-- 依頼文には目的・対象ファイル・完了条件を書き、この CLAUDE.md を読ませる。会話の経緯は渡さない
-- 独立した作業が複数あるときは 1 回のメッセージで並行に起動する
-- ワークフロー（多数エージェントの自動連携）はユーザーが明示的に頼んだときだけ使う
+Any change to the app on `main` (`app/`, `src/`, `native/`, `icons/`, `index.html`, `styles.css`,
+`manifest.webmanifest`, `package.json`) is built and published automatically. The version bump comes
+from the commit subjects since the last release; the table is in CONTRIBUTING.md. In short: start a
+subject with `Add` or `feat` only for a new feature, never bump `version` in `package.json` by hand,
+and mark breaking changes with `BREAKING CHANGE` in the body.
