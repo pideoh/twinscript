@@ -92,10 +92,25 @@ for (const scheme of ['light', 'dark']) {
       await shot(page, `desktop-${scheme}-summary`);
     }
     await page.click('#openSettings');
-    if (wanted(`settings-${scheme}`)) await shot(page, `settings-${scheme}`);
+    if (wanted(`settings-${scheme}`)) {
+      await shot(page, `settings-${scheme}`);
+      await page.locator('#settings .settings-group:not([hidden])').last().scrollIntoViewIfNeeded();
+      await shot(page, `settings-${scheme}-captions`);
+    }
     await page.keyboard.press('Escape');
     await page.click('#export');
     if (wanted(`export-${scheme}`)) await shot(page, `export-${scheme}`);
+    await close();
+  }
+  if (wanted(`captions-${scheme}`)) {
+    const { page, close } = await open({ scheme });
+    await page.evaluate(() => {
+      document.getElementById('captionContent').value = 'tgt';
+      document.getElementById('captionContent').dispatchEvent(new Event('change'));
+    });
+    await listen(page);
+    await shot(page, `captions-${scheme}-translation-only`);
+    await page.click('#toggle');
     await close();
   }
   if (wanted(`phone-${scheme}`)) {

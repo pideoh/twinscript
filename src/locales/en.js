@@ -123,6 +123,27 @@ export default {
   'settings.fontSize': 'Text size',
   'settings.uiLang': 'Display language',
   'settings.uiLang.auto': 'Auto',
+  'settings.captions': 'Captions',
+  'settings.captionContent': 'Show',
+  'settings.captionContent.both': 'Source and translation',
+  'settings.captionContent.tgt': 'Translation only',
+  'settings.captionContent.help':
+    'In the caption area and the caption window. A sentence shows its source until its translation arrives.',
+  'settings.captionFontSize': 'Caption window text size',
+  'settings.captionFontSize.value': '{n} px',
+  'settings.captionOpacity': 'Caption window background opacity',
+  'settings.captionOpacity.value': '{n}%',
+  'settings.captionOpacity.help': 'Captions keep an outline so they stay readable over any background.',
+  'settings.clickThrough': 'Let clicks pass through the caption window',
+  'settings.clickThrough.help':
+    'While this is on, the caption window cannot be moved or closed with the mouse. Hide it with the caption window button or its shortcut.',
+  'settings.captionDesktopOnly': 'Background opacity and click-through are available in the desktop app.',
+  'settings.shortcuts': 'Shortcuts',
+  'settings.shortcuts.toggle': 'Start / stop translating',
+  'settings.shortcuts.captions': 'Show / hide the caption window',
+  'settings.shortcuts.unavailable': 'In use by another app',
+  'settings.shortcuts.enabled': 'Use these shortcuts from any app',
+  'settings.shortcuts.help': 'They work even when Twinscript is in the background.',
   'settings.save': 'Save',
 
   // notifications

@@ -1,7 +1,7 @@
 // Electron main process: serves the static web app from app://rt/ and adds what a browser tab
 // cannot do on its own: system audio without the share dialog, a caption overlay that floats
 // above full-screen apps and secrets encrypted by the operating system. The rules themselves live
-// in policy.js, system-audio.js and secrets.js (unit-tested without Electron).
+// in policy.js, system-audio.js, secrets.js and shortcuts.js (unit-tested without Electron).
 
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
@@ -11,6 +11,7 @@ import {
   app,
   BrowserWindow,
   desktopCapturer,
+  globalShortcut,
   ipcMain,
   nativeTheme,
   protocol,
@@ -30,6 +31,7 @@ import {
   windowOpenAction,
 } from './policy.js';
 import { createSecretStore } from './secrets.js';
+import { createShortcuts } from './shortcuts.js';
 import { createSampleFramer, endReason, helperPath, isSystemAudioCaller } from './system-audio.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -171,9 +173,62 @@ function handleSecrets() {
   });
 }
 
+// The caption overlay, while open, and whether mouse events pass through it to the app below.
+let captionOverlay = null;
+let clickThrough = false;
+
+function applyClickThrough() {
+  if (captionOverlay && !captionOverlay.isDestroyed())
+    captionOverlay.setIgnoreMouseEvents(clickThrough, { forward: true });
+}
+
 function openCaptionOverlay(win) {
+  captionOverlay = win;
+  win.on('closed', () => {
+    if (captionOverlay === win) captionOverlay = null;
+  });
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  applyClickThrough();
+}
+
+function handleCaptionOverlay() {
+  ipcMain.handle('caption-overlay:click-through', (event, on) => {
+    if (!allowed(event)) throw new Error('not allowed');
+    clickThrough = on === true;
+    applyClickThrough();
+  });
+}
+
+// Global shortcuts (start / stop, show / hide the caption window): the page performs the action
+// as if its button had been pressed. A key taken by another app is reported, not fatal.
+function handleShortcuts() {
+  const shortcuts = createShortcuts({
+    register: (accelerator, fn) => globalShortcut.register(accelerator, fn),
+    unregister: (accelerator) => globalShortcut.unregister(accelerator),
+    platform: process.platform,
+    onCommand: (command) => {
+      if (mainWindow && !mainWindow.webContents.isDestroyed()) mainWindow.webContents.send('shortcut:command', command);
+    },
+  });
+  shortcuts.setEnabled(true);
+  ipcMain.handle('shortcut:status', (event) => {
+    if (!allowed(event)) throw new Error('not allowed');
+    return shortcuts.status();
+  });
+  ipcMain.handle('shortcut:set-enabled', (event, on) => {
+    if (!allowed(event)) throw new Error('not allowed');
+    return shortcuts.setEnabled(on === true);
+  });
+  // A shortcut that needs the user's attention (start without an API key) brings the app forward.
+  ipcMain.handle('shortcut:focus-app', (event) => {
+    if (!allowed(event)) throw new Error('not allowed');
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    if (process.platform === 'darwin') app.focus({ steal: true });
+    mainWindow.focus();
+  });
+  app.on('will-quit', () => globalShortcut.unregisterAll());
 }
 
 function createMainWindow() {
@@ -249,6 +304,8 @@ app.whenReady().then(() => {
   handleDisplayMedia(ses);
   if (process.platform === 'darwin') handleSystemAudio();
   handleSecrets();
+  handleCaptionOverlay();
+  handleShortcuts();
   createMainWindow();
   app.on('activate', () => {
     if (!mainWindow) createMainWindow();

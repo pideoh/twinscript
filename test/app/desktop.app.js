@@ -33,13 +33,31 @@ test('serves only the app files from app://rt/', async () => {
   assert.equal(await status('app/main.js'), 404);
 });
 
-test('the preload gives the page the secret store and, on macOS, the native PC audio bridge, nothing else', async () => {
+test('the preload gives the page the secret store, caption overlay click-through, global shortcuts and, on macOS, the native PC audio bridge, nothing else', async () => {
   const page = await app.firstWindow();
   const surface = await page.evaluate(() => {
     const keys = (o) => (o ? Object.keys(o).sort() : null);
-    return { secretStore: keys(window.secretStore), nativeSystemAudio: keys(window.nativeSystemAudio) };
+    return {
+      secretStore: keys(window.secretStore),
+      captionOverlay: keys(window.captionOverlay),
+      appShortcuts: keys(window.appShortcuts),
+      nativeSystemAudio: keys(window.nativeSystemAudio),
+      // What the context bridge exposes arrives as frozen plain objects on window; anything
+      // added later would show up here.
+      bridged: Object.getOwnPropertyNames(window)
+        .filter((name) => {
+          const value = window[name];
+          return value?.constructor === Object && Object.isFrozen(value);
+        })
+        .sort(),
+    };
   });
   assert.deepEqual(surface.secretStore, ['get', 'set']);
+  assert.deepEqual(surface.captionOverlay, ['setClickThrough']);
+  assert.deepEqual(surface.appShortcuts, ['focusApp', 'onCommand', 'setEnabled', 'status']);
+  const exposed = ['appShortcuts', 'captionOverlay', 'secretStore'];
+  if (process.platform === 'darwin') exposed.push('nativeSystemAudio');
+  assert.deepEqual(surface.bridged, exposed.sort());
   if (process.platform === 'darwin') assert.deepEqual(surface.nativeSystemAudio, ['onData', 'onEnd', 'start', 'stop']);
   else assert.equal(surface.nativeSystemAudio, null);
   assert.equal(await page.evaluate(() => typeof require), 'undefined');
@@ -106,4 +124,98 @@ test('runs the demo and moves the captions into an overlay window and back', asy
   await page.click('#toggle');
   assert.equal(await page.textContent('#statusText'), '停止中');
   assert.deepEqual(errors, []);
+});
+
+// What a global shortcut does, sent the way the main process sends it when the key is pressed
+// (real key presses from the operating system are not synthesized here).
+const sendShortcut = (command) =>
+  app.evaluate(({ BrowserWindow }, c) => {
+    const main = BrowserWindow.getAllWindows().find((w) => !w.isAlwaysOnTop());
+    main.webContents.send('shortcut:command', c);
+  }, command);
+
+test('global shortcuts are registered and can be turned off and on from the page', async () => {
+  const page = await app.firstWindow();
+  const status = await page.evaluate(() => window.appShortcuts.status());
+  assert.equal(status.enabled, true);
+  assert.deepEqual(
+    status.shortcuts.map((s) => [s.command, s.accelerator]),
+    [
+      ['toggle', 'CommandOrControl+Shift+T'],
+      ['captions', 'CommandOrControl+Shift+C'],
+    ],
+  );
+  // Another app may hold a key; registered says which, and nothing fails.
+  for (const s of status.shortcuts) assert.equal(typeof s.registered, 'boolean');
+  const held = await app.evaluate(({ globalShortcut }) =>
+    ['CommandOrControl+Shift+T', 'CommandOrControl+Shift+C'].map((a) => globalShortcut.isRegistered(a)),
+  );
+  assert.deepEqual(
+    held,
+    status.shortcuts.map((s) => s.registered),
+  );
+
+  const off = await page.evaluate(() => window.appShortcuts.setEnabled(false));
+  assert.equal(off.enabled, false);
+  assert.deepEqual(
+    await app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('CommandOrControl+Shift+T')),
+    false,
+  );
+  const on = await page.evaluate(() => window.appShortcuts.setEnabled(true));
+  assert.equal(on.enabled, true);
+  assert.deepEqual(
+    on.shortcuts.map((s) => s.registered),
+    held,
+  );
+});
+
+test('the shortcuts start and stop translating and show and hide the caption window; options reach the overlay', async () => {
+  const page = await app.firstWindow();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.evaluate(() =>
+    localStorage.setItem('rt-settings', JSON.stringify({ uiLang: 'ja', captionOpacity: 40, clickThrough: true })),
+  );
+  await page.goto('app://rt/?mock=1');
+  await page.waitForFunction(() => typeof document.getElementById('toggle')?.onclick === 'function');
+
+  await sendShortcut('toggle');
+  await page.waitForFunction(() => document.body.classList.contains('running'));
+
+  const [overlay] = await Promise.all([app.waitForEvent('window'), sendShortcut('captions')]);
+  await overlay.locator('#now').waitFor({ state: 'attached' });
+  assert.equal(
+    await overlay.evaluate(() => document.body.style.getPropertyValue('--caption-bg-alpha')),
+    '0.4',
+    'the saved opacity applies to the overlay',
+  );
+  // Click-through is applied by the main process; changing it while the overlay is open is fine.
+  await page.evaluate(() => window.captionOverlay.setClickThrough(false));
+  await page.evaluate(() => window.captionOverlay.setClickThrough(true));
+
+  await Promise.all([overlay.waitForEvent('close'), sendShortcut('captions')]);
+  await page.locator('#now').waitFor({ state: 'attached' });
+  assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'false');
+
+  await sendShortcut('toggle');
+  await page.waitForFunction(() => !document.body.classList.contains('running'));
+  await page.evaluate(() => window.captionOverlay.setClickThrough(false));
+  assert.deepEqual(errors, []);
+});
+
+test('starting from the shortcut without an API key asks for the key, as the button does', async () => {
+  const page = await app.firstWindow();
+  await page.evaluate(() => localStorage.setItem('rt-settings', JSON.stringify({ uiLang: 'ja' })));
+  await page.goto('app://rt/');
+  await page.waitForFunction(() => typeof document.getElementById('toggle')?.onclick === 'function');
+  await sendShortcut('toggle');
+  await page.waitForFunction(() => document.getElementById('settings').open);
+  assert.ok(await page.locator('#toast').isVisible());
+  assert.ok(!(await page.evaluate(() => document.body.classList.contains('running'))));
+  assert.ok(await page.locator('#shortcutsGroup').isVisible(), 'the dialog lists the shortcuts');
+  assert.equal(await page.locator('#shortcutList kbd').count(), 2);
+  assert.ok(await page.locator('#captionOpacity').isVisible());
+  assert.ok(await page.locator('#clickThrough').isVisible());
+  assert.ok(await page.locator('#captionDesktopOnly').isHidden());
+  await page.keyboard.press('Escape');
 });

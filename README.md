@@ -55,6 +55,28 @@ If the permission is missing, the app explains it and stops. After an update, ma
 The caption window button (top right) moves the caption area into a frameless, translucent window that stays
 on top of everything else, including full-screen slides and meeting apps. Drag it to move it; close it with ×.
 
+The "Captions" group in settings changes it while you listen:
+
+- **Show**: source and translation, or translation only. A sentence shows its source until its translation arrives.
+  This applies to the caption area in the main window too.
+- **Caption window text size**, separate from the text size of the main window.
+- **Background opacity** from 0 to 100%. The text keeps a dark outline, so it stays readable over any background.
+- **Click-through**: clicks go to the app underneath. While it is on, the caption window cannot be moved or closed
+  with the mouse; hide it with the caption window button or the shortcut below.
+
+In a browser the caption window is a picture-in-picture window, which is always opaque, so only the first two apply.
+
+### Shortcuts
+
+These work from any app while Twinscript is running, and can be turned off in settings:
+
+| Action | macOS | Windows |
+| --- | --- | --- |
+| Start / stop translating | ⇧⌘T | Ctrl+Shift+T |
+| Show / hide the caption window | ⇧⌘C | Ctrl+Shift+C |
+
+If another app already uses one of them, the settings show it as unavailable. The keys cannot be changed yet.
+
 ## Sessions and storage
 
 - The list on the left holds your sessions: create, switch, rename, delete.

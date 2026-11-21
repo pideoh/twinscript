@@ -43,6 +43,11 @@ const DEFAULTS = {
   fontSize: 18,
   otherInto: 'A', // which of the two languages a third language is translated into
   captionItems: 3, // sentences kept in the caption zone, including the one being spoken
+  captionContent: 'both', // 'both' or 'tgt' (translation only) in the caption zone
+  captionFontSize: 20, // text size while the caption zone is in the caption window
+  captionOpacity: 90, // background of the desktop caption overlay, in percent
+  clickThrough: false, // desktop caption overlay: mouse events go to the app underneath
+  globalShortcuts: true, // desktop app: start / stop and the caption window from any app
   interimInterval: 1.5, // seconds between re-translations of the sentence being spoken
 };
 const INTERIM_COOLDOWN_MS = 60_000;
@@ -94,6 +99,19 @@ const els = Object.fromEntries(
     'otherInto',
     'captionItems',
     'captionItemsOut',
+    'captionContent',
+    'captionFontSize',
+    'captionFontSizeOut',
+    'captionFontSizeField',
+    'captionOpacity',
+    'captionOpacityOut',
+    'captionOpacityField',
+    'clickThrough',
+    'clickThroughField',
+    'captionDesktopOnly',
+    'shortcutsGroup',
+    'shortcutList',
+    'globalShortcuts',
     'interimInterval',
     'interimIntervalOut',
     'settingsRunning',
@@ -170,6 +188,7 @@ function relocalize() {
   els.toggle.textContent = t(run ? 'toggle.stop' : 'toggle.start');
   renderSidebar();
   renderSummary();
+  renderShortcuts();
   if (captionWindow) {
     applyTranslations(captionWindow.document); // the caption zone lives there while it is open
     captionWindow.document.title = t('caption.title');
@@ -205,9 +224,10 @@ if (!canCaptureSystemAudio()) {
 els.source.value = settings.source;
 applyFontSize();
 
+// The caption window has its own text size; the main window's applies to everything else.
 function applyFontSize() {
   document.documentElement.style.setProperty('--fs', `${settings.fontSize}px`);
-  captionWindow?.document.documentElement.style.setProperty('--fs', `${settings.fontSize}px`);
+  captionWindow?.document.documentElement.style.setProperty('--fs', `${settings.captionFontSize}px`);
 }
 function onLangChange(changed, other) {
   if (changed.value === other.value) other.value = changed === els.langA ? settings.langB : settings.langA;
@@ -250,7 +270,13 @@ function openSettings() {
   els.otherInto.value = settings.otherInto;
   els.captionItems.value = settings.captionItems;
   els.interimInterval.value = settings.interimInterval;
+  els.captionContent.value = settings.captionContent;
+  els.captionFontSize.value = settings.captionFontSize;
+  els.captionOpacity.value = settings.captionOpacity;
+  els.clickThrough.checked = settings.clickThrough;
+  showCaptionControls();
   showTuning();
+  showShortcuts();
   els.settingsRunning.hidden = !run;
   els.settings.showModal();
 }
@@ -273,6 +299,8 @@ function showTuning() {
   els.interimIntervalOut.textContent = t('settings.interimInterval.value', {
     s: Number(els.interimInterval.value).toFixed(1),
   });
+  els.captionFontSizeOut.textContent = t('settings.captionFontSize.value', { n: Number(els.captionFontSize.value) });
+  els.captionOpacityOut.textContent = t('settings.captionOpacity.value', { n: Number(els.captionOpacity.value) });
 }
 els.captionItems.oninput = () => {
   settings.captionItems = Number(els.captionItems.value);
@@ -282,6 +310,28 @@ els.captionItems.oninput = () => {
 els.interimInterval.oninput = () => {
   settings.interimInterval = Number(els.interimInterval.value);
   showTuning();
+};
+els.captionContent.onchange = () => {
+  settings.captionContent = els.captionContent.value;
+  applyCaptionOptions();
+};
+els.captionFontSize.oninput = () => {
+  settings.captionFontSize = Number(els.captionFontSize.value);
+  showTuning();
+  applyFontSize();
+};
+els.captionOpacity.oninput = () => {
+  settings.captionOpacity = Number(els.captionOpacity.value);
+  showTuning();
+  applyCaptionOptions();
+};
+els.clickThrough.onchange = () => {
+  settings.clickThrough = els.clickThrough.checked;
+  applyClickThrough();
+};
+els.globalShortcuts.onchange = async () => {
+  settings.globalShortcuts = els.globalShortcuts.checked;
+  await applyGlobalShortcuts();
 };
 els.settings.addEventListener('close', () => {
   const key = els.apiKey.value.trim();
@@ -301,6 +351,11 @@ els.settings.addEventListener('close', () => {
   settings.otherInto = els.otherInto.value;
   settings.captionItems = Number(els.captionItems.value);
   settings.interimInterval = Number(els.interimInterval.value);
+  settings.captionContent = els.captionContent.value;
+  settings.captionFontSize = Number(els.captionFontSize.value);
+  settings.captionOpacity = Number(els.captionOpacity.value);
+  settings.clickThrough = els.clickThrough.checked;
+  if (window.appShortcuts) settings.globalShortcuts = els.globalShortcuts.checked;
   saveSettings();
 });
 
@@ -555,6 +610,79 @@ const IN_DESKTOP_APP = /\bElectron\//.test(navigator.userAgent);
 const CAPTION_WINDOW_NAME = 'captions'; // must match CAPTION_WINDOW in app/policy.js
 els.pip.hidden = !('documentPictureInPicture' in window) && !IN_DESKTOP_APP;
 
+// Settings of the caption zone that apply wherever it is, at once (also while listening).
+function applyCaptionOptions() {
+  els.now.classList.toggle('tgt-only', settings.captionContent === 'tgt');
+  // The desktop overlay's backdrop; a picture-in-picture window is opaque by nature.
+  if (captionWindow?.document.body.classList.contains('overlay'))
+    captionWindow.document.body.style.setProperty('--caption-bg-alpha', String(settings.captionOpacity / 100));
+}
+// The main process keeps the state and applies it to the overlay whenever it is open.
+function applyClickThrough() {
+  window.captionOverlay?.setClickThrough(settings.clickThrough).catch(() => {});
+}
+// Opacity and click-through exist only for the desktop overlay; without any caption window,
+// its options are left out altogether.
+function showCaptionControls() {
+  const anyWindow = !els.pip.hidden;
+  els.captionFontSizeField.hidden = !anyWindow;
+  els.captionOpacityField.hidden = !IN_DESKTOP_APP;
+  els.clickThroughField.hidden = !IN_DESKTOP_APP;
+  els.captionDesktopOnly.hidden = IN_DESKTOP_APP || !anyWindow;
+}
+applyCaptionOptions();
+if (settings.clickThrough) applyClickThrough();
+
+// ---------- global shortcuts (desktop app) ----------
+// The main process registers them (app/shortcuts.js); each one does what its button does.
+let shortcutStatus = null; // { enabled, shortcuts: [{ command, label, registered }] }
+els.shortcutsGroup.hidden = !window.appShortcuts;
+
+function renderShortcuts() {
+  if (!shortcutStatus) return;
+  els.globalShortcuts.checked = shortcutStatus.enabled;
+  els.shortcutList.replaceChildren(
+    ...shortcutStatus.shortcuts.flatMap((s) => {
+      const name = document.createElement('dt');
+      name.textContent = t(`settings.shortcuts.${s.command}`);
+      const keys = document.createElement('dd');
+      const kbd = document.createElement('kbd');
+      kbd.textContent = s.label;
+      keys.append(kbd);
+      if (shortcutStatus.enabled && !s.registered) {
+        const note = document.createElement('span');
+        note.className = 'shortcut-unavailable';
+        note.textContent = t('settings.shortcuts.unavailable');
+        keys.prepend(note);
+      }
+      return [name, keys];
+    }),
+  );
+}
+async function showShortcuts() {
+  if (!window.appShortcuts) return;
+  try {
+    shortcutStatus = await window.appShortcuts.status();
+  } catch {
+    return;
+  }
+  renderShortcuts();
+}
+async function applyGlobalShortcuts() {
+  if (!window.appShortcuts) return;
+  try {
+    shortcutStatus = await window.appShortcuts.setEnabled(settings.globalShortcuts);
+  } catch {
+    return;
+  }
+  renderShortcuts();
+}
+window.appShortcuts?.onCommand((command) => {
+  if (command === 'toggle') els.toggle.click();
+  else if (command === 'captions' && !els.pip.hidden) els.pip.click();
+});
+if (window.appShortcuts && !settings.globalShortcuts) applyGlobalShortcuts();
+
 async function openCaptionWindow() {
   // Electron exposes documentPictureInPicture but requestWindow fails there, so check it first.
   if (IN_DESKTOP_APP) {
@@ -587,6 +715,7 @@ els.pip.onclick = async () => {
     : 'margin:0;display:block;height:100vh;background:var(--bgColor-default, Canvas)';
   els.now.style.cssText = 'display:flex;width:100%;height:100vh;min-height:0;max-height:none;border-top:0';
   applyFontSize();
+  applyCaptionOptions();
   const home = document.createComment('caption zone');
   els.now.before(home);
   win.document.body.append(els.now);
@@ -845,6 +974,7 @@ els.toggle.onclick = () => (run ? stop() : start());
 
 async function start() {
   if (!MOCK && !apiKey) {
+    window.appShortcuts?.focusApp().catch(() => {}); // when started by a shortcut from another app
     toast(t('toast.apiKeyFirst'), 6000, 'warning');
     return openSettings();
   }
