@@ -36,7 +36,8 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `test/*.test.js` | Unit tests (`node:test`, no dependencies) |
 | `test/e2e/*.e2e.js`, `test/e2e/helpers.js` | Browser tests: Chrome, a fake microphone and mocked Gemini endpoints. Split into files by topic so they run in parallel; shared setup is in `helpers.js`. `a11y.e2e.js` runs axe-core on the main screen and dialogs in both themes |
 | `test/app/desktop.app.js` | Desktop smoke tests (need a display, so not run in CI) |
-| `.github/workflows/release.yml`, `scripts/release-needed.js`, `scripts/next-version.js` | Decide whether a change on `main` affects the shipped app, pick the next version, build the zips and publish a GitHub Release |
+| `.github/workflows/release.yml`, `release-please-config.json`, `.release-please-manifest.json` | release-please keeps a release pull request open on `main`; merging it tags `vX.Y.Z`, creates the GitHub Release, and the workflow builds and uploads the zips |
+| `scripts/check-commits.js` | Checks that a pull request's commit subjects and title follow Conventional Commits (run in `test.yml`) |
 | `scripts/sign-mac.js`, `scripts/verify-mac-signature.js`, `scripts/ci-mac-signing-keychain.sh` | macOS releases are re-signed with a fixed self-signed certificate (electron-builder `afterSign` hook) so the app's identity, and the permissions tied to it, survive updates; the check and the CI keychain setup. `.github/workflows/sign-check.yml` exercises this on pull requests |
 
 ## Commands
@@ -56,6 +57,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 - Some assumptions about the Gemini Live API are unverified against the real service (interim text is the whole utterance so far; one final result per utterance). Check the official documentation instead of guessing when a change depends on API behavior.
 - User-visible text goes through i18n (`t()` or `data-i18n*`; modules without UI throw `MessageError` with a message key). Add every new key to all files in `src/locales/` with the same placeholders; `test/i18n.test.js` checks this.
 - Code, comments and commit messages are in English.
+- Commit subjects and pull request titles follow Conventional Commits, `type(scope)!: description`, with the types feat, fix, perf, revert, docs, test, build, ci, chore, refactor, style; `scripts/check-commits.js` enforces this on pull requests.
 
 ## Design
 
@@ -66,10 +68,11 @@ browser, which is used for development and the browser tests. Usage and pricing 
 
 ## Releases
 
-A change on `main` is built and published automatically when it changes what users download: the app's
-own files (`app/`, `src/`, `icons/`, `index.html`, `styles.css`), Electron or electron-builder,
-or the build configuration in `package.json`. `scripts/release-needed.js` decides this; updates to checking
-and testing tools, workflows, tests and docs do not publish a version. The version bump comes from the
-commit subjects since the last release; the table is in CONTRIBUTING.md. In short: start a subject with
-`Add` or `feat` only for a new feature, never bump `version` in `package.json` by hand, and mark breaking
-changes with `BREAKING CHANGE` in the body.
+Releases go through a release pull request. On every push to `main`, release-please
+(`.github/workflows/release.yml`) opens or updates the pull request `chore(main): release X.Y.Z`, which sets the
+version in `package.json` and updates `CHANGELOG.md` from the Conventional Commits since the last release.
+Merging it tags `vX.Y.Z`, creates the GitHub Release, and builds and uploads the zips. `feat` releases a minor
+version; `fix`, `perf` and `revert` a patch; a breaking change (`type!:` or a `BREAKING CHANGE:` footer) a major.
+`docs`, `test`, `build`, `ci`, `chore`, `refactor` and `style` do not release on their own; dependency updates
+(`chore(deps)`) ship with the next release, or as `fix(deps): …` to release one on its own. Never edit `version`
+in `package.json` or the manifest by hand. The table is in CONTRIBUTING.md.

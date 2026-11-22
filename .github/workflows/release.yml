@@ -1,28 +1,15 @@
-# Builds the desktop app and publishes it as a GitHub Release whenever the app changes on main.
-# The version is chosen from the commits since the last release (see scripts/next-version.js).
+# Releases are made from a release pull request that release-please keeps up to date on main.
+# Each push to main lets release-please open or update the pull request "chore(main): release X.Y.Z",
+# which bumps package.json and updates CHANGELOG.md from the Conventional Commits since the last release.
+# Merging that pull request makes release-please tag vX.Y.Z and create the GitHub release; the jobs
+# below then build the desktop app from the tag and upload the zips to that release.
 name: release
 on:
   push:
     branches: [main]
-    paths:
-      - 'app/**'
-      - 'src/**'
-      - 'icons/**'
-      - index.html
-      - styles.css
-      - package.json
-      # so that a fix to the release process itself is released
-      - .github/workflows/release.yml
-      - scripts/next-version.js
   workflow_dispatch:
-    inputs:
-      bump:
-        description: Version bump
-        type: choice
-        options: [auto, patch, minor, major]
-        default: auto
 
-# Jobs get read-only access unless they ask for more (only the release job does).
+# Jobs get read-only access unless they ask for more.
 permissions:
   contents: read
 
@@ -31,33 +18,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  version:
+  release-please:
     runs-on: ubuntu-latest
+    # Everything goes through RELEASE_PR_TOKEN: a pull request opened with the workflow's own token
+    # would not start the checks that main requires.
+    permissions: {}
     outputs:
-      version: ${{ steps.next.outputs.version }}
-      release: ${{ steps.needed.outputs.release }}
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+      version: ${{ steps.rp.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
+      # Third-party action: pinned to a commit so a moved tag cannot change what runs here.
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        id: rp
         with:
-          fetch-depth: 0 # the version is computed from the full history and its tags
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-      - run: npm test
-      # Tool, workflow, test and doc changes do not change what users download: no new version.
-      # A manual run always releases.
-      - id: needed
-        env:
-          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          if [ "$MANUAL" = "true" ]; then echo "release=true" >> "$GITHUB_OUTPUT"
-          else echo "release=$(node scripts/release-needed.js)" >> "$GITHUB_OUTPUT"; fi
-      - id: next
-        run: echo "version=$(node scripts/next-version.js "${{ inputs.bump || 'auto' }}")" >> "$GITHUB_OUTPUT"
+          token: ${{ secrets.RELEASE_PR_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
 
   build:
-    needs: version
-    if: needs.version.outputs.release == 'true'
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
     strategy:
       fail-fast: false # let the other builds finish so their logs are available too
       matrix:
@@ -79,6 +60,8 @@ jobs:
       ELECTRON_BUILDER_COMPRESSION_LEVEL: 1
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -92,9 +75,9 @@ jobs:
           MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
           MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
         run: sh scripts/ci-mac-signing-keychain.sh setup
-      # --publish never: electron-builder only builds; the release job below does the publishing.
-      # bash on every runner: PowerShell splits a "--config.key=value" argument at the dot.
-      - run: npx electron-builder ${{ matrix.args }} --publish never --config.extraMetadata.version=${{ needs.version.outputs.version }}
+      # --publish never: electron-builder only builds; the release job below uploads the files.
+      # The version in the file names comes from package.json, which the release pull request set.
+      - run: npx electron-builder ${{ matrix.args }} --publish never
         shell: bash
       # Fails unless the app in the zip has a valid signature whose identity is the certificate, not
       # a per-build hash.
@@ -115,10 +98,10 @@ jobs:
           compression-level: 0 # already compressed
 
   release:
-    needs: [version, build]
+    needs: [release-please, build]
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write       # to upload files to the release
       id-token: write       # for the build provenance attestation
       attestations: write
     steps:
@@ -126,6 +109,11 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      # The zips are named after the version in package.json; it must be the one that was tagged.
+      - name: Check the version in the file names
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: ls dist/twinscript-"$VERSION"-*.zip
       - name: Checksums
         run: cd dist && sha256sum *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt
       # Lets anyone verify that a zip was built by this workflow from this repository
@@ -134,10 +122,9 @@ jobs:
         if: github.event.repository.private == false
         with:
           subject-path: dist/*.zip
-      - name: Publish release
+      # release-please created the release and its notes; this adds the downloads.
+      - name: Upload to the release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          gh release create "v$VERSION" dist/*.zip dist/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "v$VERSION" --generate-notes
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release upload "$TAG" dist/*.zip dist/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY"

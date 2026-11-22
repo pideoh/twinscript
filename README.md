@@ -158,7 +158,8 @@ npm run dist:mac   # macOS zips in dist/ (Apple silicon / Intel)
 npm run dist:win   # Windows zip in dist/ (x64)
 ```
 
-Releases are built and published automatically when a change to the app lands on `main`.
+Releases are made from a release pull request that is kept up to date on `main`; merging it builds and publishes
+the zips. Commit subjects follow Conventional Commits, which set the version (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 The interface also runs in a browser, which is convenient while developing:
 
