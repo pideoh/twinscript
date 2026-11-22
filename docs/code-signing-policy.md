@@ -1,27 +1,23 @@
 # Code signing policy
 
-**Status: applied for, not yet in effect.** Twinscript has applied to the SignPath Foundation program for
-open-source projects. Until the application is accepted and signing is set up, the Windows build on the Releases page is
-not signed. The macOS build is signed with the project's own self-signed certificate, which keeps its identity
-stable between versions but is not a publisher certificate and is not notarized by Apple. This page will be updated when that changes.
+## Windows
 
-Once in effect: free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
-[SignPath Foundation](https://signpath.org/).
+The Windows build on the [Releases](https://github.com/pideoh/twinscript/releases) page is not signed, so
+Windows shows a warning the first time it is opened. Each release lists SHA-256 checksums and carries a build
+provenance attestation, which show that a download is the file built from this repository by the
+[release workflow](../.github/workflows/release.yml).
 
-## What gets signed
+## macOS
 
-Only the Windows build (`twinscript-<version>-win-x64.zip`) published on this repository's
-[Releases](https://github.com/pideoh/twinscript/releases) page, built from the `main` branch by the
-[release workflow](../.github/workflows/release.yml) on GitHub-hosted runners. Nothing built elsewhere is signed.
+The macOS build is signed with the project's own self-signed certificate. This keeps the app's identity the
+same between versions, so permissions granted to it survive an update. It is not a publisher certificate and
+the app is not notarized by Apple, so macOS shows a warning the first time it is opened.
 
-## Team roles
+## Who can publish
 
-| Role | Who |
-| --- | --- |
-| Committers and reviewers | [Maintainers](https://github.com/pideoh/twinscript/graphs/contributors) with write access. Changes from anyone else arrive as pull requests and are reviewed by a maintainer before merging. |
-| Approvers | The repository [owner](https://github.com/pideoh). Every release is approved by hand before it is signed. |
-
-All members with these roles use multi-factor authentication on GitHub and SignPath.
+Releases are built only from the `main` branch on GitHub-hosted runners. Changes reach `main` only through
+pull requests that pass the required checks, merged by a
+[maintainer](https://github.com/pideoh/twinscript/graphs/contributors) with write access.
 
 ## Privacy policy
 
