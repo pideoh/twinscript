@@ -112,6 +112,8 @@ Twinscript may use it, choose "Always Allow"; the app uses it only to read and s
 - **Paid tier** (a key linked to Google Cloud billing): transcription costs about $0.009 per minute (about $0.54 per hour)
   plus a small token fee for translation. What you send is not used for training.
 
+These are the prices at the time of writing; Google's [pricing page](https://ai.google.dev/gemini-api/docs/pricing) has the current ones.
+
 ## Limitations
 
 - It cannot tell speakers apart (who said what).
