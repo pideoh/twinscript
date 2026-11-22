@@ -10,6 +10,17 @@ const SCRIPT = [
   ['負荷テストの結果はいつ頃出そうですか？', 'When do you expect the load test results?'],
   ['We should have the full report by Wednesday.', '水曜日までには完全なレポートをお出しできる見込みです。'],
 ];
+// The same lines in Simplified Chinese, for a demo with a third language.
+const CHINESE = [
+  '现在开始今天的例会。',
+  '首先请分享一下上周的进展。',
+  '好的。我们完成了 API 集成，并在周五开始了负载测试。',
+  '负载测试的结果大概什么时候能出来？',
+  '我们应该能在周三之前拿出完整的报告。',
+];
+// [Japanese, English, Simplified Chinese] of each line, whichever was spoken.
+const LINES = SCRIPT.map(([src, tgt], i) => (/[ぁ-んァ-ン]/.test(src) ? [src, tgt] : [tgt, src]).concat(CHINESE[i]));
+const IN = { Japanese: 0, English: 1, 'Simplified Chinese': 2 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export class MockTranscriber {
@@ -38,8 +49,11 @@ export class MockTranscriber {
 }
 
 export class MockTranslator {
-  async translate(text, { onDelta } = {}) {
-    const hits = SCRIPT.filter(([src]) => text.includes(src)).map(([, tgt]) => tgt);
+  // into: with a third language, the language asked for (English when the demo has no such lines).
+  async translate(text, { onDelta, into } = {}) {
+    const hits = into
+      ? SCRIPT.flatMap(([src], i) => (text.includes(src) ? [LINES[i][IN[into] ?? 1]] : []))
+      : SCRIPT.filter(([src]) => text.includes(src)).map(([, tgt]) => tgt);
     const full = hits.length ? hits.join(' ') : '…';
     for (let n = 6; n < full.length; n += 6) {
       await sleep(40);
@@ -47,6 +61,10 @@ export class MockTranslator {
     }
     onDelta?.(full);
     return full;
+  }
+  // The demo leaves every case the writing system does not settle to 'other'.
+  async identify() {
+    return 'other';
   }
 }
 

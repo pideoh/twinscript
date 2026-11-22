@@ -1,4 +1,5 @@
-// Tells from the writing system which way a transcript should be translated, so that the
+// Tells from the writing system which way a transcript should be translated (or, with three
+// languages, which language it is in), so that the
 // direction does not depend on the translation model recognizing the language. Pure functions.
 // Languages are the English names the translator is given.
 
@@ -61,6 +62,18 @@ export function targetByScript(text, { langA, langB, otherInto }) {
   // That only matters when a third language would go the other way.
   if (SHARED.has(cls) && otherInto === written) return null;
   return other;
+}
+
+// Which of `languages` `text` is spoken in, told from its writing system: the one language that
+// uses it, 'other' when none of them does, or null when the writing system does not settle it
+// (the text is short or mixed, or two of the languages share it). A language outside the list
+// written like one in it (French with English selected) counts as that one.
+export function sourceByScript(text, languages) {
+  const cls = scriptClass(text);
+  if (!cls) return null;
+  const matching = languages.filter((language) => scriptOf(language) === cls);
+  if (matching.length > 1) return null;
+  return matching[0] ?? 'other';
 }
 
 // Whether text in langA can be told from text in langB by its writing system alone.

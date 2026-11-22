@@ -44,7 +44,7 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || 'chrome' });
 
 const wanted = (name) => !filter || name.includes(filter);
-async function open({ width = 1280, height = 800, scheme = 'light', uiLang = 'en', phone = false } = {}) {
+async function open({ width = 1280, height = 800, scheme = 'light', uiLang = 'en', phone = false, langC = '' } = {}) {
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: 2,
@@ -58,7 +58,7 @@ async function open({ width = 1280, height = 800, scheme = 'light', uiLang = 'en
       if (!sessionStorage.getItem('seeded')) localStorage.setItem('rt-settings', JSON.stringify(settings));
       sessionStorage.setItem('seeded', '1');
     },
-    { uiLang },
+    { uiLang, langC },
   );
   const page = await context.newPage();
   page.on('pageerror', (e) => console.error('page error:', e.message));
@@ -123,6 +123,26 @@ for (const scheme of ['light', 'dark']) {
     await page.click('#menu');
     await page.waitForTimeout(300);
     await shot(page, `phone-${scheme}-drawer`);
+    await close();
+  }
+}
+
+// A third language (Japanese UI): the header with its third select, tagged translations.
+for (const scheme of ['light', 'dark']) {
+  for (const [name, size] of [
+    ['', {}],
+    ['-phone', { width: 390, height: 844, phone: true }],
+  ]) {
+    if (!wanted(`three-${scheme}${name}`)) continue;
+    const { page, close } = await open({ scheme, uiLang: 'ja', langC: 'cmn-Hans-CN', ...size });
+    await shot(page, `three-${scheme}${name}-idle`);
+    await page.locator('header.bar').screenshot({ path: join(out, `three-${scheme}${name}-header.png`) });
+    console.log(`three-${scheme}${name}-header`);
+    await listen(page);
+    await shot(page, `three-${scheme}${name}-listening`);
+    await page.click('#toggle');
+    await page.waitForTimeout(400);
+    await shot(page, `three-${scheme}${name}-stopped`);
     await close();
   }
 }

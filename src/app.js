@@ -6,7 +6,7 @@ import { MessageError } from './message-error.js';
 import { MockSummarizer, MockTranscriber, MockTranslator } from './mock.js';
 import { ReadAloud } from './read-aloud.js';
 import { canRecord, Recorder } from './recorder.js';
-import { languageByScript, scriptsDiffer } from './script-hint.js';
+import { languageByScript, scriptsDiffer, sourceByScript } from './script-hint.js';
 import { loadApiKey, saveApiKey } from './secrets.js';
 import { UtteranceTracker } from './segmenter.js';
 import { store } from './store.js';
@@ -36,6 +36,7 @@ const LANGS = [
 const DEFAULTS = {
   langA: 'ja-JP',
   langB: 'en-US',
+  langC: '', // an optional third language: every sentence is then translated into the other two
   source: 'mic',
   uiLang: 'auto',
   translateModel: 'gemini-3.5-flash-lite',
@@ -49,6 +50,9 @@ const DEFAULTS = {
   readAloud: 'off', // 'off', 'A', 'B' or 'both': translations into which language are read aloud
   captionItems: 3, // sentences kept in the caption zone, including the one being spoken
   captionContent: 'both', // 'both' or 'tgt' (translation only) in the caption zone
+  // The same two with a third language, remembered apart: several translations take more room.
+  captionItems3: 1,
+  captionContent3: 'tgt',
   captionFontSize: 20, // text size while the caption zone is in the caption window
   captionOpacity: 90, // background of the desktop caption overlay, in percent
   clickThrough: false, // desktop caption overlay: mouse events go to the app underneath
@@ -66,6 +70,7 @@ const els = Object.fromEntries(
   [
     'langA',
     'langB',
+    'langC',
     'swap',
     'source',
     'export',
@@ -103,9 +108,11 @@ const els = Object.fromEntries(
     'vocabulary',
     'fontSize',
     'otherInto',
+    'otherIntoField',
     'readAloud',
     'readAloudField',
     'readAloudUnavailable',
+    'readAloudUnavailableThree',
     'captionItems',
     'captionItemsOut',
     'captionContent',
@@ -162,6 +169,8 @@ function saveSettings() {
 const { settings, legacyKey } = loadSettings();
 let { key: apiKey, storage: keyStorage } = await loadApiKey(window.secretStore, legacyKey);
 if (legacyKey !== undefined) saveSettings();
+// The caption zone keeps its own settings while a third language is selected (see DEFAULTS).
+const captionKey = (name) => (settings.langC ? `${name}3` : name);
 const reader = new ReadAloud(); // reads finished translations aloud
 let captionWindow = null; // always-on-top caption window, when open
 let languageNames = null; // Intl.DisplayNames for the UI language
@@ -189,7 +198,8 @@ const langLabel = (code) => {
 // Re-renders everything on screen that is not static markup.
 function relocalize() {
   applyLocale();
-  for (const sel of [els.langA, els.langB]) for (const o of sel.options) o.text = langLabel(o.value);
+  for (const sel of [els.langA, els.langB, els.langC])
+    for (const o of sel.options) o.text = o.value ? langLabel(o.value) : t('header.langC.none');
   els.uiLang.options[0].text = t('settings.uiLang.auto');
   fillOtherInto();
   fillReadAloud();
@@ -226,8 +236,13 @@ window.addEventListener('languagechange', () => {
 for (const sel of [els.langA, els.langB]) {
   for (const l of LANGS) sel.add(new Option(langLabel(l.code), l.code));
 }
+els.langC.add(new Option(t('header.langC.none'), ''));
+for (const l of LANGS) els.langC.add(new Option(langLabel(l.code), l.code));
 els.langA.value = settings.langA;
 els.langB.value = settings.langB;
+if (!LANGS.some((l) => l.code === settings.langC) || [settings.langA, settings.langB].includes(settings.langC))
+  settings.langC = '';
+els.langC.value = settings.langC;
 if (!canCaptureSystemAudio()) {
   for (const option of els.source.querySelectorAll('option:not([value=mic])')) option.remove();
   settings.source = 'mic';
@@ -243,6 +258,26 @@ function applyFontSize() {
 function onLangChange(changed, other) {
   if (changed.value === other.value) other.value = changed === els.langA ? settings.langB : settings.langA;
   if (changed.value === other.value) other.value = LANGS.find((l) => l.code !== changed.value).code;
+  // The third language never equals the first two: it takes the language the changed one had,
+  // or is turned off when that is taken too.
+  const third = els.langC;
+  if (third.value && (third.value === els.langA.value || third.value === els.langB.value)) {
+    const previous = settings[changed.id];
+    third.value = langsInUse().includes(previous) ? '' : previous;
+  }
+  langsChanged();
+}
+const langsInUse = () => [els.langA.value, els.langB.value, els.langC.value];
+// A third language that equals one of the first two takes its place there; that one gets the
+// third language's previous value, or the first language not in use when there was none.
+function onThirdLangChange() {
+  const third = els.langC;
+  for (const sel of [els.langA, els.langB]) {
+    if (!third.value || sel.value !== third.value) continue;
+    const previous = settings.langC;
+    sel.value =
+      previous && !langsInUse().includes(previous) ? previous : LANGS.find((l) => !langsInUse().includes(l.code)).code;
+  }
   langsChanged();
 }
 // The choices for a third language and for reading aloud are stored as a side (A / B) but mean
@@ -259,15 +294,24 @@ function setLangs(a, b) {
 }
 function langsChanged() {
   setLangs(els.langA.value, els.langB.value);
+  settings.langC = els.langC.value;
   saveSettings();
+  applyCaptionOptions();
   if (current) {
     current.langA = settings.langA;
     current.langB = settings.langB;
+    setSessionLangC(current);
     markDirty(current);
   }
 }
+// A session with two languages keeps the shape it always had: no langC at all.
+function setSessionLangC(sess) {
+  if (settings.langC) sess.langC = settings.langC;
+  else delete sess.langC;
+}
 els.langA.onchange = () => onLangChange(els.langA, els.langB);
 els.langB.onchange = () => onLangChange(els.langB, els.langA);
+els.langC.onchange = onThirdLangChange;
 els.swap.onclick = () => {
   [els.langA.value, els.langB.value] = [els.langB.value, els.langA.value];
   langsChanged();
@@ -292,9 +336,9 @@ function openSettings() {
   fillOtherInto();
   els.otherInto.value = settings.otherInto;
   fillReadAloud();
-  els.captionItems.value = settings.captionItems;
+  els.captionItems.value = settings[captionKey('captionItems')];
   els.interimInterval.value = settings.interimInterval;
-  els.captionContent.value = settings.captionContent;
+  els.captionContent.value = settings[captionKey('captionContent')];
   els.captionFontSize.value = settings.captionFontSize;
   els.captionOpacity.value = settings.captionOpacity;
   els.clickThrough.checked = settings.clickThrough;
@@ -307,7 +351,9 @@ function openSettings() {
 function showKeyStorage() {
   els.apiKeyStorage.textContent = t(`settings.apiKey.storage.${keyStorage}`);
 }
+// With a third language every sentence goes into the other two, so there is nothing to choose.
 function fillOtherInto() {
+  els.otherIntoField.hidden = !!settings.langC;
   els.otherInto.options[0].text = t('settings.otherInto.left', { lang: langLabel(settings.langA) });
   els.otherInto.options[1].text = t('settings.otherInto.right', { lang: langLabel(settings.langB) });
 }
@@ -319,9 +365,12 @@ function fillReadAloud() {
   els.readAloud.options[1].text = t('settings.readAloud.into', { lang: langLabel(settings.langA) });
   els.readAloud.options[2].text = t('settings.readAloud.into', { lang: langLabel(settings.langB) });
   els.readAloud.value = settings.readAloud;
-  const possible = canReadAloudPair();
-  els.readAloud.disabled = !possible;
-  els.readAloudUnavailable.hidden = possible;
+  // Reading aloud is for two languages only.
+  const three = !!settings.langC;
+  const pair = canReadAloudPair();
+  els.readAloud.disabled = three || !pair;
+  els.readAloudUnavailable.hidden = three || pair;
+  els.readAloudUnavailableThree.hidden = !three;
 }
 // Applies at once, also while listening.
 els.readAloud.onchange = () => {
@@ -345,7 +394,7 @@ function showTuning() {
   els.captionOpacityOut.textContent = t('settings.captionOpacity.value', { n: Number(els.captionOpacity.value) });
 }
 els.captionItems.oninput = () => {
-  settings.captionItems = Number(els.captionItems.value);
+  settings[captionKey('captionItems')] = Number(els.captionItems.value);
   showTuning();
   trimCaptions();
 };
@@ -354,7 +403,7 @@ els.interimInterval.oninput = () => {
   showTuning();
 };
 els.captionContent.onchange = () => {
-  settings.captionContent = els.captionContent.value;
+  settings[captionKey('captionContent')] = els.captionContent.value;
   applyCaptionOptions();
 };
 els.captionFontSize.oninput = () => {
@@ -392,9 +441,9 @@ els.settings.addEventListener('close', () => {
   settings.vocabulary = els.vocabulary.value.trim();
   settings.fontSize = Number(els.fontSize.value);
   settings.otherInto = els.otherInto.value;
-  settings.captionItems = Number(els.captionItems.value);
+  // The caption zone's sentences and content are stored as they change (they belong to the
+  // number of languages the dialog was opened with, which may have changed by now).
   settings.interimInterval = Number(els.interimInterval.value);
-  settings.captionContent = els.captionContent.value;
   settings.captionFontSize = Number(els.captionFontSize.value);
   settings.captionOpacity = Number(els.captionOpacity.value);
   settings.clickThrough = els.clickThrough.checked;
@@ -403,10 +452,14 @@ els.settings.addEventListener('close', () => {
 });
 
 // ---------- sessions (saved conversations) ----------
-// { id, title, customTitle, createdAt, updatedAt, langA, langB, activeMs,
-//   segments: [{ id, at, elapsed, src, tgt }], recordings: [{ id, startedAt, elapsedStart, durationMs, mime }],
+// { id, title, customTitle, createdAt, updatedAt, langA, langB, langC?, activeMs,
+//   segments: [{ id, at, elapsed, src, tgt, lang?, tgts? }], recordings: [{ id, startedAt, elapsedStart, durationMs, mime }],
 //   summary?: { overview, keyPoints, decisions, actionItems: [{ task, owner, due }], truncated,
 //               generatedAt, model, segmentCount } }
+// With a third language (langC), a segment also has `lang`, the code of the language it was
+// spoken in ('other' for none of the three), and `tgts: [{ lang, text }]`, one translation per
+// target language; `tgt` then holds those translations joined by line breaks, so everything that
+// reads `tgt` works as with two languages.
 let sessions = []; // saved sessions, newest first
 let current = null; // the session on screen
 let run = null; // the live capture/translation in progress, if any
@@ -444,6 +497,7 @@ function blankSession() {
     updatedAt: now,
     langA: settings.langA,
     langB: settings.langB,
+    ...(settings.langC && { langC: settings.langC }),
     activeMs: 0,
     segments: [],
     recordings: [],
@@ -452,7 +506,15 @@ function blankSession() {
 
 const serialize = (sess) => ({
   ...sess,
-  segments: sess.segments.map(({ id, at, elapsed, src, tgt }) => ({ id, at, elapsed, src, tgt })),
+  segments: sess.segments.map(({ id, at, elapsed, src, tgt, lang, tgts }) => ({
+    id,
+    at,
+    elapsed,
+    src,
+    tgt,
+    ...(lang && { lang }),
+    ...(tgts && { tgts: tgts.map(({ lang, text }) => ({ lang, text })) }),
+  })),
 });
 
 function markDirty(sess) {
@@ -504,8 +566,13 @@ function showSession(sess) {
     setLangs(sess.langA, sess.langB);
     els.langA.value = settings.langA;
     els.langB.value = settings.langB;
-    saveSettings();
   }
+  const langC = sess.langC;
+  settings.langC =
+    LANGS.some((l) => l.code === langC) && langC !== settings.langA && langC !== settings.langB ? langC : '';
+  els.langC.value = settings.langC;
+  saveSettings();
+  applyCaptionOptions();
   els.clock.textContent = formatElapsed(sess.activeMs);
   els.log.scrollTop = els.log.scrollHeight;
   document.body.classList.remove('drawer');
@@ -604,10 +671,15 @@ function mountSegment(seg, isLive = false) {
   srcEl.textContent = seg.src;
   const tgtEl = document.createElement('div');
   tgtEl.className = `tgt${isLive ? ' pending' : ''}`;
-  tgtEl.textContent = seg.tgt;
   el.append(timeEl, srcEl, tgtEl);
   els.empty.hidden = true;
   Object.assign(seg, { el, srcEl, tgtEl });
+  if (seg.tgts) {
+    showTargets(seg);
+    for (const { lang, text } of seg.tgts) if (text) setLine(seg, lang, text);
+  } else {
+    tgtEl.textContent = seg.tgt;
+  }
   if (run) {
     els.nowList.append(el);
     trimCaptions();
@@ -618,7 +690,7 @@ function mountSegment(seg, isLive = false) {
 }
 
 // Moves the oldest sentences out of the caption zone into the transcript.
-function trimCaptions(keep = settings.captionItems) {
+function trimCaptions(keep = settings[captionKey('captionItems')]) {
   const wasNear = nearBottom();
   while (els.nowList.children.length > keep) els.log.insertBefore(els.nowList.firstElementChild, els.anchor);
   keepBottom(wasNear);
@@ -634,6 +706,44 @@ function setText(seg, part, text, cls) {
   const node = part === 'src' ? seg.srcEl : seg.tgtEl;
   node.textContent = text;
   if (part === 'tgt') node.className = `tgt${cls ? ` ${cls}` : ''}`;
+  keepBottom(wasNear);
+  updateJump();
+}
+
+// With a third language a segment has one line per target language, each led by a tag. A line
+// appears with its first text, in the order of seg.tgts.
+function showTargets(seg) {
+  seg.tgtEl.className = 'tgt multi';
+  seg.tgtEl.replaceChildren();
+  seg.lines = new Map();
+}
+// Sets the languages a segment is translated into; returns false when they were already those.
+function setTargets(seg, codes) {
+  if (seg.tgts && seg.lines && seg.tgts.map((x) => x.lang).join() === codes.join()) return false;
+  seg.tgts = codes.map((lang) => ({ lang, text: '' }));
+  showTargets(seg);
+  return true;
+}
+function setLine(seg, code, text, cls) {
+  const wasNear = nearBottom();
+  let line = seg.lines.get(code);
+  if (!line) {
+    const lang = LANGS.find((l) => l.code === code);
+    line = document.createElement('div');
+    const tag = document.createElement('span');
+    tag.className = 'label lang-tag';
+    tag.textContent = lang?.display ?? code;
+    const body = document.createElement('span');
+    body.className = 'tgt-text';
+    if (lang) body.lang = lang.display;
+    line.append(tag, body);
+    const order = (c) => seg.tgts.findIndex((x) => x.lang === c);
+    const next = [...seg.lines].find(([c]) => order(c) > order(code))?.[1];
+    seg.tgtEl.insertBefore(line, next ?? null);
+    seg.lines.set(code, line);
+  }
+  line.className = `tgt-line${cls ? ` ${cls}` : ''}`;
+  line.lastChild.textContent = text;
   keepBottom(wasNear);
   updateJump();
 }
@@ -657,7 +767,7 @@ els.pip.hidden = !('documentPictureInPicture' in window) && !IN_DESKTOP_APP;
 
 // Settings of the caption zone that apply wherever it is, at once (also while listening).
 function applyCaptionOptions() {
-  els.now.classList.toggle('tgt-only', settings.captionContent === 'tgt');
+  els.now.classList.toggle('tgt-only', settings[captionKey('captionContent')] === 'tgt');
   // The desktop overlay's backdrop; a picture-in-picture window is opaque by nature.
   if (captionWindow?.document.body.classList.contains('overlay'))
     captionWindow.document.body.style.setProperty('--caption-bg-alpha', String(settings.captionOpacity / 100));
@@ -1007,7 +1117,7 @@ function setRunning(running) {
   els.toggle.classList.toggle('stop', running);
   document.body.classList.toggle('running', running);
   els.now.hidden = !running;
-  for (const el of [els.langA, els.langB, els.swap, els.source, els.newSession]) el.disabled = running;
+  for (const el of [els.langA, els.langB, els.langC, els.swap, els.source, els.newSession]) el.disabled = running;
   if (!running) {
     setStatus('idle');
     els.level.style.width = '0';
@@ -1025,12 +1135,15 @@ async function start() {
   }
   const langA = LANGS.find((l) => l.code === settings.langA);
   const langB = LANGS.find((l) => l.code === settings.langB);
+  const langC = LANGS.find((l) => l.code === settings.langC);
   const sess = current;
   sess.langA = langA.code;
   sess.langB = langB.code;
+  setSessionLangC(sess);
   const r = {
     session: sess,
-    langs: [langA, langB], // what the translator was given, whatever the selects say later
+    // what the translator was given, whatever the selects say later
+    langs: langC ? [langA, langB, langC] : [langA, langB],
     baseMs: sess.activeMs,
     startedAt: 0,
     interim: { busy: false, lastAt: 0, pausedUntil: 0, timer: null, text: '' },
@@ -1067,12 +1180,13 @@ async function start() {
       model: settings.translateModel,
       langA: langA.name,
       langB: langB.name,
+      langC: langC?.name,
       glossary: settings.glossary,
       otherInto: (settings.otherInto === 'B' ? langB : langA).name,
     });
     r.transcriber = new GeminiLiveTranscriber({
       apiKey,
-      languageCodes: [langA.code, langB.code],
+      languageCodes: r.langs.map((l) => l.code),
       smart: settings.smart,
       customVocabulary: vocabulary.terms,
       ...handlers,
@@ -1230,8 +1344,12 @@ function scheduleInterimTranslation(s) {
     it.busy = true;
     it.lastAt = Date.now();
     try {
-      const out = await s.translator.translate(text, { history: recentHistory(s) });
-      if (seg === live && out) setText(seg, 'tgt', out, 'pending');
+      if (s.langs.length > 2) {
+        await translateInterimLines(s, seg, text);
+      } else {
+        const out = await s.translator.translate(text, { history: recentHistory(s) });
+        if (seg === live && out) setText(seg, 'tgt', out, 'pending');
+      }
     } catch (err) {
       if (err instanceof RateLimitError) {
         it.pausedUntil = Date.now() + INTERIM_COOLDOWN_MS;
@@ -1243,6 +1361,30 @@ function scheduleInterimTranslation(s) {
     }
   }, wait);
 }
+
+// With a third language: the sentence in progress goes into the other languages, one request per
+// line, but only when its writing system tells which language it is in (the model is not asked
+// while the sentence is still growing).
+async function translateInterimLines(r, seg, text) {
+  const source = sourceByScript(
+    text,
+    r.langs.map((l) => l.name),
+  );
+  if (!source) return;
+  const targets = targetsFor(r, source);
+  setTargets(seg, targets);
+  const results = await Promise.allSettled(
+    targets.map(async (code) => {
+      const out = await r.translator.translate(text, { history: recentHistory(r, code), into: langName(code) });
+      if (seg === live && out && seg.tgts.some((x) => x.lang === code)) setLine(seg, code, out, 'pending');
+    }),
+  );
+  const limited = results.find((x) => x.status === 'rejected' && x.reason instanceof RateLimitError);
+  if (limited) throw limited.reason;
+}
+// The codes of the languages a sentence goes into: the selected ones other than the one it was
+// spoken in (source: an English name or 'other'), in the order of the selects.
+const targetsFor = (r, source) => r.langs.filter((l) => l.name !== source).map((l) => l.code);
 
 function finalize(r, text) {
   const seg = live;
@@ -1263,14 +1405,16 @@ function commit(r, seg, text) {
   translateFinal(r, seg);
 }
 
-function recentHistory(r) {
+// lang: with a third language, the target whose own earlier translations are wanted.
+function recentHistory(r, lang) {
   return r.session.segments
     .filter((x) => x.tgt)
     .slice(-HISTORY_LINES)
-    .map(({ src, tgt }) => ({ src, tgt }));
+    .map(({ src, tgt, tgts }) => ({ src, tgt: (lang && tgts?.find((x) => x.lang === lang)?.text) || tgt }));
 }
 
 async function translateFinal(r, seg) {
+  if (r.langs.length > 2) return translateFinalLines(r, seg);
   const history = recentHistory(r);
   seg.rev = (seg.rev || 0) + 1; // a segment can be re-translated when its text is corrected
   const rev = seg.rev;
@@ -1302,6 +1446,54 @@ async function translateFinal(r, seg) {
         continue;
       }
       if (shown()) setText(seg, 'tgt', errorText(err), 'error');
+      return;
+    }
+  }
+}
+
+// With a third language: which language the sentence is in comes from its writing system, or else
+// from the model; then it is translated into each of the others at once, each into its own line.
+async function translateFinalLines(r, seg) {
+  seg.rev = (seg.rev || 0) + 1;
+  const rev = seg.rev;
+  const names = r.langs.map((l) => l.name);
+  const source = sourceByScript(seg.src, names) ?? (await r.translator.identify(seg.src, names).catch(() => 'other'));
+  if (seg.rev !== rev) return;
+  seg.lang = r.langs.find((l) => l.name === source)?.code ?? 'other';
+  const targets = targetsFor(r, source);
+  // Lines already showing a translation of the text in progress are swapped once, when complete.
+  const kept = !setTargets(seg, targets);
+  const swap = new Set(kept ? targets.filter((code) => seg.lines.get(code)?.lastChild.textContent) : []);
+  await Promise.all(targets.map((code) => translateLine(r, seg, rev, code, swap.has(code))));
+}
+
+async function translateLine(r, seg, rev, code, swapWhenDone) {
+  const history = recentHistory(r, code);
+  const shown = () => seg.rev === rev && seg.el.isConnected;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const out = await r.translator.translate(seg.src, {
+        history,
+        into: langName(code),
+        onDelta: (partial) => {
+          if (shown() && !swapWhenDone) setLine(seg, code, partial);
+        },
+      });
+      if (seg.rev !== rev) return;
+      seg.tgts.find((x) => x.lang === code).text = out;
+      seg.tgt = seg.tgts
+        .map((x) => x.text)
+        .filter(Boolean)
+        .join('\n');
+      if (shown()) setLine(seg, code, out);
+      markDirty(r.session);
+      return;
+    } catch (err) {
+      if (err instanceof RateLimitError && attempt < 3) {
+        await new Promise((res) => setTimeout(res, 1500 * 2 ** attempt));
+        continue;
+      }
+      if (shown()) setLine(seg, code, errorText(err), 'error');
       return;
     }
   }

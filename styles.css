@@ -892,6 +892,32 @@ input[type="range"] {
   font-weight: var(--base-text-weight-normal);
   font-size: 0.8em;
 }
+/* With a third language: one line per translation, each led by a Label with its language. */
+.seg .tgt.multi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-4);
+}
+.tgt-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--base-size-8);
+}
+.tgt-line .lang-tag {
+  font-weight: var(--base-text-weight-normal);
+}
+.tgt-text {
+  min-width: 0;
+}
+.seg .tgt-line.pending .tgt-text {
+  color: var(--fgColor-muted);
+  font-weight: var(--base-text-weight-normal);
+}
+.seg .tgt-line.error .tgt-text {
+  color: var(--fgColor-danger);
+  font-weight: var(--base-text-weight-normal);
+  font-size: 0.8em;
+}
 @media (min-width: 820px) {
   .seg {
     grid-template-columns: auto 1fr 1fr;
@@ -985,9 +1011,13 @@ input[type="range"] {
   font-size: 0.8em;
   font-weight: var(--base-text-weight-normal);
 }
+/* With a third language, the source goes once any line holds a translation. */
+.now.tgt-only .seg:has(.tgt-line:not(.error)) .src {
+  display: none;
+}
 /* Translation only: a sentence shows its source until its translation (or an error) arrives, so
    the zone is never blank. */
-.now.tgt-only .seg:has(.tgt:not(:empty):not(.error)) .src,
+.now.tgt-only .seg:has(.tgt:not(:empty):not(.error):not(.multi)) .src,
 .now.tgt-only .seg .tgt:empty {
   display: none;
 }

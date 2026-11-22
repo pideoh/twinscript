@@ -43,6 +43,10 @@ Each release also has a `SHA256SUMS.txt` to check the download against. See the 
 2. Open Twinscript, open the settings (gear button, top right), enter the key and save.
 3. Choose the two languages and the audio input, then press "Start translating".
 
+For a meeting in three languages, pick one more in the third language menu ("+ Add a language"). Every sentence is then
+translated into the other two, each translation on its own line with a tag for its language, and speech in a language
+that is none of the three is translated into all three. Choose "+ Add a language" again to go back to two languages.
+
 ### Audio input
 
 - **Microphone**: for a meeting in the room.
@@ -79,7 +83,7 @@ In a browser the caption window is a picture-in-picture window, which is always 
 
 "Read translations aloud" in settings speaks each finished translation into the language you choose (or into both)
 with the voices of your operating system; sentences still being spoken are not read. It takes effect at once, also
-while listening. It needs two languages with different writing systems (such as Japanese and English), because that
+while listening. It is not available with a third language. It needs two languages with different writing systems (such as Japanese and English), because that
 is how the app tells which language a translation is in. Use headphones: from speakers, the microphone picks up the
 voice and transcribes it again.
 
@@ -120,6 +124,8 @@ Twinscript may use it, choose "Always Allow"; the app uses it only to read and s
 - **Free tier**: both models work on it. It is rate-limited.
 - **Paid tier** (a key linked to Google Cloud billing): transcription costs about $0.009 per minute (about $0.54 per hour)
   plus a small token fee for translation. What you send is not used for training.
+- With a third language, every sentence is translated into two languages, so translation requests (and their token fee)
+  double.
 
 These are the prices at the time of writing; Google's [pricing page](https://ai.google.dev/gemini-api/docs/pricing) has the current ones.
 
@@ -128,6 +134,10 @@ These are the prices at the time of writing; Google's [pricing page](https://ai.
 - It cannot tell speakers apart (who said what).
 - A transcription session lasts at most 10 minutes, so the app switches to a new connection in the background, at a pause in speech.
 - When the free tier hits its rate limit, translation of sentences in progress pauses for a minute; finished sentences are still translated.
+- With a third language, the language of a sentence is told from its writing system. Languages that share it with
+  another selected one (such as English and French, or Simplified and Traditional Chinese) are told apart by the
+  translation model, which takes one more request for such a sentence. A language that is not selected but is written
+  like a selected one (French when only English uses the Latin alphabet) is taken for that one.
 - Recordings (WebM) carry no duration information, so some players cannot seek in them.
 
 ## How it works
