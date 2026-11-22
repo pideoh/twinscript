@@ -5,12 +5,14 @@ English | [日本語](README.ja.md)
 A desktop app for macOS and Windows that transcribes a meeting in real time and translates it between two languages.
 Choose two languages and press "Start translating": Twinscript detects which one is being spoken, writes it down and shows the translation beside it.
 
-![Twinscript showing a Japanese and English meeting side by side](docs/screenshot.png)
+![A Japanese and English meeting turning into text as it is spoken, with the translation next to it](docs/demo.png)
 
 - **Two-way**: speak in either language; no switching.
 - **Hears the meeting**: transcribes the microphone, the audio playing on the computer (the other participants in Zoom, Teams, Meet), or both.
 - **Captions on top**: a caption window that stays above slides and meeting apps, including full screen.
 - **Keeps a record**: sessions are saved with their audio, and transcripts export with a timeline as text, Markdown, CSV or SRT.
+- **Summary after the meeting**: an AI summary of a finished session with an overview, key points, decisions and action items.
+- **Better with names**: register company and product names as terms, and correct mishearings with `wrong => right` rules.
 - The interface is available in English, Japanese and Simplified Chinese.
 
 ## Install
@@ -36,7 +38,7 @@ Each release also has a `SHA256SUMS.txt` to check the download against. See the 
 
 ## Get started
 
-1. Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/apikey).
+1. Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/apikey) ([step by step](docs/api-key.md)).
 2. Open Twinscript, open the settings (gear button, top right), enter the key and save.
 3. Choose the two languages and the audio input, then press "Start translating".
 
