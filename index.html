@@ -26,6 +26,7 @@
         <span class="select-wrap"><select id="langA" class="select" aria-label="Language 1" data-i18n-aria-label="header.langA"></select></span>
         <button id="swap" class="icon-btn" title="Swap" aria-label="Swap languages" data-i18n-title="header.swap.title" data-i18n-aria-label="header.swap.label"><svg class="octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M5.22 14.78a.75.75 0 0 0 1.06-1.06L4.56 12h8.69a.75.75 0 0 0 0-1.5H4.56l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3a.75.75 0 0 0 0 1.06l3 3Zm5.56-6.5a.75.75 0 1 1-1.06-1.06l1.72-1.72H2.75a.75.75 0 0 1 0-1.5h8.69L9.72 2.28a.75.75 0 0 1 1.06-1.06l3 3a.75.75 0 0 1 0 1.06l-3 3Z"/></svg></button>
         <span class="select-wrap"><select id="langB" class="select" aria-label="Language 2" data-i18n-aria-label="header.langB"></select></span>
+        <span class="select-wrap"><select id="langC" class="select" aria-label="Language 3" data-i18n-aria-label="header.langC"></select></span>
       </div>
       <div class="tools">
         <span class="select-wrap"><select id="source" class="select" aria-label="Audio input" data-i18n-aria-label="header.source">
@@ -132,7 +133,7 @@
           <label class="check"><input id="smart" type="checkbox"> <span data-i18n="settings.smart">Clean up the transcript (removes fillers; sentences may take a little longer to finalize)</span></label>
           <label class="check"><input id="record" type="checkbox"> <span data-i18n="settings.record">Record and save the audio (in this browser on this device; about 15 MB per hour)</span></label>
         </div>
-        <label class="form-control"><span class="form-label" data-i18n="settings.otherInto">When a language other than these two is spoken, translate into</span>
+        <label id="otherIntoField" class="form-control"><span class="form-label" data-i18n="settings.otherInto">When a language other than these two is spoken, translate into</span>
           <span class="select-wrap"><select id="otherInto" class="select"><option value="A"></option><option value="B"></option></select></span>
         </label>
         <label id="readAloudField" class="form-control"><span class="form-label" data-i18n="settings.readAloud">Read translations aloud</span>
@@ -143,6 +144,7 @@
             <option value="both" data-i18n="settings.readAloud.both">Both directions</option>
           </select></span>
           <small id="readAloudUnavailable" class="caption" data-i18n="settings.readAloud.unavailable" hidden>Not available for this language pair: both languages use the same writing system, so the language of a translation cannot be told.</small>
+          <small id="readAloudUnavailableThree" class="caption" data-i18n="settings.readAloud.unavailableThree" hidden>Not available while a third language is selected: reading aloud works with two languages only.</small>
           <small class="caption" data-i18n="settings.readAloud.help">Finished sentences are read with your system’s voices. Use headphones: from speakers, the microphone would pick up the voice and transcribe it again.</small>
         </label>
         <label class="form-control"><span class="form-label"><span data-i18n="settings.interimInterval">Interval for re-translating a sentence in progress</span> <output id="interimIntervalOut"></output></span>

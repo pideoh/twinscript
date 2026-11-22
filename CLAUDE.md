@@ -12,15 +12,15 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/app.js` | UI, settings, saved sessions (list / switch), start / stop, translation flow, downloads |
 | `src/segmenter.js` | Turns recognizer results (interim / final) into sentence-sized segments. DOM-free |
 | `src/transcriber.js` | Gemini Live API (`gemini-3.5-transcribe-live`) WebSocket, reconnects, rotation before the 10-minute session limit |
-| `src/translator.js` | Streaming translation with `gemini-3.5-flash-lite` |
-| `src/script-hint.js` | Writing-system hints: which way a transcript is translated (`targetByScript`), which of the two languages a translation is in (`languageByScript`), whether a pair can be told apart (`scriptsDiffer`). Pure functions |
+| `src/translator.js` | Streaming translation with `gemini-3.5-flash-lite`; `into` fixes the target language, `identify` asks which language a sentence is in (three-language sessions) |
+| `src/script-hint.js` | Writing-system hints: which way a transcript is translated (`targetByScript`), which of the selected languages it is in (`sourceByScript`, `languageByScript`), whether a pair can be told apart (`scriptsDiffer`). Pure functions |
 | `src/read-aloud.js` | Reads finished translations aloud with the system's speech synthesis: a short queue that drops the oldest waiting sentence, voice choice, language-code mapping. DOM-free, synthesizer injected |
 | `src/vocabulary.js` | Parses the "Terms and corrections" setting into recognizer terms (max 1,000) and `wrong => right` rules, and applies the rules to recognized text. Pure functions |
 | `src/summarizer.js` | Summary of a finished session (overview, key points, decisions, action items) as structured JSON from the translation model. DOM-free |
 | `src/audio.js`, `src/pcm-worklet.js` | Microphone / tab audio capture, 16 kHz PCM in 100 ms chunks, mix for recording |
 | `src/auto-gain.js` | Raises quiet PC audio to a usable level (not applied to the microphone). Pure class |
 | `src/recorder.js` | Records with MediaRecorder, handing over a chunk every 5 seconds |
-| `src/store.js` | IndexedDB: `sessions` (with transcripts) and `audio` (recording chunks) |
+| `src/store.js` | IndexedDB: `sessions` (with transcripts) and `audio` (recording chunks). Three-language sessions add `langC` and, per segment, `lang` and `tgts`; `tgt` stays the translations joined by line breaks |
 | `src/secrets.js` | Where the API key is kept (desktop: `window.secretStore`; browser: memory only). DOM-free |
 | `src/exporter.js` | Transcript export (txt / md / csv / srt). Pure functions |
 | `src/mock.js` | Stand-in engines for the `?mock=1` demo |

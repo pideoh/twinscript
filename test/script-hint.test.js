@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { languageByScript, scriptClass, scriptsDiffer, targetByScript } from '../src/script-hint.js';
+import { languageByScript, scriptClass, scriptsDiffer, sourceByScript, targetByScript } from '../src/script-hint.js';
 
 const jaEn = { langA: 'Japanese', langB: 'English', otherInto: 'Japanese' };
 
@@ -64,4 +64,35 @@ test('reading aloud is possible only for two languages with different writing sy
   assert.equal(scriptsDiffer('Korean', 'Thai'), true);
   assert.equal(scriptsDiffer('English', 'French'), false);
   assert.equal(scriptsDiffer('Simplified Chinese', 'Traditional Chinese'), false);
+});
+
+const jaEnZh = ['Japanese', 'English', 'Simplified Chinese'];
+
+test('with three languages, each is recognized by its writing system', () => {
+  assert.equal(sourceByScript('それでは会議を始めます。', jaEnZh), 'Japanese');
+  assert.equal(sourceByScript("Let's begin the meeting.", jaEnZh), 'English');
+  assert.equal(sourceByScript('我们这一代人要为未来思考', jaEnZh), 'Simplified Chinese');
+  assert.equal(sourceByScript('Kubernetes の設定を見直します', jaEnZh), 'Japanese', 'kana decides');
+});
+
+test('with three languages, speech in a fourth writing system is another language', () => {
+  assert.equal(sourceByScript('और यह है छोटे सिंक्रोनस मोटर।', jaEnZh), 'other');
+  assert.equal(sourceByScript('안녕하세요, 회의를 시작하겠습니다', jaEnZh), 'other');
+  assert.equal(sourceByScript('مرحبا بكم جميعا', jaEnZh), 'other');
+});
+
+test('with three languages, a language written like a selected one counts as that one', () => {
+  assert.equal(sourceByScript('Bonjour à tous et bienvenue', jaEnZh), 'English');
+});
+
+test('with three languages, the model is asked when the writing system does not tell', () => {
+  assert.equal(sourceByScript('你好', jaEnZh), null, 'too short');
+  assert.equal(sourceByScript('東京都知事', jaEnZh), null, 'a few Han characters could be Japanese');
+  assert.equal(sourceByScript('会議 mtg 会議', jaEnZh), null, 'mixed');
+  assert.equal(sourceByScript('', jaEnZh), null);
+  const latin = ['Japanese', 'English', 'French'];
+  assert.equal(sourceByScript('Bonjour à tous et bienvenue', latin), null, 'two selected languages share it');
+  assert.equal(sourceByScript('それでは会議を始めます。', latin), 'Japanese');
+  const han = ['English', 'Simplified Chinese', 'Traditional Chinese'];
+  assert.equal(sourceByScript('我们这一代人要为未来思考', han), null);
 });

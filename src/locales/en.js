@@ -18,6 +18,8 @@ export default {
   'header.menu': 'Sessions',
   'header.langA': 'Language 1',
   'header.langB': 'Language 2',
+  'header.langC': 'Language 3',
+  'header.langC.none': '+ Add a language',
   'header.swap.title': 'Swap',
   'header.swap.label': 'Swap languages',
   'header.source': 'Audio input',
@@ -115,6 +117,8 @@ export default {
   'settings.readAloud.off': 'Off',
   'settings.readAloud.into': 'Translations into {lang}',
   'settings.readAloud.both': 'Both directions',
+  'settings.readAloud.unavailableThree':
+    'Not available while a third language is selected: reading aloud works with two languages only.',
   'settings.readAloud.help':
     'Finished sentences are read with your system’s voices. Use headphones: from speakers, the microphone would pick up the voice and transcribe it again.',
   'settings.readAloud.unavailable':

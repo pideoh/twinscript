@@ -65,4 +65,43 @@ for (const colorScheme of ['light', 'dark']) {
     assert.deepEqual(errors, []);
     await close();
   });
+
+  test(`a transcript in three languages passes the accessibility checks in the ${colorScheme} theme`, async () => {
+    const { page, errors, close } = await openApp(
+      '',
+      { apiKey: 'test-key', langC: 'cmn-Hans-CN', interimInterval: 0.5 },
+      undefined,
+      { colorScheme },
+    );
+    await assertAccessible(page, 'main screen with a third language, idle');
+
+    await page.click('#openSettings');
+    await assertAccessible(page, 'settings dialog with a third language');
+    await page.click('#settings button[value=ok]');
+
+    await mockGemini(page, [
+      [3, 'final', 'One is done.'],
+      [5, 'final', 'それでは会議を始めます。'],
+      [7, 'interim', '我们这一代人要为'],
+    ]);
+    await page.click('#toggle');
+    // Two finished rows with two translations each, and one in progress in the caption zone.
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('.seg:not(.live) .tgt-line').length === 4 &&
+        document.querySelectorAll('.seg.live .tgt-line.pending').length === 2,
+    );
+    await assertAccessible(page, 'caption zone with a third language');
+    await page.click('#toggle');
+    // The sentence in progress is kept as a finished one when listening stops.
+    await page.waitForFunction(
+      () =>
+        document.querySelectorAll('#log .seg').length === 3 &&
+        document.querySelectorAll('#log .tgt-line:not(.pending)').length === 6,
+    );
+    await assertAccessible(page, 'main screen with a transcript in three languages');
+
+    assert.deepEqual(errors, []);
+    await close();
+  });
 }
