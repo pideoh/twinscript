@@ -121,3 +121,20 @@ test('without rules the text is unchanged', () => {
   assert.equal(applyReplacements('hello', []), 'hello');
   assert.equal(applyReplacements('', [{ from: 'a', to: 'b' }]), '');
 });
+
+test('a correction is not applied again to text that is already correct', () => {
+  // The recognizer is also given the corrected form as a term, so it may already write it.
+  const rules = [{ from: 'こんにちわ', to: 'こんにちわんこ' }];
+  assert.equal(applyReplacements('こんにちわんこ。', rules), 'こんにちわんこ。');
+  assert.equal(applyReplacements('こんにちわ。こんにちわんこ。', rules), 'こんにちわんこ。こんにちわんこ。');
+  assert.equal(
+    applyReplacements('use kube and Kubernetes', [{ from: 'kube', to: 'Kubernetes' }]),
+    'use Kubernetes and Kubernetes',
+  );
+  // A corrected form that another rule names as wrong is still corrected.
+  const chain = [
+    { from: 'a1', to: 'b2' },
+    { from: 'b2', to: 'c3' },
+  ];
+  assert.equal(applyReplacements('b2', chain), 'c3');
+});

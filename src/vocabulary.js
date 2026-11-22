@@ -36,17 +36,27 @@ const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Replaces every occurrence of each rule's `from` (literal, case-insensitive) with its `to`.
 // Longer `from` values win where rules overlap; otherwise rules keep their order. All matches are
-// found in one pass, so text inserted by one rule is never rewritten by another.
+// found in one pass, so text inserted by one rule is never rewritten by another. Text that is
+// already a rule's `to` is left alone even when it contains the `from` (the recognizer is given
+// `to` as a term, so it may write the corrected form itself).
 export function applyReplacements(text, rules) {
   if (!text || !rules?.length) return text;
-  const ordered = rules
-    .map((rule, i) => ({ ...rule, i }))
-    .filter((rule) => rule.from)
-    .sort((a, b) => b.from.length - a.from.length || a.i - b.i);
-  if (!ordered.length) return text;
-  const pattern = new RegExp(ordered.map((rule) => `(${escapeRegExp(rule.from)})`).join('|'), 'giu');
-  return text.replace(pattern, (...match) => {
-    const groups = match.slice(1, ordered.length + 1);
-    return ordered[groups.findIndex((g) => g !== undefined)].to;
+  const wrong = rules.filter((rule) => rule.from);
+  if (!wrong.length) return text;
+  const lower = (s) => s.toLowerCase();
+  const froms = wrong.map((rule) => lower(rule.from));
+  const correct = [...new Set(wrong.map((rule) => rule.to))].filter(
+    (to) => !froms.includes(lower(to)) && froms.some((from) => lower(to).includes(from)),
+  );
+  const ordered = [
+    ...wrong.map((rule) => ({ match: rule.from, to: rule.to })),
+    ...correct.map((to) => ({ match: to })), // matched and kept as written
+  ]
+    .map((entry, i) => ({ ...entry, i }))
+    .sort((a, b) => b.match.length - a.match.length || a.i - b.i);
+  const pattern = new RegExp(ordered.map((entry) => `(${escapeRegExp(entry.match)})`).join('|'), 'giu');
+  return text.replace(pattern, (found, ...rest) => {
+    const entry = ordered[rest.slice(0, ordered.length).findIndex((g) => g !== undefined)];
+    return entry.to ?? found;
   });
 }

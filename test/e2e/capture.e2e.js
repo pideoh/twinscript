@@ -106,6 +106,19 @@ test('terms and corrections from settings reach the recognizer and fix the trans
   );
   assert.deepEqual(setupMsg.inputAudioTranscription.customVocabulary, ['Kubernetes', 'Twinscript']);
   await page.click('#toggle');
+
+  // A rule changed while stopped applies when the same session is started again.
+  await page.click('#openSettings');
+  await page.fill('#vocabulary', 'twin script => TWINSCRIPT');
+  await page.click('#settings button[value=ok]');
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.querySelector('.seg.live .src')?.textContent === 'TWINSCRIPT');
+  assert.deepEqual(
+    (await rows(page)).filter((r) => !r.live).map((r) => r.src),
+    ['We use Twinscript for meetings.', 'Twinscript', 'We use TWINSCRIPT for meetings.'],
+    'earlier rows, including the one cut off by stopping, keep the text they had',
+  );
+  await page.click('#toggle');
   assert.deepEqual(errors, []);
   await close();
 });
