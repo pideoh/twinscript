@@ -45,10 +45,13 @@ export class GeminiTranslator {
   }
 
   // history: [{src, tgt}], onDelta(fullTextSoFar). Resolves with the full translation.
-  async translate(text, { history = [], onDelta, signal } = {}) {
+  // onTarget(language) is told the language the model was told to translate into, or null when
+  // the model was left to pick the direction itself.
+  async translate(text, { history = [], onDelta, onTarget, signal } = {}) {
     const context = history.map((h) => `${plain(h.src)}\n=> ${plain(h.tgt)}`).join('\n');
     // Where the writing system settles the direction, the model is told instead of asked.
     const into = targetByScript(text, this.langs);
+    onTarget?.(into);
     const prompt = `${context ? `<context>\n${context}\n</context>\n` : ''}<text>\n${plain(text)}\n</text>`;
     const body = {
       systemInstruction: { parts: [{ text: this.#system(into) }] },
@@ -69,7 +72,7 @@ export class GeminiTranslator {
       if (res.status === 400 && this.useThinkingConfig && /thinking/i.test(detail)) {
         // This model doesn't take the thinking option; drop it for good.
         this.useThinkingConfig = false;
-        return this.translate(text, { history, onDelta, signal });
+        return this.translate(text, { history, onDelta, onTarget, signal });
       }
       if (res.status === 429) throw new RateLimitError('error.rateLimit');
       let message = detail;

@@ -4,7 +4,9 @@ import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocal
 import { octicon } from './icons.js';
 import { MessageError } from './message-error.js';
 import { MockSummarizer, MockTranscriber, MockTranslator } from './mock.js';
+import { ReadAloud } from './read-aloud.js';
 import { canRecord, Recorder } from './recorder.js';
+import { languageByScript, scriptsDiffer } from './script-hint.js';
 import { loadApiKey, saveApiKey } from './secrets.js';
 import { UtteranceTracker } from './segmenter.js';
 import { store } from './store.js';
@@ -44,6 +46,7 @@ const DEFAULTS = {
   vocabulary: '', // terms for the recognizer and `wrong => right` corrections, one per line
   fontSize: 18,
   otherInto: 'A', // which of the two languages a third language is translated into
+  readAloud: 'off', // 'off', 'A', 'B' or 'both': translations into which language are read aloud
   captionItems: 3, // sentences kept in the caption zone, including the one being spoken
   captionContent: 'both', // 'both' or 'tgt' (translation only) in the caption zone
   captionFontSize: 20, // text size while the caption zone is in the caption window
@@ -100,6 +103,9 @@ const els = Object.fromEntries(
     'vocabulary',
     'fontSize',
     'otherInto',
+    'readAloud',
+    'readAloudField',
+    'readAloudUnavailable',
     'captionItems',
     'captionItemsOut',
     'captionContent',
@@ -156,6 +162,7 @@ function saveSettings() {
 const { settings, legacyKey } = loadSettings();
 let { key: apiKey, storage: keyStorage } = await loadApiKey(window.secretStore, legacyKey);
 if (legacyKey !== undefined) saveSettings();
+const reader = new ReadAloud(); // reads finished translations aloud
 let captionWindow = null; // always-on-top caption window, when open
 let languageNames = null; // Intl.DisplayNames for the UI language
 
@@ -185,6 +192,7 @@ function relocalize() {
   for (const sel of [els.langA, els.langB]) for (const o of sel.options) o.text = langLabel(o.value);
   els.uiLang.options[0].text = t('settings.uiLang.auto');
   fillOtherInto();
+  fillReadAloud();
   showTuning();
   showKeyStorage();
   setStatus(statusState);
@@ -237,14 +245,17 @@ function onLangChange(changed, other) {
   if (changed.value === other.value) other.value = LANGS.find((l) => l.code !== changed.value).code;
   langsChanged();
 }
-// The choice for a third language is stored as a side (A / B) but means a language, so it
-// follows that language when the two change places.
+// The choices for a third language and for reading aloud are stored as a side (A / B) but mean
+// a language, so they follow that language when the two change places.
 function setLangs(a, b) {
-  const target = settings.otherInto === 'B' ? settings.langB : settings.langA;
+  const langOf = (side) => ({ A: settings.langA, B: settings.langB })[side];
+  const sideOf = (lang, side) => (lang === a ? 'A' : lang === b ? 'B' : side);
+  const target = langOf(settings.otherInto) ?? settings.langA;
+  const spoken = langOf(settings.readAloud);
   settings.langA = a;
   settings.langB = b;
-  if (target === a) settings.otherInto = 'A';
-  else if (target === b) settings.otherInto = 'B';
+  settings.otherInto = sideOf(target, settings.otherInto);
+  if (spoken) settings.readAloud = sideOf(spoken, settings.readAloud);
 }
 function langsChanged() {
   setLangs(els.langA.value, els.langB.value);
@@ -280,6 +291,7 @@ function openSettings() {
   els.uiLang.value = settings.uiLang;
   fillOtherInto();
   els.otherInto.value = settings.otherInto;
+  fillReadAloud();
   els.captionItems.value = settings.captionItems;
   els.interimInterval.value = settings.interimInterval;
   els.captionContent.value = settings.captionContent;
@@ -299,6 +311,24 @@ function fillOtherInto() {
   els.otherInto.options[0].text = t('settings.otherInto.left', { lang: langLabel(settings.langA) });
   els.otherInto.options[1].text = t('settings.otherInto.right', { lang: langLabel(settings.langB) });
 }
+// Reading aloud needs the language of each translation, which only the writing system tells.
+const canReadAloudPair = () =>
+  scriptsDiffer(LANGS.find((l) => l.code === settings.langA).name, LANGS.find((l) => l.code === settings.langB).name);
+function fillReadAloud() {
+  els.readAloudField.hidden = !reader.available;
+  els.readAloud.options[1].text = t('settings.readAloud.into', { lang: langLabel(settings.langA) });
+  els.readAloud.options[2].text = t('settings.readAloud.into', { lang: langLabel(settings.langB) });
+  els.readAloud.value = settings.readAloud;
+  const possible = canReadAloudPair();
+  els.readAloud.disabled = !possible;
+  els.readAloudUnavailable.hidden = possible;
+}
+// Applies at once, also while listening.
+els.readAloud.onchange = () => {
+  settings.readAloud = els.readAloud.value;
+  if (settings.readAloud === 'off') reader.stop();
+  saveSettings();
+};
 els.fontSize.oninput = () => {
   settings.fontSize = Number(els.fontSize.value);
   applyFontSize();
@@ -455,6 +485,7 @@ function flushSaves() {
 window.addEventListener('pagehide', flushSaves);
 
 function showSession(sess) {
+  reader.stop();
   current = sess;
   try {
     localStorage.setItem('rt-current', sess.id);
@@ -999,6 +1030,7 @@ async function start() {
   sess.langB = langB.code;
   const r = {
     session: sess,
+    langs: [langA, langB], // what the translator was given, whatever the selects say later
     baseMs: sess.activeMs,
     startedAt: 0,
     interim: { busy: false, lastAt: 0, pausedUntil: 0, timer: null, text: '' },
@@ -1117,6 +1149,7 @@ function stop() {
   const r = run;
   if (!r) return;
   r.transcriber?.stop();
+  reader.stop();
   r.tracker.flush(); // keep whatever was heard so far instead of dropping it
   if (live) {
     live.el.remove();
@@ -1247,16 +1280,21 @@ async function translateFinal(r, seg) {
   const swapWhenDone = !!seg.tgtEl.textContent;
   for (let attempt = 0; ; attempt++) {
     try {
+      let target = null;
       const out = await r.translator.translate(seg.src, {
         history,
         onDelta: (partial) => {
           if (shown() && !swapWhenDone) setText(seg, 'tgt', partial);
+        },
+        onTarget: (language) => {
+          target = language;
         },
       });
       if (seg.rev !== rev) return;
       seg.tgt = out;
       if (shown()) setText(seg, 'tgt', out);
       markDirty(r.session);
+      if (!seg.spoken) seg.spoken = readTranslation(r, out, target);
       return;
     } catch (err) {
       if (err instanceof RateLimitError && attempt < 3) {
@@ -1267,6 +1305,21 @@ async function translateFinal(r, seg) {
       return;
     }
   }
+}
+
+// Reads a finished translation aloud when it is in a language the user chose. Its language comes
+// from its writing system, else from what the translator was told to translate into; when neither
+// settles it, it is not read. Returns whether it was read.
+function readTranslation(r, text, target) {
+  if (run !== r || settings.readAloud === 'off' || !reader.available) return false;
+  const [a, b] = r.langs;
+  if (!scriptsDiffer(a.name, b.name)) return false;
+  const name = languageByScript(text, a.name, b.name) ?? target;
+  const lang = r.langs.find((l) => l.name === name);
+  const wanted = { A: [settings.langA], B: [settings.langB], both: [settings.langA, settings.langB] };
+  if (!lang || !wanted[settings.readAloud]?.includes(lang.code)) return false;
+  reader.speak(text, lang.code);
+  return true;
 }
 
 // ---------- startup ----------

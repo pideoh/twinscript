@@ -13,7 +13,8 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/segmenter.js` | Turns recognizer results (interim / final) into sentence-sized segments. DOM-free |
 | `src/transcriber.js` | Gemini Live API (`gemini-3.5-transcribe-live`) WebSocket, reconnects, rotation before the 10-minute session limit |
 | `src/translator.js` | Streaming translation with `gemini-3.5-flash-lite` |
-| `src/script-hint.js` | Decides the translation direction from the writing system of the text where that settles it (e.g. Chinese or Hindi in a Japanese-English meeting). Pure functions |
+| `src/script-hint.js` | Writing-system hints: which way a transcript is translated (`targetByScript`), which of the two languages a translation is in (`languageByScript`), whether a pair can be told apart (`scriptsDiffer`). Pure functions |
+| `src/read-aloud.js` | Reads finished translations aloud with the system's speech synthesis: a short queue that drops the oldest waiting sentence, voice choice, language-code mapping. DOM-free, synthesizer injected |
 | `src/vocabulary.js` | Parses the "Terms and corrections" setting into recognizer terms (max 1,000) and `wrong => right` rules, and applies the rules to recognized text. Pure functions |
 | `src/summarizer.js` | Summary of a finished session (overview, key points, decisions, action items) as structured JSON from the translation model. DOM-free |
 | `src/audio.js`, `src/pcm-worklet.js` | Microphone / tab audio capture, 16 kHz PCM in 100 ms chunks, mix for recording |
