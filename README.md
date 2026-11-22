@@ -10,6 +10,7 @@ Choose two languages and press "Start translating": Twinscript detects which one
 - **Two-way**: speak in either language; no switching.
 - **Hears the meeting**: transcribes the microphone, the audio playing on the computer (the other participants in Zoom, Teams, Meet), or both.
 - **Captions on top**: a caption window that stays above slides and meeting apps, including full screen.
+- **Reads translations aloud**: finished translations can be spoken with your system's voices.
 - **Keeps a record**: sessions are saved with their audio, and transcripts export with a timeline as text, Markdown, CSV or SRT.
 - **Summary after the meeting**: an AI summary of a finished session with an overview, key points, decisions and action items.
 - **Better with names**: register company and product names as terms, and correct mishearings with `wrong => right` rules.
@@ -73,6 +74,14 @@ The "Captions" group in settings changes it while you listen:
   with the mouse; hide it with the caption window button or the shortcut below.
 
 In a browser the caption window is a picture-in-picture window, which is always opaque, so only the first two apply.
+
+### Reading translations aloud
+
+"Read translations aloud" in settings speaks each finished translation into the language you choose (or into both)
+with the voices of your operating system; sentences still being spoken are not read. It takes effect at once, also
+while listening. It needs two languages with different writing systems (such as Japanese and English), because that
+is how the app tells which language a translation is in. Use headphones: from speakers, the microphone picks up the
+voice and transcribes it again.
 
 ### Shortcuts
 

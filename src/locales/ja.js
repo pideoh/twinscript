@@ -110,6 +110,13 @@ export default {
   'settings.otherInto': '選んだ2言語以外が話されたときの訳し先',
   'settings.otherInto.left': '{lang}（左の言語）',
   'settings.otherInto.right': '{lang}（右の言語）',
+  'settings.readAloud': '訳文の読み上げ',
+  'settings.readAloud.off': 'オフ',
+  'settings.readAloud.into': '{lang}への訳文',
+  'settings.readAloud.both': '両方向',
+  'settings.readAloud.help':
+    '確定した文をシステムの音声で読み上げます。ヘッドホンを使ってください。スピーカーから流すとマイクが音声を拾い、もう一度文字起こしされてしまいます。',
+  'settings.readAloud.unavailable': 'この2言語は同じ文字を使うため訳文の言語を判別できず、読み上げは使えません。',
   'settings.captionItems': '下の欄に残す文数',
   'settings.captionItems.help': '話している文を含む数です。増やすと読み返しやすくなり、欄は高くなります。',
   'settings.captionItems.one': '{n} 文',

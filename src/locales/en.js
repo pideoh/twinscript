@@ -111,6 +111,14 @@ export default {
   'settings.otherInto': 'When a language other than these two is spoken, translate into',
   'settings.otherInto.left': '{lang} (left language)',
   'settings.otherInto.right': '{lang} (right language)',
+  'settings.readAloud': 'Read translations aloud',
+  'settings.readAloud.off': 'Off',
+  'settings.readAloud.into': 'Translations into {lang}',
+  'settings.readAloud.both': 'Both directions',
+  'settings.readAloud.help':
+    'Finished sentences are read with your system’s voices. Use headphones: from speakers, the microphone would pick up the voice and transcribe it again.',
+  'settings.readAloud.unavailable':
+    'Not available for this language pair: both languages use the same writing system, so the language of a translation cannot be told.',
   'settings.captionItems': 'Sentences kept in the area below',
   'settings.captionItems.help':
     'This includes the sentence being spoken. More is easier to re-read, and the area gets taller.',

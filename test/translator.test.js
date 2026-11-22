@@ -152,3 +152,16 @@ test('speech in a third writing system is sent with the language to translate in
     /any other language, translate it into Japanese, never into English/,
   );
 });
+
+test('the caller learns which language the translation was asked to be in', async () => {
+  stubFetch(
+    () => new Response(sse('ok'), { status: 200 }),
+    () => new Response(sse('ok'), { status: 200 }),
+  );
+  const tr = make();
+  const targets = [];
+  const out = await tr.translate('それでは会議を始めます。', { onTarget: (lang) => targets.push(lang) });
+  assert.equal(out, 'ok', 'the result is still the translation');
+  await tr.translate('OK', { onTarget: (lang) => targets.push(lang) });
+  assert.deepEqual(targets, ['English', null], 'null when the model picks the direction');
+});

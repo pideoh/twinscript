@@ -62,3 +62,16 @@ export function targetByScript(text, { langA, langB, otherInto }) {
   if (SHARED.has(cls) && otherInto === written) return null;
   return other;
 }
+
+// Whether text in langA can be told from text in langB by its writing system alone.
+export const scriptsDiffer = (langA, langB) => scriptOf(langA) !== scriptOf(langB);
+
+// Which of the two languages `text` is written in (langA or langB), or null when the writing
+// system does not settle it (both languages share it, or the text is short or mixed).
+export function languageByScript(text, langA, langB) {
+  if (!scriptsDiffer(langA, langB)) return null;
+  const cls = scriptClass(text);
+  if (cls === scriptOf(langA)) return langA;
+  if (cls === scriptOf(langB)) return langB;
+  return null;
+}
