@@ -40,7 +40,7 @@ test('docs, tests, workflows and tooling are not', () => {
       '.github/workflows/release.yml',
       'scripts/screenshots.mjs',
       'biome.json',
-      'docs/screenshot.png',
+      'docs/demo.png',
     ]),
     false,
   );
