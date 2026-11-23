@@ -529,6 +529,12 @@ input[type="range"] {
 .bar .select-wrap {
   flex: 0 1 auto;
 }
+/* Beside the sidebar the header stays on one row: the selects shorten before anything wraps. */
+@media (min-width: 820px) {
+  .bar {
+    flex-wrap: nowrap;
+  }
+}
 
 /* ---------- Sidebar: NavList of saved sessions ---------- */
 #sidebar {
