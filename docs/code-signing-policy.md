@@ -15,8 +15,8 @@ the app is not notarized by Apple, so macOS shows a warning the first time it is
 
 ## Who can publish
 
-Releases are built only from the `main` branch on GitHub-hosted runners. Changes reach `main` only through
-pull requests that pass the required checks, merged by a
+Releases are built only from the `main` branch on GitHub-hosted runners, when a maintainer merges the release
+pull request. Changes reach `main` only through pull requests that pass the required checks, merged by a
 [maintainer](https://github.com/pideoh/twinscript/graphs/contributors) with write access.
 
 ## Privacy policy

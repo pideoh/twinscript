@@ -152,7 +152,8 @@ npm run dist:mac   # dist/ に macOS 用 zip（Apple シリコン / Intel）
 npm run dist:win   # dist/ に Windows 用 zip（x64）
 ```
 
-リリースは、アプリの変更が `main` に入ると自動でビルド・公開されます。
+リリースは、`main` 上で自動的に更新されるリリース用プルリクエストから行います。これをマージすると zip がビルド・公開されます。
+コミットの件名は Conventional Commits に従い、それがバージョンを決めます（[CONTRIBUTING.md](CONTRIBUTING.md) を参照）。
 
 画面はブラウザでも動くので、開発中の確認に使えます。
 

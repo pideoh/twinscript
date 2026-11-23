@@ -26,18 +26,31 @@ npm run test:app   # desktop smoke tests (opens windows)
 - Styling uses the Primer tokens defined at the top of `styles.css` and Octicons; no ad-hoc colors.
 - No new runtime dependencies.
 
-## Commit messages decide the release version
+## Commit messages and releases
 
-Every change to the app that lands on `main` is released automatically (changes to tests, docs, workflows and development tools are not). The version bump is derived
-from the commit subjects since the last release:
+Commit subjects and pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/):
+`type(scope): description`, where the scope is optional. A check on every pull request rejects other forms
+(`scripts/check-commits.js`). The type decides whether a change is released and how the version moves:
 
-| Bump | When | Example |
+| Type | Use for | Released as |
 | --- | --- | --- |
-| major | body contains `BREAKING CHANGE`, or subject is `type!: ...` | saved sessions can no longer be read |
-| minor | subject starts with `Add` or `feat` | `Add a caption window` |
-| patch | anything else | `Fix ...`, wording, defaults |
+| `feat` | a new feature | minor (`0.7.0` → `0.8.0`) |
+| `fix` | a bug fix | patch (`0.7.0` → `0.7.1`) |
+| `perf` | a speed or memory improvement | patch |
+| `revert` | undoing an earlier commit | patch |
+| `docs`, `test`, `build`, `ci`, `chore`, `refactor`, `style` | everything else | not released on its own |
 
-So start a subject with `Add` only when the change adds a feature.
+A breaking change, for example saved sessions that can no longer be read, is marked with `!` after the type
+(`feat!: ...`) or with a `BREAKING CHANGE: ...` footer in the commit body, and is released as a major version.
+
+How a release happens: after each merge to `main`, [release-please](https://github.com/googleapis/release-please)
+opens or updates a pull request named `chore(main): release X.Y.Z` that sets the version in `package.json` and
+adds the `feat`, `fix`, `perf` and `revert` changes to `CHANGELOG.md`. Merging that pull request tags `vX.Y.Z`,
+creates the GitHub release, and builds and uploads the macOS and Windows zips to it.
+
+Dependency updates from Dependabot are committed as `chore(deps): ...` and ship with the next release. To make
+one releasable on its own, for example an Electron security fix, a maintainer can merge it with a
+`fix(deps): ...` title.
 
 ## Adding a display language
 

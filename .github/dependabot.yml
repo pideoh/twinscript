@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # "chore(deps): ..." passes the Conventional Commits check and does not by itself make a release.
+    commit-message:
+      prefix: chore
+      include: scope
     # Only versions that have been out for a week: time for a bad release to be noticed and pulled.
     cooldown:
       default-days: 7
@@ -15,6 +19,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # "chore(deps): ..." / "chore(deps-dev): ...": the update ships with the next release.
+    commit-message:
+      prefix: chore
+      include: scope
     cooldown:
       default-days: 7
     groups:
