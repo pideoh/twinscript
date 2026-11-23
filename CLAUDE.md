@@ -43,6 +43,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `.github/workflows/preview-build.yml` | Started by hand: builds signed zips of a branch as workflow artifacts, to try the app before a release. Publishes nothing |
 | `scripts/check-commits.js` | Checks that a pull request's commit subjects and title follow Conventional Commits (run in `test.yml`) |
 | `scripts/tuning/replay.mjs`, `scripts/tuning/metrics.mjs`, `scripts/tuning/clock.mjs` | Replays a recognizer trace through the segmenter, the pacer and the translator (real, or `--mock` on a simulated clock) and scores first / final delay, flicker and requests. See `docs/tuning.md` |
+| `scripts/tuning/latency.mjs` | Times one short translation request with the app's request options and alternatives, and reports thinking tokens: tells a slow model from a slow strategy |
 | `scripts/sign-mac.js`, `scripts/verify-mac-signature.js`, `scripts/ci-mac-signing-keychain.sh` | macOS releases are re-signed with a fixed self-signed certificate (electron-builder `afterSign` hook) so the app's identity, and the permissions tied to it, survive updates; the check and the CI keychain setup. `.github/workflows/sign-check.yml` exercises this on pull requests |
 
 ## Commands
