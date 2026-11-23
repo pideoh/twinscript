@@ -15,7 +15,7 @@ const SCRIPT = {
 const scriptOf = (language) => SCRIPT[language] ?? 'latin';
 
 const COUNTERS = {
-  kana: /[\p{Script=Hiragana}\p{Script=Katakana}]/gu,
+  kana: /[\p{Script=Hiragana}\p{Script=Katakana}ー]/gu, // with the long-vowel mark
   han: /\p{Script=Han}/gu,
   hangul: /\p{Script=Hangul}/gu,
   thai: /\p{Script=Thai}/gu,
@@ -31,12 +31,13 @@ const DOMINANT = 0.6;
 export function scriptClass(text) {
   const s = String(text ?? '');
   const letters = s.match(/\p{L}/gu)?.length ?? 0;
-  if (letters < MIN_LETTERS) return null;
   const count = (name) => s.match(COUNTERS[name])?.length ?? 0;
   const kana = count('kana');
   const han = count('han');
-  if (kana >= 2) return 'kana'; // Japanese, whatever foreign terms are mixed in
-  if (kana) return null;
+  // Kana is only Japanese, so two of them settle it however short the text is and whatever
+  // foreign terms are mixed in.
+  if (kana >= 2) return 'kana';
+  if (kana || letters < MIN_LETTERS) return null;
   if (han / letters >= DOMINANT) return han >= MIN_HAN_ONLY ? 'han' : null;
   let known = han;
   for (const name of ['hangul', 'thai', 'devanagari', 'latin']) {
