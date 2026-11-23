@@ -22,7 +22,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/audio.js`, `src/pcm-worklet.js` | Microphone / tab audio capture, 16 kHz PCM in 100 ms chunks, mix for recording |
 | `src/auto-gain.js` | Raises quiet PC audio to a usable level (not applied to the microphone). Pure class |
 | `src/recorder.js` | Records with MediaRecorder, handing over a chunk every 5 seconds |
-| `src/store.js` | IndexedDB, version 3: `sessions` (metadata and `segmentCount`, no segments), `segments` (one record per segment, key `[sessionId, pos]`, loaded when a session is opened; a save writes only changed segments), `summaries` (one record per summary, key `[sessionId, id]`) and `audio` (recording chunks). The upgrade from version 1 moves segments out of the session records. Three-language sessions add `langC` and, per segment, `lang` and `tgts`; `tgt` stays the translations joined by line breaks |
+| `src/store.js` | IndexedDB, version 3: `sessions` (metadata and `segmentCount`, no segments), `segments` (one record per segment, key `[sessionId, pos]`, loaded when a session is opened; a save writes only changed segments), `summaries` (one record per summary, key `[sessionId, id]`) and `audio` (recording chunks). The upgrade from version 1 moves segments out of the session records. Three-language sessions add `langC` and, per segment, `lang` and `tgts`; `tgt` stays the translations joined by line breaks. A session's metadata carries its `usage` record |
 | `src/secrets.js` | Where the API key is kept (desktop: `window.secretStore`; browser: memory only). DOM-free |
 | `src/exporter.js` | Transcript export (txt / md / csv / srt). Pure functions |
 | `src/mock.js` | Stand-in engines for the `?mock=1` demo |
@@ -44,8 +44,9 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `.github/workflows/release.yml`, `release-please-config.json`, `.release-please-manifest.json` | release-please keeps a release pull request open on `main`; merging it tags `vX.Y.Z`, creates the GitHub Release, and the workflow builds and uploads the zips |
 | `.github/workflows/preview-build.yml` | Started by hand: builds signed zips of a branch as workflow artifacts, to try the app before a release. Publishes nothing |
 | `scripts/check-commits.js` | Checks that a pull request's commit subjects and title follow Conventional Commits (run in `test.yml`) |
-| `src/pricing.js` | Gemini price table (paid tier, Standard; the block is rewritten by `scripts/update-pricing.mjs`), cost of a usage record, price overrides, USD formatting. Pure, DOM-free. Not wired into the app yet |
-| `src/usage.js` | Versioned usage record (listening time; requests and tokens from `usageMetadata`, thinking counted as output) and its arithmetic. Pure, DOM-free. Not wired into the app yet |
+| `src/pricing.js` | Gemini price table (paid tier, Standard; the block is rewritten by `scripts/update-pricing.mjs`), cost of a usage record, price overrides, USD formatting. Pure, DOM-free |
+| `src/usage.js` | Versioned usage record (listening time; requests and tokens from `usageMetadata`, thinking counted as output) and its arithmetic. Pure, DOM-free |
+| `src/usage-stats.js` | Daily usage totals in `localStorage` (`rt-usage`, kept when sessions are deleted) and the rows of the usage dialog. Pure. `LIVE_MODEL` must follow `MODEL` in `src/transcriber.js` (a unit test checks it) |
 | `scripts/update-pricing.mjs`, `.github/workflows/pricing-check.yml` | Check the price table against Google's pricing page (`--write` to update); the monthly workflow proposes changes as a pull request |
 | `scripts/tuning/replay.mjs`, `scripts/tuning/metrics.mjs`, `scripts/tuning/clock.mjs` | Replays a recognizer trace through the segmenter, the pacer and the translator (real, or `--mock` on a simulated clock) and scores first / final delay, flicker and requests. See `docs/tuning.md` |
 | `scripts/tuning/latency.mjs` | Times one short translation request with the app's request options and alternatives, and reports thinking tokens: tells a slow model from a slow strategy |
