@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Replays a recorded recognizer trace through the app's segmentation and in-progress translation
 // pacing, with the real translation model (or a fake one with --mock), and scores how the
-// translations appeared: delay and flicker. See "Tuning tools" in CONTRIBUTING.md.
+// translations appeared: delay and flicker. See docs/tuning.md.
 //
 //   GEMINI_API_KEY=... node scripts/tuning/replay.mjs <trace.json> [--strategy interval[,other]]
 //     [--interval 1.5] [--speed 1] [--mock] [--out result.json]
@@ -66,21 +66,50 @@ export class MockTranslator {
 }
 
 // Runs one strategy over a trace. clock: { now, setTimer, clearTimer } plus runAll() when simulated.
-export async function replay({ trace, strategy = DEFAULT_STRATEGY, interval = 1.5, speed = 1, clock, translator }) {
+// onProgress({ traceMs, sentences, requests, rateLimited, failed, lastError }) is called whenever one
+// of those changes; traceMs is how far into the trace the replay is.
+export async function replay({
+  trace,
+  strategy = DEFAULT_STRATEGY,
+  interval = 1.5,
+  speed = 1,
+  clock,
+  translator,
+  onProgress,
+}) {
   const langs = trace.langs.slice(0, 2).map((code) => {
     const lang = LANGS.find((l) => l.code === code);
     if (!lang) throw new Error(`Unknown language code in trace: ${code}`);
     return lang;
   });
   const names = langs.map((l) => l.name);
-  const counts = { requests: 0, rateLimited: 0 };
+  const counts = { requests: 0, rateLimited: 0, failed: 0, answered: 0, lastError: null };
+  let traceNow = () => 0;
+  const report = () =>
+    onProgress?.({
+      traceMs: traceNow(),
+      sentences: segments.length,
+      requests: counts.requests,
+      rateLimited: counts.rateLimited,
+      failed: counts.failed,
+      answered: counts.answered,
+      lastError: counts.lastError,
+    });
   const counted = async (call) => {
     counts.requests++;
     try {
-      return await call();
+      const out = await call();
+      counts.answered++;
+      return out;
     } catch (err) {
       if (err instanceof RateLimitError) counts.rateLimited++;
+      else {
+        counts.failed++;
+        counts.lastError = String(err?.message ?? err);
+      }
       throw err;
+    } finally {
+      report();
     }
   };
   const tr = {
@@ -269,7 +298,10 @@ export async function replay({ trace, strategy = DEFAULT_STRATEGY, interval = 1.
   const commit = (rec, text) => {
     rec.src = text;
     rec.finishedAt = clock.now();
-    if (!segments.includes(rec)) segments.push(rec);
+    if (!segments.includes(rec)) {
+      segments.push(rec);
+      report();
+    }
     track(translateFinal(rec));
     return rec;
   };
@@ -297,6 +329,7 @@ export async function replay({ trace, strategy = DEFAULT_STRATEGY, interval = 1.
 
   const start = clock.now();
   const at = (ms) => Math.max(0, start + ms / speed - clock.now());
+  traceNow = () => Math.round((clock.now() - start) * speed);
   for (const e of trace.events) {
     clock.setTimer(() => (e.kind === 'final' ? tracker.final(e.text) : tracker.interim(e.text)), at(e.t));
   }
@@ -336,8 +369,42 @@ export async function replay({ trace, strategy = DEFAULT_STRATEGY, interval = 1.
   };
 }
 
+export const USAGE = `Replays a recorded recognizer trace and scores how the translations appeared.
+
+  GEMINI_API_KEY=... node scripts/tuning/replay.mjs <trace.json> [options]
+  node scripts/tuning/replay.mjs test/fixtures/replay-trace.json --mock
+
+Options
+  --strategy a,b   pacing strategies to compare, one run each (default: interval)
+  --interval 1.5   seconds between in-progress translations for the interval strategy
+  --speed 1        play the speech faster; delays are then not comparable, use it for a dry run only
+  --mock           fake translator on a simulated clock: no key, instant, same numbers every time
+  --out file.json  also write every sentence's timeline
+  --quiet          print only the table
+  --help           this text
+
+A trace comes from the app opened with ?debug=1 (Download → recognizer trace).
+With the real model a run takes as long as the speech in the trace. See docs/tuning.md.`;
+
+const LEGEND = `
+first ms   from a sentence's first words to its first translation on screen (lower is better)
+final ms   from the end of a sentence to its complete translation (lower is better)
+flicker    share of shown translation that was erased rather than extended; 0 = it only ever grew
+erased / updates   the totals behind flicker
+requests   translation requests sent; rateLimited: how many hit the rate limit
+Each cell is mean/median/p90 over the sentences.`;
+
 export function parseArgs(argv) {
-  const args = { strategies: [DEFAULT_STRATEGY], interval: 1.5, speed: 1, mock: false, out: null, trace: null };
+  const args = {
+    strategies: [DEFAULT_STRATEGY],
+    interval: 1.5,
+    speed: 1,
+    mock: false,
+    out: null,
+    trace: null,
+    help: false,
+    quiet: false,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const value = () => {
@@ -348,11 +415,14 @@ export function parseArgs(argv) {
     else if (a === '--interval') args.interval = Number(value());
     else if (a === '--speed') args.speed = Number(value());
     else if (a === '--mock') args.mock = true;
+    else if (a === '--quiet') args.quiet = true;
+    else if (a === '--help' || a === '-h') args.help = true;
     else if (a === '--out') args.out = value();
     else if (a.startsWith('--')) throw new Error(`Unknown option: ${a}`);
     else args.trace = a;
   }
-  if (!args.trace) throw new Error('Usage: node scripts/tuning/replay.mjs <trace.json> [options]');
+  if (args.help) return args;
+  if (!args.trace) throw new Error(`No trace file given.\n\n${USAGE}`);
   if (!(args.interval > 0)) throw new Error('--interval must be a positive number of seconds');
   if (!(args.speed > 0)) throw new Error('--speed must be a positive number');
   return args;
@@ -367,14 +437,47 @@ function realClock() {
   };
 }
 
+const clockTime = (ms) => {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+const PROGRESS_EVERY_MS = 10_000;
+// Requests that fail before any has succeeded mean the key or the model is wrong: stop early
+// instead of replaying the whole trace for nothing.
+const GIVE_UP_AFTER_FAILURES = 5;
+
 export async function main(argv, { log = console.log, warn = console.error, env = process.env } = {}) {
   const args = parseArgs(argv);
+  if (args.help) {
+    log(USAGE);
+    return [];
+  }
   const trace = JSON.parse(readFileSync(args.trace, 'utf8'));
   if (trace.version !== 1) throw new Error(`Unsupported trace version: ${trace.version}`);
+  if (!Array.isArray(trace.events) || !trace.events.length) throw new Error('The trace has no recognizer results.');
   if (trace.langs.length > 2) warn(`Note: the trace has ${trace.langs.length} languages; only the first two are used.`);
   const apiKey = env.GEMINI_API_KEY;
   if (!args.mock && !apiKey) throw new Error('Set GEMINI_API_KEY in the environment, or pass --mock.');
   const [langA, langB] = trace.langs.slice(0, 2).map((code) => LANGS.find((l) => l.code === code)?.name);
+  const say = args.quiet ? () => {} : warn; // progress goes to stderr, so stdout holds only the table
+  const lengthMs = Math.max(trace.durationMs ?? 0, ...trace.events.map((e) => e.t));
+  const finals = trace.events.filter((e) => e.kind === 'final').length;
+  say(
+    `Trace: ${clockTime(lengthMs)} of speech, ${trace.events.length} recognizer results (${finals} final), ${langA} / ${langB}.`,
+  );
+  if (args.mock) say('Translator: mock on a simulated clock; this takes a moment.');
+  else {
+    const each = lengthMs / args.speed;
+    say(
+      `Translator: ${MODEL}. Each strategy replays in real time: about ${clockTime(each)}` +
+        (args.strategies.length > 1
+          ? `, ${clockTime(each * args.strategies.length)} for all ${args.strategies.length}.`
+          : '.'),
+    );
+    if (args.speed !== 1)
+      say('Note: with --speed the speech is shortened but the model answers no faster, so delays are not comparable.');
+  }
+
   const runs = [];
   for (const strategy of args.strategies) {
     // --mock runs on a simulated clock: instant and the same on every run.
@@ -382,16 +485,57 @@ export async function main(argv, { log = console.log, warn = console.error, env 
     const translator = args.mock
       ? new MockTranslator({ langA, langB, setTimer: clock.setTimer })
       : new GeminiTranslator({ apiKey, model: MODEL, langA, langB, otherInto: langA });
-    runs.push(await replay({ trace, strategy, interval: args.interval, speed: args.speed, clock, translator }));
+    let last = null;
+    let giveUp = null;
+    const failure = new Promise((_resolve, reject) => {
+      giveUp = reject;
+    });
+    const line = () =>
+      last &&
+      say(
+        `  ${strategy}: ${clockTime(last.traceMs)} / ${clockTime(lengthMs)}, ${last.sentences} sentences, ` +
+          `${last.requests} requests` +
+          (last.rateLimited ? `, ${last.rateLimited} rate-limited` : '') +
+          (last.failed ? `, ${last.failed} failed (${last.lastError})` : ''),
+      );
+    const ticker = args.mock ? null : setInterval(line, PROGRESS_EVERY_MS);
+    try {
+      const run = replay({
+        trace,
+        strategy,
+        interval: args.interval,
+        speed: args.speed,
+        clock,
+        translator,
+        onProgress: (p) => {
+          last = p;
+          if (!p.answered && p.failed >= GIVE_UP_AFTER_FAILURES)
+            giveUp(
+              new Error(`Stopped: the first ${p.failed} translation requests all failed. Last error: ${p.lastError}`),
+            );
+        },
+      });
+      runs.push(await Promise.race([run, failure]));
+    } finally {
+      clearInterval(ticker);
+    }
+    line();
   }
   log(formatTable(runs));
-  if (args.out) writeFileSync(args.out, `${JSON.stringify({ trace: args.trace, mock: args.mock, runs }, null, 2)}\n`);
+  say(LEGEND);
+  if (args.out) {
+    writeFileSync(args.out, `${JSON.stringify({ trace: args.trace, mock: args.mock, runs }, null, 2)}\n`);
+    say(`Every sentence's timeline is in ${args.out} (it contains what was said; keep it out of the repository).`);
+  }
   return runs;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main(process.argv.slice(2)).catch((err) => {
-    console.error(err.message);
-    process.exitCode = 1;
-  });
+  main(process.argv.slice(2)).then(
+    () => process.exit(0), // do not wait for requests still in flight after an early stop
+    (err) => {
+      console.error(err.message);
+      process.exit(1);
+    },
+  );
 }

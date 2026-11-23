@@ -42,7 +42,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `.github/workflows/release.yml`, `release-please-config.json`, `.release-please-manifest.json` | release-please keeps a release pull request open on `main`; merging it tags `vX.Y.Z`, creates the GitHub Release, and the workflow builds and uploads the zips |
 | `.github/workflows/preview-build.yml` | Started by hand: builds signed zips of a branch as workflow artifacts, to try the app before a release. Publishes nothing |
 | `scripts/check-commits.js` | Checks that a pull request's commit subjects and title follow Conventional Commits (run in `test.yml`) |
-| `scripts/tuning/replay.mjs`, `scripts/tuning/metrics.mjs`, `scripts/tuning/clock.mjs` | Replays a recognizer trace through the segmenter, the pacer and the translator (real, or `--mock` on a simulated clock) and scores first / final delay, flicker and requests. See "Tuning tools" in CONTRIBUTING.md |
+| `scripts/tuning/replay.mjs`, `scripts/tuning/metrics.mjs`, `scripts/tuning/clock.mjs` | Replays a recognizer trace through the segmenter, the pacer and the translator (real, or `--mock` on a simulated clock) and scores first / final delay, flicker and requests. See `docs/tuning.md` |
 | `scripts/sign-mac.js`, `scripts/verify-mac-signature.js`, `scripts/ci-mac-signing-keychain.sh` | macOS releases are re-signed with a fixed self-signed certificate (electron-builder `afterSign` hook) so the app's identity, and the permissions tied to it, survive updates; the check and the CI keychain setup. `.github/workflows/sign-check.yml` exercises this on pull requests |
 
 ## Commands
@@ -50,12 +50,13 @@ browser, which is used for development and the browser tests. Usage and pricing 
 - `npm run lint`: Biome checks formatting and lint rules; `npm run format` applies the fixes. Run before committing.
 - `npm test`: unit tests. Run after every logic change.
 - `npm run test:e2e`: only when `src/app.js`, `src/audio.js`, HTML or CSS changed.
-- `npm start`: http://localhost:5173 (`?mock=1` for a demo without a key, `?debug=1` to log raw recognizer output, download a recognizer trace and use an audio file as input; see "Tuning tools" in CONTRIBUTING.md).
+- `npm start`: http://localhost:5173 (`?mock=1` for a demo without a key, `?debug=1` to log raw recognizer output, download a recognizer trace and use an audio file as input; see `docs/tuning.md`).
 - `npm run app`: start the desktop app. `npm run test:app` only when `app/` or the caption window changed.
 - `npm run dist:mac` / `npm run dist:win`: build zips into `dist/`.
 
 ## Rules
 
+- A change to the tuning tools (`?debug=1`, `scripts/tuning/`, the trace format, the pacer's strategies) updates `docs/tuning.md` in the same pull request.
 - A change that users can see updates the docs in the same pull request: the README (both languages) and pages under `docs/` that describe it, and the README animation when the main screen looks different (`node scripts/demo.mjs` writes `docs/demo.png`). Do not regenerate the animation otherwise: each version adds several megabytes to the repository.
 - Add or update tests in the same commit as a behavior change. For a segmentation bug, add the failing case to `test/segmenter.test.js` before fixing it.
 - No new dependencies: zero at runtime; dev dependencies are `playwright-core`, `electron`, `electron-builder`, `@biomejs/biome` and `axe-core` only.

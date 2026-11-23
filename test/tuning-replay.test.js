@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
-import { LANGS, parseArgs } from '../scripts/tuning/replay.mjs';
+import { createVirtualClock } from '../scripts/tuning/clock.mjs';
+import { LANGS, parseArgs, replay } from '../scripts/tuning/replay.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const run = (...args) =>
@@ -73,8 +74,11 @@ test('options are checked', () => {
     mock: true,
     out: null,
     trace: 't.json',
+    help: false,
+    quiet: false,
   });
-  assert.throws(() => parseArgs([]), /Usage/);
+  assert.throws(() => parseArgs([]), /No trace file given[\s\S]*--strategy/);
+  assert.equal(parseArgs(['--help']).help, true);
   assert.throws(() => parseArgs(['t.json', '--interval', '0']), /interval/);
   assert.throws(() => parseArgs(['t.json', '--nope']), /nope/);
 });
@@ -85,4 +89,41 @@ test('the replay knows the same languages as the app', () => {
   const inApp = [...block.matchAll(/code: '([^']+)'.*?name: '([^']+)'/g)].map(([, code, name]) => ({ code, name }));
   assert.ok(inApp.length > 2);
   assert.deepEqual(LANGS, inApp);
+});
+
+test('progress is printed apart from the table, and --quiet leaves only the table', async () => {
+  const loud = await run('test/fixtures/replay-trace.json', '--mock');
+  assert.equal(loud.stdout.trim().split('\n').length, 2, 'stdout holds the table only');
+  assert.match(loud.stderr, /Trace: 0:21 of speech, 43 recognizer results \(4 final\), Japanese \/ English\./);
+  assert.match(loud.stderr, /interval: 0:\d\d \/ 0:21, 6 sentences, 16 requests/);
+  assert.match(loud.stderr, /flicker +share of shown translation/);
+  const quiet = await run('test/fixtures/replay-trace.json', '--mock', '--quiet');
+  assert.equal(quiet.stderr, '');
+  assert.equal(quiet.stdout, loud.stdout);
+});
+
+test('--help explains the options without needing a trace or a key', async () => {
+  const { stdout } = await run('--help');
+  assert.match(stdout, /--strategy a,b/);
+  assert.match(stdout, /takes as long as the speech/);
+});
+
+test('failed translation requests are counted and reported with their error', async () => {
+  const trace = JSON.parse(readFileSync(join(root, 'test/fixtures/replay-trace.json'), 'utf8'));
+  const clock = createVirtualClock(Date.UTC(2026, 0, 1));
+  const translator = {
+    translate: () => Promise.reject(new Error('API key not valid')),
+    identify: () => Promise.reject(new Error('API key not valid')),
+  };
+  const seen = [];
+  await replay({ trace, clock, translator, onProgress: (p) => seen.push(p) });
+  const last = seen.at(-1);
+  assert.ok(last.failed > 0);
+  assert.equal(last.answered, 0);
+  assert.equal(last.lastError, 'API key not valid');
+  assert.ok(seen.some((p) => p.sentences > 0));
+  assert.ok(
+    seen.every((p, i) => i === 0 || p.traceMs >= seen[i - 1].traceMs),
+    'the position in the trace never goes back',
+  );
 });
