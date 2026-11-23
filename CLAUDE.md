@@ -11,7 +11,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | --- | --- |
 | `src/app.js` | UI, settings, saved sessions (list / switch), start / stop, translation flow, downloads |
 | `src/segmenter.js` | Turns recognizer results (interim / final) into sentence-sized segments. DOM-free |
-| `src/transcriber.js` | Gemini Live API (`gemini-3.5-transcribe-live`) WebSocket, reconnects, rotation before the 10-minute session limit |
+| `src/transcriber.js` | Gemini Live API (`gemini-3.5-transcribe-live`) WebSocket, reconnects, rotation before the 10-minute session limit; each connection uses a single-use token from `auth_tokens` (the key travels in a request header only), falling back to the key in the address when the token service never answers |
 | `src/translator.js` | Streaming translation with `gemini-3.5-flash-lite`; `into` fixes the target language, `identify` asks which language a sentence is in (three-language sessions) |
 | `src/script-hint.js` | Writing-system hints: which way a transcript is translated (`targetByScript`), which of the selected languages it is in (`sourceByScript`, `languageByScript`), whether a pair can be told apart (`scriptsDiffer`). Pure functions |
 | `src/read-aloud.js` | Reads finished translations aloud with the system's speech synthesis: a short queue that drops the oldest waiting sentence, voice choice, language-code mapping. DOM-free, synthesizer injected |
