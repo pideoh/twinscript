@@ -6,6 +6,9 @@ const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 export class RateLimitError extends MessageError {}
 
+// Models whose default thinking level is already the lowest.
+const MINIMAL_BY_DEFAULT = /flash-lite/i;
+
 // Recognized speech is data for the model, so it must not be able to close or reopen the
 // blocks that delimit it. Tags that imitate them lose their brackets.
 const DELIMITER = /<\s*\/?\s*(text|context)\s*>/gi;
@@ -16,7 +19,10 @@ export class GeminiTranslator {
   constructor({ apiKey, model, langA, langB, langC, otherInto = langA, glossary }) {
     this.apiKey = apiKey;
     this.model = model;
-    this.useThinkingConfig = true;
+    // Translation wants the least thinking. Flash-Lite models think minimally by default, and
+    // measured against the service a request that says so explicitly was answered in about 3 s
+    // instead of 0.6 s; so the option is only sent to models that would think more without it.
+    this.useThinkingConfig = !MINIMAL_BY_DEFAULT.test(model);
     this.langs = { langA, langB, otherInto };
     this.langC = langC;
     this.glossary = glossary;

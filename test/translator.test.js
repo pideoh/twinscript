@@ -277,3 +277,24 @@ test('the translation on screen is kept when the thinking option is dropped', as
   await make().translate('やあ、元気', { previous: 'Hey,' });
   assert.match(calls[1].body.systemInstruction.parts[0].text, /already on screen: "Hey,"/);
 });
+
+test('the default model is not asked to think minimally, which it does anyway and answers faster without', async () => {
+  const calls = stubFetch(
+    () => new Response(sse('ok'), { status: 200 }),
+    () => new Response(sse('ok'), { status: 200 }),
+    () => new Response(sse('{"language":"English"}'), { status: 200 }),
+  );
+  const lite = new GeminiTranslator({
+    apiKey: 'K',
+    model: 'gemini-3.5-flash-lite',
+    langA: 'Japanese',
+    langB: 'English',
+  });
+  await lite.translate('こんにちは、世界。');
+  assert.equal(calls[0].body.generationConfig.thinkingConfig, undefined);
+  // Another model may think more by default, so it is still told not to.
+  await make().translate('こんにちは、世界。');
+  assert.deepEqual(calls[1].body.generationConfig.thinkingConfig, { thinkingLevel: 'minimal' });
+  await lite.identify('了解', ['Japanese', 'English']);
+  assert.equal(calls[2].body.generationConfig.thinkingConfig, undefined);
+});
