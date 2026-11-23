@@ -3,7 +3,18 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { linesDone, mockGemini, mockTargets, reload, rows, saved, setup, tagged, translated } from './helpers.js';
+import {
+  linesDone,
+  mockGemini,
+  mockTargets,
+  reload,
+  rows,
+  saved,
+  setup,
+  storedSessions,
+  tagged,
+  translated,
+} from './helpers.js';
 
 const { openApp } = setup();
 
@@ -79,16 +90,7 @@ test('with a third language every sentence is translated into the other two, a f
 
   // Stored: the translations are also kept joined, so downloads read as before.
   await saved(page);
-  const stored = await page.evaluate(
-    () =>
-      new Promise((resolve) => {
-        const open = indexedDB.open('twinscript');
-        open.onsuccess = () => {
-          const req = open.result.transaction('sessions').objectStore('sessions').getAll();
-          req.onsuccess = () => resolve(req.result);
-        };
-      }),
-  );
+  const stored = await storedSessions(page);
   assert.equal(stored.length, 1);
   assert.equal(stored[0].langC, 'cmn-Hans-CN');
   assert.deepEqual(stored[0].segments[0].tgts, [
@@ -109,6 +111,7 @@ test('with a third language every sentence is translated into the other two, a f
   await page.waitForSelector('#sessionList .session');
   assert.equal(await page.inputValue('#langC'), '', 'an untouched new session is not saved');
   await page.locator('#sessionList .open').first().click();
+  await page.waitForSelector('#sessionList .current'); // its transcript is loaded when it is opened
   assert.equal(await page.inputValue('#langC'), 'cmn-Hans-CN');
   assert.deepEqual(await tagged(page), expected);
   assert.deepEqual(errors, []);
@@ -129,16 +132,7 @@ test('turning the third language off returns to two languages as before', async 
   assert.equal(await page.locator('.tgt-line, .lang-tag, .tgt.multi').count(), 0, 'no tags');
 
   await saved(page);
-  const stored = await page.evaluate(
-    () =>
-      new Promise((resolve) => {
-        const open = indexedDB.open('twinscript');
-        open.onsuccess = () => {
-          const req = open.result.transaction('sessions').objectStore('sessions').getAll();
-          req.onsuccess = () => resolve(req.result);
-        };
-      }),
-  );
+  const stored = await storedSessions(page);
   assert.ok(!('langC' in stored[0]), 'a two-language session keeps its shape');
   assert.deepEqual(Object.keys(stored[0].segments[0]).sort(), ['at', 'elapsed', 'id', 'src', 'tgt']);
 

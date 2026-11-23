@@ -3,7 +3,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { linesDone, mockGemini, mockTargets, saved, setup, tagged } from './helpers.js';
+import { linesDone, mockGemini, mockTargets, saved, setup, storedSessions, tagged } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -23,17 +23,6 @@ const done = (page, count) =>
       })
     );
   }, count);
-const storedSessions = (page) =>
-  page.evaluate(
-    () =>
-      new Promise((resolve) => {
-        const open = indexedDB.open('twinscript');
-        open.onsuccess = () => {
-          const req = open.result.transaction('sessions').objectStore('sessions').getAll();
-          req.onsuccess = () => resolve(req.result);
-        };
-      }),
-  );
 const options = (page) =>
   page.locator('#otherInto option').evaluateAll((os) => os.map((o) => [o.value, o.textContent]));
 // Closes the settings with Save and waits until the app has taken the values (the dialog's close

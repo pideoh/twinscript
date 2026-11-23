@@ -472,7 +472,7 @@ els.settings.addEventListener('close', () => {
 });
 
 // ---------- sessions (saved conversations) ----------
-// { id, title, customTitle, createdAt, updatedAt, langA, langB, langC?, activeMs,
+// { id, title, customTitle, createdAt, updatedAt, langA, langB, langC?, activeMs, segmentCount?,
 //   segments: [{ id, at, elapsed, src, tgt, lang?, tgts? }], recordings: [{ id, startedAt, elapsedStart, durationMs, mime }],
 //   summary?: { overview, keyPoints, decisions, actionItems: [{ task, owner, due }], truncated,
 //               generatedAt, model, segmentCount } }
@@ -480,6 +480,8 @@ els.settings.addEventListener('close', () => {
 // spoken in ('other' for none of the three), and `tgts: [{ lang, text }]`, one translation per
 // target language; `tgt` then holds those translations joined by line breaks, so everything that
 // reads `tgt` works as with two languages.
+// Saved sessions are listed without their segments (`segments` is absent and `segmentCount` says
+// how many there are); they are loaded the first time the session is shown.
 let sessions = []; // saved sessions, newest first
 let current = null; // the session on screen
 let run = null; // the live capture/translation in progress, if any
@@ -492,7 +494,7 @@ let saveTimer;
 const uid = () =>
   crypto.randomUUID?.() ??
   [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
-const isEmpty = (sess) => !sess.segments.length && !sess.recordings.length;
+const isEmpty = (sess) => !(sess.segments?.length ?? sess.segmentCount) && !sess.recordings.length;
 // Errors from audio.js, transcriber.js and translator.js carry a message key.
 const errorText = (err) => (err?.key ? t(err.key, err.params) : (err?.message ?? String(err)));
 
@@ -552,21 +554,38 @@ function flushSaves() {
       if (run.recording) run.recording.durationMs = Date.now() - run.recording.startedAt;
     }
     sess.updatedAt = Date.now();
-    if (!sess.customTitle) sess.title = sess.segments[0]?.src.slice(0, 30) || formatDateTime(sess.createdAt);
+    if (!sess.customTitle && sess.segments)
+      sess.title = sess.segments[0]?.src.slice(0, 30) || formatDateTime(sess.createdAt);
     if (!sessions.includes(sess)) {
       sessions.unshift(sess);
       store.requestPersistence();
     }
-    store
-      .saveSession(serialize(sess))
-      .catch((err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'));
+    store.saveSession(sess).catch((err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'));
   }
   dirty.clear();
   renderSidebar();
 }
 window.addEventListener('pagehide', flushSaves);
 
-function showSession(sess) {
+let opening = null; // the session whose segments are being loaded to show it
+async function showSession(sess) {
+  if (!sess.segments) {
+    opening = sess;
+    let segments;
+    try {
+      segments = await store.loadSegments(sess.id);
+    } catch (err) {
+      if (opening === sess) opening = null;
+      toast(t('toast.openFailed', { message: err.message }), 6000, 'critical');
+      if (!current) showSession(blankSession());
+      return;
+    }
+    if (opening !== sess) return; // another session was chosen meanwhile
+    opening = null;
+    sess.segments ??= segments;
+    if (run && current) return; // capture started while loading
+  }
+  opening = null;
   reader.stop();
   current = sess;
   try {
@@ -1640,6 +1659,8 @@ function readTranslation(r, text, target) {
 // ---------- startup ----------
 setStatus('idle');
 els.toggle.textContent = t('toggle.start');
+// Until that window is closed the list below stays empty, so say why.
+store.onUpgradeBlocked(() => toast(t('toast.upgradeBlocked'), 60_000, 'warning'));
 try {
   sessions = (await store.listSessions()).sort((a, b) => b.createdAt - a.createdAt);
 } catch {
@@ -1651,5 +1672,5 @@ try {
 } catch {
   /* private mode */
 }
-showSession(sessions.find((x) => x.id === lastId) ?? blankSession());
+await showSession(sessions.find((x) => x.id === lastId) ?? blankSession());
 if (MOCK) toast(t('toast.demo'), 4000);
