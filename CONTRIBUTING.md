@@ -22,6 +22,8 @@ npm run test:app   # desktop smoke tests (opens windows)
 ```
 
 - Add or update tests with every behavior change.
+- If users can see the change, update the README (English and Japanese) and `docs/` in the same pull request. Regenerate
+  the README animation with `node scripts/demo.mjs` only when the main screen looks different.
 - User-visible text goes through `src/i18n.js`; add each new key to every file in `src/locales/`.
 - Styling uses the Primer tokens defined at the top of `styles.css` and Octicons; no ad-hoc colors.
 - No new runtime dependencies.
