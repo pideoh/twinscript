@@ -139,7 +139,8 @@ After a session, "Label speakers" (next to the summary controls) tells the speak
 and labels each line of the transcript with its speaker: "Speaker 1", "Speaker 2", … in the order they first speak.
 
 - The recording is uploaded to Google's Gemini API for this (`gemini-3.5-transcribe`) and deleted there as soon as it
-  has been analyzed, also when the analysis fails or is cancelled. The app explains this and asks once before the first
+  has been analyzed, also when the analysis fails or is cancelled (a file whose upload was interrupted is removed by
+  Google on its own after two days). The app explains this and asks once before the first
   use.
 - Progress is shown per step (preparing the audio, uploading, analyzing part 1 of n) and it can be cancelled.
 - "Speakers" opens the names: a name applies to every line of that speaker in the session. Activating the name on a line

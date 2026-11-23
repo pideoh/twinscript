@@ -18,11 +18,14 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/vocabulary.js` | Parses the "Terms and corrections" setting into recognizer terms (max 1,000) and `wrong => right` rules, and applies the rules to recognized text. Pure functions |
 | `src/summarizer.js` | Summary of a finished session as Markdown, written to a template, a length and a language by the translation model; `legacySummaryToMarkdown` shows summaries made by earlier versions. DOM-free |
 | `src/summary-templates.js` | The eight preset templates (`{ id, name, description, prompt }`) and custom ones: validation, import / export, storage in `localStorage` under `rt-summary-templates` |
+| `src/speakers.js` | Speaker labels, pure logic: planning the parts of a recording, choosing reference clips, mapping each part's labels to the session's speakers (with the safeguards that leave a speaker unknown rather than guess), assigning speakers to segments, WAV bytes |
+| `src/diarizer.js` | Requests to the Files and Interactions APIs for `gemini-3.5-transcribe` with diarization and word times, and the loop over the parts (`labelSpeakers`). DOM-free |
+| `src/speaker-audio.js` | Decodes a session's recordings with Web Audio into 16 kHz mono samples |
 | `src/markdown.js` | Safe Markdown renderer for summaries (headings, lists, tables, emphasis, code, http/https links); everything else, raw HTML included, is shown as text. DOM-free |
 | `src/audio.js`, `src/pcm-worklet.js` | Microphone / tab audio capture, 16 kHz PCM in 100 ms chunks, mix for recording |
 | `src/auto-gain.js` | Raises quiet PC audio to a usable level (not applied to the microphone). Pure class |
 | `src/recorder.js` | Records with MediaRecorder, handing over a chunk every 5 seconds |
-| `src/store.js` | IndexedDB, version 3: `sessions` (metadata and `segmentCount`, no segments), `segments` (one record per segment, key `[sessionId, pos]`, loaded when a session is opened; a save writes only changed segments), `summaries` (one record per summary, key `[sessionId, id]`) and `audio` (recording chunks). The upgrade from version 1 moves segments out of the session records. Three-language sessions add `langC` and, per segment, `lang` and `tgts`; `tgt` stays the translations joined by line breaks. A session's metadata carries its `usage` record |
+| `src/store.js` | IndexedDB, version 3: `sessions` (metadata and `segmentCount`, no segments), `segments` (one record per segment, key `[sessionId, pos]`, loaded when a session is opened; a save writes only changed segments), `summaries` (one record per summary, key `[sessionId, id]`) and `audio` (recording chunks). The upgrade from version 1 moves segments out of the session records. Three-language sessions add `langC` and, per segment, `lang` and `tgts`; `tgt` stays the translations joined by line breaks. A session's metadata carries its `usage` record; segments may carry `speaker`, and the metadata `speakerLabels` |
 | `src/secrets.js` | Where the API key is kept (desktop: `window.secretStore`; browser: memory only). DOM-free |
 | `src/exporter.js` | Transcript export (txt / md / csv / srt). Pure functions |
 | `src/mock.js` | Stand-in engines for the `?mock=1` demo |
@@ -32,7 +35,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/i18n.js` | Display-language resolution (`resolveLocale`), `t(key, params)`, applying `data-i18n*` to static HTML. Languages are registered only in its `LOCALES` array |
 | `src/locales/*.js` | Message catalogs (`en` is the reference and fallback, `ja`, `zh-Hans`). Dotted keys |
 | `src/icons.js` | Octicons (SVG) for buttons that are created at runtime |
-| `src/message-error.js` | Error carrying a message key and params; thrown by `audio.js`, `transcriber.js`, `translator.js` and translated by `app.js` |
+| `src/message-error.js` | Error carrying a message key and params; thrown by `audio.js`, `transcriber.js`, `translator.js`, `diarizer.js` and translated by `app.js` |
 | `app/main.js` | Electron main process: serves the app from `app://rt/`, PC audio, caption overlay |
 | `app/policy.js` | Desktop rules (served files, navigation, `window.open`, permissions, IPC caller check, what a screen-share request gets per platform). Electron-free |
 | `app/preload.js` | The page's only bridge to the main process: `window.secretStore`, `window.captionOverlay` (click-through) and `window.appShortcuts` (global shortcuts) |
