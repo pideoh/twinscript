@@ -3,7 +3,7 @@
 // app uses and with alternatives, so a slow replay can be told apart from a slow model.
 // See docs/tuning.md.
 //
-//   GEMINI_API_KEY=... node scripts/tuning/latency.mjs [--model gemini-3.5-flash-lite] [--count 5]
+//   GEMINI_API_KEY=... node scripts/tuning/latency.mjs [--model gemini-3.5-flash-lite] [--count 8]
 //
 // It sends a fixed, harmless sentence; nothing from a trace. The key is read from the environment
 // and never printed.
@@ -107,12 +107,9 @@ export async function measureApp({
   now = () => performance.now(),
   say = () => {},
 }) {
-  const rows = [];
-  for (const request of requests) {
-    const firsts = [];
-    const totals = [];
-    let error = null;
-    for (let i = 0; i < count; i++) {
+  const data = requests.map(() => ({ firsts: [], totals: [], error: null }));
+  for (let round = 0; round < count; round++) {
+    for (const [i, request] of requests.entries()) {
       // A new translator each time, as a session starts with one.
       const tr = new GeminiTranslator({ apiKey, model, langA: 'Japanese', langB: 'English' });
       const start = now();
@@ -123,26 +120,27 @@ export async function measureApp({
             first ??= now() - start;
           },
         });
-        totals.push(now() - start);
-        if (first !== null) firsts.push(first);
+        data[i].totals.push(now() - start);
+        if (first !== null) data[i].firsts.push(first);
       } catch (err) {
-        error = String(err?.message ?? err)
+        data[i].error = String(err?.message ?? err)
           .replace(/\s+/g, ' ')
           .slice(0, 100);
       }
     }
-    rows.push({
-      name: request.name,
-      count,
-      ok: totals.length,
-      firstMs: median(firsts),
-      totalMs: median(totals),
-      thoughts: null,
-      error,
-    });
-    say(`  ${request.name}: done`);
+    say(`  round ${round + 1} of ${count}`);
   }
-  return rows;
+  return requests.map((request, i) => ({
+    name: request.name,
+    count,
+    ok: data[i].totals.length,
+    firstMs: median(data[i].firsts),
+    totalMs: median(data[i].totals),
+    minMs: data[i].totals.length ? Math.min(...data[i].totals) : null,
+    maxMs: data[i].totals.length ? Math.max(...data[i].totals) : null,
+    thoughts: null,
+    error: data[i].error,
+  }));
 }
 
 const median = (xs) => {
@@ -158,6 +156,7 @@ export function formatLatency(rows) {
     'ok',
     'first text ms (median)',
     'whole answer ms (median)',
+    'fastest-slowest',
     'thinking tokens',
     'error',
   ];
@@ -166,6 +165,7 @@ export function formatLatency(rows) {
     `${r.ok}/${r.count}`,
     ms(r.firstMs),
     ms(r.totalMs),
+    r.minMs == null ? '-' : `${ms(r.minMs)}-${ms(r.maxMs)}`,
     ms(r.thoughts),
     r.error ?? '',
   ]);
@@ -178,43 +178,50 @@ export function formatLatency(rows) {
   return [row(head), ...lines.map(row)].join('\n');
 }
 
+// Rounds, not blocks: every variant is asked once per round, in turn. The model's speed drifts from
+// minute to minute, and asking one variant five times and then the next would measure the drift.
 export async function measure({ apiKey, model, count, variants = VARIANTS, fetchImpl, now, say = () => {} }) {
-  const rows = [];
-  for (const variant of variants) {
-    const results = [];
-    for (let i = 0; i < count; i++) results.push(await once({ apiKey, model, config: variant.config, fetchImpl, now }));
-    const good = results.filter((r) => r.status === 200);
-    rows.push({
+  const results = variants.map(() => []);
+  for (let round = 0; round < count; round++) {
+    for (const [i, variant] of variants.entries())
+      results[i].push(await once({ apiKey, model, config: variant.config, fetchImpl, now }));
+    say(`  round ${round + 1} of ${count}`);
+  }
+  return variants.map((variant, i) => {
+    const good = results[i].filter((r) => r.status === 200);
+    const bad = results[i].find((r) => r.error);
+    const totals = good.map((r) => r.totalMs);
+    return {
       name: variant.name,
       count,
       ok: good.length,
       firstMs: median(good.map((r) => r.firstMs).filter((x) => x !== null)),
-      totalMs: median(good.map((r) => r.totalMs)),
+      totalMs: median(totals),
+      minMs: totals.length ? Math.min(...totals) : null,
+      maxMs: totals.length ? Math.max(...totals) : null,
       thoughts: median(good.map((r) => r.thoughts)),
-      error:
-        results.find((r) => r.error)?.error &&
-        `HTTP ${results.find((r) => r.error).status}: ${results.find((r) => r.error).error}`,
-    });
-    say(`  ${variant.name}: done`);
-  }
-  return rows;
+      error: bad && `HTTP ${bad.status}: ${bad.error}`,
+    };
+  });
 }
 
 export async function main(argv, { log = console.log, warn = console.error, env = process.env } = {}) {
   let model = 'gemini-3.5-flash-lite';
-  let count = 5;
+  let count = 8;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--model') model = argv[++i];
     else if (argv[i] === '--count') count = Number(argv[++i]);
     else
       throw new Error(
-        `Unknown option: ${argv[i]}\nUsage: GEMINI_API_KEY=... node scripts/tuning/latency.mjs [--model name] [--count 5]`,
+        `Unknown option: ${argv[i]}\nUsage: GEMINI_API_KEY=... node scripts/tuning/latency.mjs [--model name] [--count 8]`,
       );
   }
   if (!(count > 0)) throw new Error('--count must be a positive number');
   const apiKey = env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('Set GEMINI_API_KEY in the environment.');
-  warn(`Model: ${model}. ${count} requests per row, one after another; about a minute.`);
+  warn(
+    `Model: ${model}. ${count} requests per row, asked in rounds so every row meets the same conditions; a few minutes.`,
+  );
   const probe = new GeminiTranslator({ apiKey, model, langA: 'Japanese', langB: 'English' });
   warn(`The app sends the thinking option to this model: ${probe.useThinkingConfig ? 'yes' : 'no'}.`);
   warn('Request options, with a bare request:');
@@ -224,6 +231,8 @@ export async function main(argv, { log = console.log, warn = console.error, env 
   const appRows = await measureApp({ apiKey, model, count, say: warn });
   log(`\n${formatLatency(appRows)}`);
   warn(`
+Rows are asked in turn, round after round, because the model's speed drifts from minute to minute.
+fastest-slowest   the spread of the whole answer; a wide spread means the model's speed was changing
 first text ms     until the first piece of the translation arrives
 whole answer ms   until the answer is complete
 thinking tokens   tokens the model spent thinking before answering; 0 is what a live translation wants
