@@ -51,6 +51,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 
 ## Rules
 
+- A change that users can see updates the docs in the same pull request: the README (both languages) and pages under `docs/` that describe it, and the README animation when the main screen looks different (`node scripts/demo.mjs` writes `docs/demo.png`). Do not regenerate the animation otherwise: each version adds several megabytes to the repository.
 - Add or update tests in the same commit as a behavior change. For a segmentation bug, add the failing case to `test/segmenter.test.js` before fixing it.
 - No new dependencies: zero at runtime; dev dependencies are `playwright-core`, `electron`, `electron-builder`, `@biomejs/biome` and `axe-core` only.
 - The interface must keep running in a plain browser (development and the browser tests rely on it). Desktop-only code lives in `app/`; `src/` only branches on detecting Electron.

@@ -13,5 +13,5 @@ description: Capture and review screenshots of Twinscript after a visual change 
    - dialogs: header, scrolling body, footer buttons aligned right;
    - other languages: labels and buttons fit.
 3. Run `npm test` (the design-token test catches literal colors and Unicode icons) and `npm run test:e2e`.
-4. If the change is visible on the main screen, refresh the README animation: `node scripts/demo.mjs` (writes `docs/demo.png`).
+4. If the main screen of the two-language demo looks different (header, transcript, caption area), refresh the README animation: `node scripts/demo.mjs` (writes `docs/demo.png`). Leave it alone otherwise: every version adds several megabytes to the repository. Update the README text (both languages) and `docs/` for anything users can see, and fill in "Screens and docs" in the pull request.
 5. Things this does not cover, to mention in the pull request if relevant: the desktop caption overlay (`npm run test:app` opens it) and the browser picture-in-picture window.
