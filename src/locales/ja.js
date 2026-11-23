@@ -29,6 +29,7 @@ export default {
   'source.mic': 'マイク',
   'source.system': 'PC音声',
   'source.both': 'マイク＋PC音声',
+  'source.file': '音声ファイル（デバッグ）',
 
   // transcript and caption zone
   'empty.main': '言語を2つ選んで「翻訳開始」を押してください。',
@@ -83,6 +84,7 @@ export default {
   'export.recording': '録音 {n} ・ {date} ・ {length}',
   'export.recordingNow': '録音中',
   'export.save': '保存',
+  'export.trace': '認識トレースをダウンロード（デバッグ）',
 
   // downloaded transcript files
   'file.title': '文字起こし',
@@ -185,6 +187,8 @@ export default {
   'error.windowBlocked': 'ウィンドウがブロックされました',
   'error.noSharedAudio':
     '共有した画面/タブに音声が含まれていません。共有ダイアログで「音声も共有」をオンにしてください。',
+  'error.audioFileDecode':
+    '{name} を音声として読み込めませんでした。WAV、MP3、M4A、Ogg、WebM のいずれかを試してください。',
   'error.systemAudioPermission':
     'PC音声が止まりました。システム設定 → プライバシーとセキュリティ → 画面収録とシステムオーディオ録音 →「システムオーディオ録音のみ」で Twinscript を許可し、アプリを開き直してください。PC音声には macOS 14.2 以降が必要です。',
   'error.connectFailed': '接続できませんでした: {reason}',

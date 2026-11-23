@@ -59,6 +59,18 @@ To try the app before a release, a maintainer can build it from any branch: Acti
 The zips are attached to that run for a week and nothing is published. The macOS build is signed like a release, so
 it replaces the installed app and keeps its permissions.
 
+## Tuning tools
+
+How the captions feel depends on when the sentence being spoken is translated and how much of a shown translation
+is rewritten. [docs/tuning.md](docs/tuning.md) describes the tools for measuring that:
+
+- the app opened with `?debug=1` records what the recognizer delivered (a trace) and can take an audio file as input;
+- `node scripts/tuning/replay.mjs <trace.json>` replays a trace through the segmentation, the pacer (`src/pacer.js`) and
+  the translation model, and reports delay, flicker and the number of requests (`--help` lists the options).
+
+A trace contains what was said in the meeting. Do not commit traces or attach them to public issues;
+`*.trace.json` and `twinscript-trace-*.json` are ignored by Git.
+
 ## Adding a display language
 
 Copy `src/locales/en.js` to a new file, translate the values, and register it in the `LOCALES`

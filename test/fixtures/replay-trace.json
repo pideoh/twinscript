@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "startedAt": "2026-11-20T09:00:00.000Z",
+  "langs": ["ja-JP", "en-US"],
+  "source": "mic",
+  "durationMs": 21000,
+  "events": [
+    {
+      "t": 500,
+      "kind": "interim",
+      "text": "おはようございます。"
+    },
+    {
+      "t": 800,
+      "kind": "interim",
+      "text": "おはようございます。今日は"
+    },
+    {
+      "t": 1100,
+      "kind": "interim",
+      "text": "おはようございます。今日は新しい"
+    },
+    {
+      "t": 1400,
+      "kind": "interim",
+      "text": "おはようございます。今日は新しい検索画面の"
+    },
+    {
+      "t": 1700,
+      "kind": "interim",
+      "text": "おはようございます。今日は新しい検索画面の進め方について"
+    },
+    {
+      "t": 2000,
+      "kind": "interim",
+      "text": "おはようございます。今日は新しい検索画面の進め方について話したいと"
+    },
+    {
+      "t": 2300,
+      "kind": "interim",
+      "text": "おはようございます。今日は新しい検索画面の進め方について話したいと思います。"
+    },
+    {
+      "t": 2800,
+      "kind": "final",
+      "text": "おはようございます。今日は新しい検索画面の進め方について話したいと思います。"
+    },
+    {
+      "t": 6000,
+      "kind": "interim",
+      "text": "Thanks."
+    },
+    {
+      "t": 6250,
+      "kind": "interim",
+      "text": "Thanks. I"
+    },
+    {
+      "t": 6500,
+      "kind": "interim",
+      "text": "Thanks. I looked"
+    },
+    {
+      "t": 6750,
+      "kind": "interim",
+      "text": "Thanks. I looked at"
+    },
+    {
+      "t": 7000,
+      "kind": "interim",
+      "text": "Thanks. I looked at the"
+    },
+    {
+      "t": 7250,
+      "kind": "interim",
+      "text": "Thanks. I looked at the draft"
+    },
+    {
+      "t": 7500,
+      "kind": "interim",
+      "text": "Thanks. I looked at the draft yesterday"
+    },
+    {
+      "t": 7750,
+      "kind": "interim",
+      "text": "Thanks. I looked at the draft yesterday and"
+    },
+    {
+      "t": 8000,
+      "kind": "interim",
+      "text": "Thanks. I looked at the draft yesterday and I"
+    },
+    {
+      "t": 8250,
+      "kind": "interim",
+      "text": "Thanks. I looked at the draft yesterday and I think"
+    },
+    {
+      "t": 8500,
+      "kind": "interim",
+      "text": "Thanks. I looked at the draft yesterday and I think the"
+    },
+    {
+      "t": 8750,
+      "kind": "interim",
+      "text": "Thanks. I looked at the draft yesterday and I think the filters"
+    },
+    {
+      "t": 9000,
+      "kind": "interim",
+      "text": "Thanks. I looked at the draft yesterday and I think the filters need"
+    },
+    {
+      "t": 9250,
+      "kind": "interim",
+      "text": "Thanks. I looked at the draft yesterday and I think the filters need more"
+    },
+    {
+      "t": 9500,
+      "kind": "interim",
+      "text": "Thanks. I looked at the draft yesterday and I think the filters need more space."
+    },
+    {
+      "t": 9950,
+      "kind": "final",
+      "text": "Thanks. I looked at the draft yesterday and I think the filters need more space."
+    },
+    {
+      "t": 11000,
+      "kind": "interim",
+      "text": "そうですね、"
+    },
+    {
+      "t": 11300,
+      "kind": "interim",
+      "text": "そうですね、フィルターは"
+    },
+    {
+      "t": 11600,
+      "kind": "interim",
+      "text": "そうですね、フィルターは右側に"
+    },
+    {
+      "t": 11900,
+      "kind": "interim",
+      "text": "そうですね、フィルターは右側にまとめて、"
+    },
+    {
+      "t": 12200,
+      "kind": "interim",
+      "text": "そうですね、フィルターは右側にまとめて、結果の一覧を"
+    },
+    {
+      "t": 12500,
+      "kind": "interim",
+      "text": "そうですね、フィルターは右側にまとめて、結果の一覧を広く"
+    },
+    {
+      "t": 12800,
+      "kind": "interim",
+      "text": "そうですね、フィルターは右側にまとめて、結果の一覧を広くしたいです。"
+    },
+    {
+      "t": 13100,
+      "kind": "interim",
+      "text": "そうですね、フィルターは右側にまとめて、結果の一覧を広くしたいです。来週までに"
+    },
+    {
+      "t": 13400,
+      "kind": "interim",
+      "text": "そうですね、フィルターは右側にまとめて、結果の一覧を広くしたいです。来週までに試作を"
+    },
+    {
+      "t": 13700,
+      "kind": "interim",
+      "text": "そうですね、フィルターは右側にまとめて、結果の一覧を広くしたいです。来週までに試作を用意します。"
+    },
+    {
+      "t": 14200,
+      "kind": "final",
+      "text": "そうですね、フィルターは右側にまとめて、結果の一覧を広くしたいです。来週までに試作を用意します。"
+    },
+    {
+      "t": 17500,
+      "kind": "interim",
+      "text": "Great,"
+    },
+    {
+      "t": 17750,
+      "kind": "interim",
+      "text": "Great, let"
+    },
+    {
+      "t": 18000,
+      "kind": "interim",
+      "text": "Great, let’s"
+    },
+    {
+      "t": 18250,
+      "kind": "interim",
+      "text": "Great, let’s review"
+    },
+    {
+      "t": 18500,
+      "kind": "interim",
+      "text": "Great, let’s review it"
+    },
+    {
+      "t": 18750,
+      "kind": "interim",
+      "text": "Great, let’s review it on"
+    },
+    {
+      "t": 19000,
+      "kind": "interim",
+      "text": "Great, let’s review it on Friday."
+    },
+    {
+      "t": 19450,
+      "kind": "final",
+      "text": "Great, let’s review it on Friday."
+    }
+  ]
+}

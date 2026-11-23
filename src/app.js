@@ -1,9 +1,11 @@
 import { AudioCapture, canCaptureSystemAudio, inMacDesktopApp } from './audio.js';
+import { addFileSourceOption, FILE_TAIL_MS, pickAudioFile, traceDownloadButton } from './debug-tools.js';
 import { buildTranscript, formatDateTime, formatElapsed, safeFileName } from './exporter.js';
 import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './i18n.js';
 import { octicon } from './icons.js';
 import { MessageError } from './message-error.js';
 import { MockSummarizer, MockTranscriber, MockTranslator } from './mock.js';
+import { createPacer } from './pacer.js';
 import { ReadAloud } from './read-aloud.js';
 import { canRecord, Recorder } from './recorder.js';
 import { languageByScript, scriptsDiffer, sourceByScript, targetLanguages } from './script-hint.js';
@@ -11,6 +13,7 @@ import { loadApiKey, saveApiKey } from './secrets.js';
 import { UtteranceTracker } from './segmenter.js';
 import { store } from './store.js';
 import { GeminiSummarizer } from './summarizer.js';
+import { createTrace } from './trace.js';
 import { GeminiLiveTranscriber } from './transcriber.js';
 import { GeminiTranslator, RateLimitError } from './translator.js';
 import { applyReplacements, parseVocabulary } from './vocabulary.js';
@@ -62,11 +65,13 @@ const DEFAULTS = {
   globalShortcuts: true, // desktop app: start / stop and the caption window from any app
   interimInterval: 1.5, // seconds between re-translations of the sentence being spoken
 };
-const INTERIM_COOLDOWN_MS = 60_000;
 const HISTORY_LINES = 3;
 const SILENT_SYSTEM_AUDIO_MS = 8000; // how long PC audio may deliver nothing before the user is told
 const MOCK = new URLSearchParams(location.search).has('mock');
 const DEBUG = new URLSearchParams(location.search).has('debug'); // log raw recognizer output to the console
+// Debug only: the recognizer trace of the last run (src/trace.js), also readable from the console.
+let lastTrace = null;
+if (DEBUG) window.__twinscriptTrace = () => lastTrace;
 
 const $ = (id) => document.getElementById(id);
 const els = Object.fromEntries(
@@ -252,6 +257,8 @@ if (!canCaptureSystemAudio()) {
   for (const option of els.source.querySelectorAll('option:not([value=mic])')) option.remove();
   settings.source = 'mic';
 }
+if (DEBUG) addFileSourceOption(els.source);
+else if (settings.source === 'file') settings.source = 'mic';
 els.source.value = settings.source;
 applyFontSize();
 
@@ -967,7 +974,7 @@ function download(blob, name) {
 }
 
 els.export.onclick = () => {
-  if (isEmpty(current)) return toast(t('toast.nothingToSave'));
+  if (isEmpty(current) && !(DEBUG && lastTrace)) return toast(t('toast.nothingToSave'));
   flushSaves(); // so the title and recording lengths are up to date
   const sess = current;
   const rows = sess.recordings.map((rec, i) => {
@@ -996,6 +1003,7 @@ els.export.onclick = () => {
     heading.textContent = t('export.recordings');
     rows.unshift(heading);
   }
+  if (DEBUG && lastTrace) rows.push(traceDownloadButton(lastTrace, download));
   els.recordings.replaceChildren(...rows);
   els.exportDialog.showModal();
 };
@@ -1205,9 +1213,9 @@ async function start() {
     baseMs: sess.activeMs,
     startedAt: 0,
     otherInto: settings.otherInto,
-    interim: { busy: false, lastAt: 0, pausedUntil: 0, timer: null, text: '' },
   };
   r.tracker = createTracker(r);
+  r.pacer = createInterimPacer(r);
   run = r;
   setRunning(true);
   setStatus('connecting');
@@ -1216,10 +1224,12 @@ async function start() {
   const handlers = {
     onInterim: (text) => {
       if (DEBUG) console.log('[interim]', text);
+      if (run === r) r.trace?.add('interim', text);
       if (run === r) r.tracker.interim(applyReplacements(text, vocabulary.rules));
     },
     onFinal: (text) => {
       if (DEBUG) console.log('[final]', text);
+      if (run === r) r.trace?.add('final', text);
       if (run === r) r.tracker.final(applyReplacements(text, vocabulary.rules));
     },
     onState: (state) => run === r && setStatus(state),
@@ -1256,6 +1266,9 @@ async function start() {
 
   try {
     if (!MOCK) {
+      const file = settings.source === 'file' ? await pickAudioFile() : undefined;
+      if (file === null) return run === r && stop(); // the file picker was cancelled
+      if (run !== r) return;
       r.capture = new AudioCapture({
         onChunk: (b64) => r.transcriber.sendAudio(b64),
         onLevel: (rms) => {
@@ -1267,12 +1280,21 @@ async function start() {
             stop();
           }
         },
+        onFileEnded: () => {
+          setTimeout(() => {
+            if (run !== r) return;
+            toast(t('toast.audioEnded'));
+            stop();
+          }, FILE_TAIL_MS);
+        },
       });
-      await r.capture.start(settings.source);
+      await r.capture.start(settings.source, file);
       if (run !== r) return r.capture.stop(); // stopped while the permission prompt was open
     }
     r.startedAt = Date.now();
-    if (!MOCK && settings.record && canRecord()) startRecording(r);
+    // Times in the trace count from here, which for a file is (about) where its playback starts.
+    if (DEBUG) r.trace = createTrace({ langs: r.langs.map((l) => l.code), source: settings.source });
+    if (!MOCK && settings.record && settings.source !== 'file' && canRecord()) startRecording(r);
     r.transcriber.start();
     r.ticker = setInterval(() => {
       els.clock.textContent = formatElapsed(elapsedNow());
@@ -1331,12 +1353,16 @@ function stop() {
     live = null;
   }
   trimCaptions(0);
-  clearTimeout(r.interim.timer);
+  r.pacer.cancel();
   clearInterval(r.ticker);
   clearInterval(r.systemWatch);
   clearInterval(r.autosave);
   if (r.startedAt) r.session.activeMs = elapsedNow();
   if (r.recording) r.recording.durationMs = Date.now() - r.recording.startedAt;
+  if (r.trace) {
+    r.trace.end();
+    lastTrace = r.trace.toJSON();
+  }
   run = null;
   // Let the recorder hand over its last chunk before the audio graph is torn down.
   const release = () => r.capture?.stop();
@@ -1377,53 +1403,34 @@ function createTracker(r) {
       if (!text) {
         live?.el.remove();
         live = null;
-        clearTimeout(r.interim.timer);
-        r.interim.timer = null;
-        r.interim.text = '';
+        r.pacer.cancel();
         return;
       }
       if (!live) live = createSegment();
       setText(live, 'src', text);
-      r.interim.text = text;
-      scheduleInterimTranslation(r);
+      r.pacer.update(text);
     },
     correct: (seg, text) => commit(r, seg, text),
   });
 }
 
-function scheduleInterimTranslation(s) {
-  const it = s.interim;
-  if (!settings.interimTranslate || it.busy || it.timer || !live) return;
-  const now = Date.now();
-  if (now < it.pausedUntil) return;
-  const wait = Math.max(0, it.lastAt + settings.interimInterval * 1000 - now);
-  it.timer = setTimeout(async () => {
-    it.timer = null;
-    const seg = live;
-    const text = it.text;
-    if (run !== s || !seg || text.length < 4) return;
-    it.busy = true;
-    it.lastAt = Date.now();
-    try {
-      if (s.langs.length > 2 || intoSeveral(s, text)) {
-        await translateInterimLines(s, seg, text);
-      } else {
-        const out = await s.translator.translate(text, { history: recentHistory(s) });
-        if (seg === live && out) {
-          clearTargets(seg);
-          setText(seg, 'tgt', out, 'pending');
-        }
-      }
-    } catch (err) {
-      if (err instanceof RateLimitError) {
-        it.pausedUntil = Date.now() + INTERIM_COOLDOWN_MS;
-        toast(t('toast.rateLimited'), 6000, 'warning');
-      }
-    } finally {
-      it.busy = false;
-      if (run === s && live === seg && it.text !== text) scheduleInterimTranslation(s);
-    }
-  }, wait);
+// The sentence being spoken is translated as it grows; src/pacer.js decides when.
+function createInterimPacer(r) {
+  return createPacer({
+    options: {
+      enabled: () => settings.interimTranslate,
+      interval: () => settings.interimInterval,
+    },
+    translate: (text) =>
+      r.langs.length > 2 || intoSeveral(r, text)
+        ? translateInterimLines(r, live, text)
+        : r.translator.translate(text, { history: recentHistory(r) }),
+    show: (out) => {
+      clearTargets(live);
+      setText(live, 'tgt', out, 'pending');
+    },
+    onRateLimit: () => toast(t('toast.rateLimited'), 6000, 'warning'),
+  });
 }
 
 // With a third language, or two and a sentence in neither of them: the sentence in progress goes
@@ -1476,9 +1483,7 @@ function clearTargets(seg) {
 function finalize(r, text) {
   const seg = live;
   live = null;
-  clearTimeout(r.interim.timer);
-  r.interim.timer = null;
-  r.interim.text = '';
+  r.pacer.finish();
   commit(r, seg, text);
   return seg;
 }

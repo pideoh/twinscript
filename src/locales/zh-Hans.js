@@ -29,6 +29,7 @@ export default {
   'source.mic': '麦克风',
   'source.system': '电脑音频',
   'source.both': '麦克风 + 电脑音频',
+  'source.file': '音频文件（调试）',
 
   // transcript and caption zone
   'empty.main': '选择两种语言，然后点击“开始翻译”。',
@@ -83,6 +84,7 @@ export default {
   'export.recording': '录音 {n} ・ {date} ・ {length}',
   'export.recordingNow': '录音中',
   'export.save': '保存',
+  'export.trace': '下载识别跟踪记录（调试）',
 
   // downloaded transcript files
   'file.title': '转录文本',
@@ -180,6 +182,7 @@ export default {
   // errors reported by audio.js, transcriber.js and translator.js
   'error.windowBlocked': '窗口被拦截',
   'error.noSharedAudio': '共享的屏幕或标签页不含音频。请在共享对话框中开启“分享音频”。',
+  'error.audioFileDecode': '无法将 {name} 作为音频读取。请尝试 WAV、MP3、M4A、Ogg 或 WebM 文件。',
   'error.systemAudioPermission':
     '电脑音频已中断。请在 系统设置 → 隐私与安全性 → 录屏与系统录音 →“仅系统录音”中允许 Twinscript，然后重新打开应用。电脑音频需要 macOS 14.2 或更高版本。',
   'error.connectFailed': '无法连接：{reason}',

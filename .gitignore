@@ -2,3 +2,5 @@ node_modules/
 .DS_Store
 dist/
 CLAUDE.local.md
+*.trace.json
+twinscript-trace-*.json
