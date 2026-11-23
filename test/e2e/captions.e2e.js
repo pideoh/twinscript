@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mockGemini, reload, setup } from './helpers.js';
+import { listening, mockGemini, reload, setup } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -70,7 +70,7 @@ test('the translation on screen is swapped once, not restarted, when the sentenc
     });
   });
   await page.click('#toggle');
-  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  await listening(page);
   send('interimInputTranscription', 'It is raining');
   await page.waitForFunction(() => document.querySelector('.seg .tgt')?.textContent === '雨が');
   send('inputTranscription', 'It is raining today.');

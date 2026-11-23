@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { setup } from './helpers.js';
+import { listening, setup } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -69,7 +69,7 @@ test('finished translations into the chosen language are read aloud once, and no
   );
   const send = await mockMeeting(page);
   await page.click('#toggle');
-  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  await listening(page);
 
   send('interimInputTranscription', 'It is raining');
   await shownTranslation(page, '雨が降っています');
@@ -108,7 +108,7 @@ test('of the two translations of speech in neither language, the one in the chos
     route.fulfill({ status: 200, contentType: 'text/event-stream', body });
   });
   await page.click('#toggle');
-  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  await listening(page);
   send('inputTranscription', 'और यह है छोटे सिंक्रोनस मोटर।');
   await page.waitForFunction(() => document.querySelectorAll('.seg .tgt-line:not(.pending)').length === 2);
   await page.waitForFunction(() => window.spoken.length === 1);
@@ -122,7 +122,7 @@ test('turning reading aloud off silences it at once, also while listening', asyn
   const { page, errors, close } = await openApp('', { apiKey: 'test-key', readAloud: 'both' }, { script: fakeSpeech });
   const send = await mockMeeting(page);
   await page.click('#toggle');
-  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  await listening(page);
   send('inputTranscription', 'それでは会議を始めます。');
   await page.waitForFunction(() => window.spoken.length === 1);
   assert.deepEqual(await spoken(page), [{ text: 'Let us begin the meeting.', lang: 'en-US' }]);
