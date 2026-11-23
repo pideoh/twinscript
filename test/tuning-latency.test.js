@@ -34,6 +34,8 @@ test('each set of request options is timed and its thinking tokens are reported'
       ['no thinking option', 2, 3000, 210],
       ['thinkingBudget 0', 0, null, null],
       ['thinkingLevel low', 2, 500, 0],
+      ['priority tier (serviceTier)', 2, 3000, 210],
+      ['priority tier (service_tier)', 2, 3000, 210],
     ],
   );
   assert.match(rows[2].error, /^HTTP 400: thinkingBudget is not supported/);
@@ -72,4 +74,31 @@ test("the app's own requests are timed one feature at a time", async () => {
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+test('the tier that served a request is taken from the response and shown', async () => {
+  let t = 0;
+  const seen = [];
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    seen.push(body);
+    const priority = body.serviceTier === 'priority';
+    t += priority ? 400 : 2000;
+    return new Response(sse([{ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }]), {
+      status: 200,
+      headers: { 'x-gemini-service-tier': priority ? 'priority' : 'standard' },
+    });
+  };
+  const variants = VARIANTS.filter((v) => /no thinking|serviceTier/.test(v.name));
+  const rows = await measure({ apiKey: 'KEY', model: 'm-1', count: 3, variants, fetchImpl, now: () => t });
+  assert.deepEqual(
+    rows.map((r) => [r.name, r.totalMs, r.tier]),
+    [
+      ['no thinking option', 2000, 'standard'],
+      ['priority tier (serviceTier)', 400, 'priority'],
+    ],
+  );
+  assert.equal(seen[0].serviceTier, undefined);
+  assert.equal(seen[1].serviceTier, 'priority', 'a top-level field of the request');
+  assert.match(formatLatency(rows), /served by/);
 });

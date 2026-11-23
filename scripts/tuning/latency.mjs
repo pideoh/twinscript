@@ -21,13 +21,18 @@ export const VARIANTS = [
   { name: 'no thinking option', config: {} },
   { name: 'thinkingBudget 0', config: { thinkingConfig: { thinkingBudget: 0 } } },
   { name: 'thinkingLevel low', config: { thinkingConfig: { thinkingLevel: 'low' } } },
+  // The Priority tier (a paid, faster tier in preview). Documented for another endpoint as
+  // "service_tier"; both spellings are tried here, and the response says which tier served it.
+  { name: 'priority tier (serviceTier)', config: {}, top: { serviceTier: 'priority' } },
+  { name: 'priority tier (service_tier)', config: {}, top: { service_tier: 'priority' } },
 ];
 
-async function once({ apiKey, model, config, fetchImpl = fetch, now = () => performance.now() }) {
+async function once({ apiKey, model, config, top = {}, fetchImpl = fetch, now = () => performance.now() }) {
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM }] },
     contents: [{ role: 'user', parts: [{ text: `<text>\n${TEXT}\n</text>` }] }],
     generationConfig: { temperature: 0.2, maxOutputTokens: 1024, ...config },
+    ...top,
   };
   const start = now();
   const res = await fetchImpl(`${API}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
@@ -74,7 +79,14 @@ async function once({ apiKey, model, config, fetchImpl = fetch, now = () => perf
       }
     }
   }
-  return { status: 200, firstMs, totalMs: now() - start, thoughts, chars };
+  return {
+    status: 200,
+    firstMs,
+    totalMs: now() - start,
+    thoughts,
+    chars,
+    tier: res.headers.get('x-gemini-service-tier'),
+  };
 }
 
 // The same model asked the way the app asks it (src/translator.js), one feature at a time, to see
@@ -158,6 +170,7 @@ export function formatLatency(rows) {
     'whole answer ms (median)',
     'fastest-slowest',
     'thinking tokens',
+    'served by',
     'error',
   ];
   const lines = rows.map((r) => [
@@ -167,6 +180,7 @@ export function formatLatency(rows) {
     ms(r.totalMs),
     r.minMs == null ? '-' : `${ms(r.minMs)}-${ms(r.maxMs)}`,
     ms(r.thoughts),
+    r.tier ?? '-',
     r.error ?? '',
   ]);
   const widths = head.map((h, i) => Math.max(h.length, ...lines.map((l) => l[i].length)));
@@ -184,7 +198,7 @@ export async function measure({ apiKey, model, count, variants = VARIANTS, fetch
   const results = variants.map(() => []);
   for (let round = 0; round < count; round++) {
     for (const [i, variant] of variants.entries())
-      results[i].push(await once({ apiKey, model, config: variant.config, fetchImpl, now }));
+      results[i].push(await once({ apiKey, model, config: variant.config, top: variant.top, fetchImpl, now }));
     say(`  round ${round + 1} of ${count}`);
   }
   return variants.map((variant, i) => {
@@ -200,6 +214,7 @@ export async function measure({ apiKey, model, count, variants = VARIANTS, fetch
       minMs: totals.length ? Math.min(...totals) : null,
       maxMs: totals.length ? Math.max(...totals) : null,
       thoughts: median(good.map((r) => r.thoughts)),
+      tier: [...new Set(good.map((r) => r.tier).filter(Boolean))].join('/') || null,
       error: bad && `HTTP ${bad.status}: ${bad.error}`,
     };
   });
@@ -236,6 +251,7 @@ fastest-slowest   the spread of the whole answer; a wide spread means the model'
 first text ms     until the first piece of the translation arrives
 whole answer ms   until the answer is complete
 thinking tokens   tokens the model spent thinking before answering; 0 is what a live translation wants
+served by         the service tier the response names (standard, priority), when it names one
 In the first table, the first row is the option the app used to send to every model.
 The second table uses the app's own requests: a row much slower than "translate" shows which part of a request costs time.`);
   return [...rows, ...appRows];

@@ -161,7 +161,9 @@ for each how long the first text and the whole answer took, and how many tokens 
 table times the app's own requests one feature at a time (plain, with earlier lines as context, continuing a shown
 translation, the model picking the direction, identifying the language), which shows what part of a request is slow. The rows
 are asked in turn, round after round, and `fastest-slowest` shows the spread: the model's speed drifts from minute to
-minute, so a difference between two rows only means something when it is larger than the spread within each. An answer to
+minute, so a difference between two rows only means something when it is larger than the spread within each. The first table also tries the Priority service tier, a faster paid tier (in preview at the time of writing, about
+1.8 times the Standard price), and `served by` shows the tier the response names. Standard is documented as
+"seconds to minutes", so slow answers at busy times are expected on it. An answer to
 one sentence normally takes well under a second; thinking tokens above 0 mean the model is reasoning before it
 translates, which is where seconds go.
 
