@@ -247,7 +247,9 @@ function blockRange(source) {
 /** `source` (the text of src/pricing.js) with its price block replaced by `table`. */
 export function replacePricesBlock(source, table) {
   const [start, end] = blockRange(source);
-  return source.slice(0, start) + renderPricesBlock(table) + source.slice(end);
+  // Keep the file's line endings: a checkout on Windows may have CRLF.
+  const eol = source.includes('\r\n') ? '\r\n' : '\n';
+  return source.slice(0, start) + renderPricesBlock(table).replaceAll('\n', eol) + source.slice(end);
 }
 
 /** Reads the price table from the text of src/pricing.js by evaluating only its price block. */

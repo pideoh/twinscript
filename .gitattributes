@@ -1,0 +1,2 @@
+# The same bytes on every platform: text files are checked out with LF line endings.
+* text=auto eol=lf
