@@ -4,11 +4,12 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createVirtualClock } from '../scripts/tuning/clock.mjs';
 import { LANGS, parseArgs, replay } from '../scripts/tuning/replay.mjs';
 
-const root = new URL('..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url)); // not .pathname: that is no path on Windows
 const run = (...args) =>
   promisify(execFile)(process.execPath, ['scripts/tuning/replay.mjs', ...args], {
     cwd: root,
