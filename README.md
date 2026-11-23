@@ -43,6 +43,8 @@ Each release also has a `SHA256SUMS.txt` to check the download against. See the 
 2. Open Twinscript, open the settings (gear button, top right), enter the key and save.
 3. Choose the two languages and the audio input, then press "Start translating".
 
+Each line starts with a short code for its language (JA, EN, ZH), for what was said and for its translations.
+
 For a meeting in three languages, pick one more in the third language menu ("+ Add a language"). Every sentence is then
 translated into the other two, each translation on its own line with a tag for its language. Choose "+ Add a language"
 again to go back to two languages.
