@@ -984,6 +984,12 @@ input[type="range"] {
   padding: 0;
   border: 0;
 }
+/* Several translations per sentence: a rule between sentences shows which lines belong together. */
+.now-list .seg:has(.tgt.multi) + .seg,
+.now-list .seg + .seg:has(.tgt.multi) {
+  padding-top: var(--base-size-12);
+  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
 @media (min-width: 820px) {
   .now .seg {
     grid-template-columns: 1fr;

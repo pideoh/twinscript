@@ -251,8 +251,8 @@ test('with a third language the settings hide the choice for other languages and
   assert.ok(await page.locator('#readAloudUnavailable').isHidden());
   assert.deepEqual(
     [await page.inputValue('#captionContent'), await page.inputValue('#captionItems')],
-    ['tgt', '1'],
-    'the caption zone shows translations only, one sentence',
+    ['tgt', '3'],
+    'the caption zone shows translations only and keeps as many sentences as with two languages',
   );
   await page.selectOption('#captionContent', 'both');
   await page.click('#settings button[value=ok]');

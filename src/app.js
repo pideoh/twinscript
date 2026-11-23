@@ -50,8 +50,9 @@ const DEFAULTS = {
   readAloud: 'off', // 'off', 'A', 'B' or 'both': translations into which language are read aloud
   captionItems: 3, // sentences kept in the caption zone, including the one being spoken
   captionContent: 'both', // 'both' or 'tgt' (translation only) in the caption zone
-  // The same two with a third language, remembered apart: several translations take more room.
-  captionItems3: 1,
+  // The same two with a third language, remembered apart. Translations only, so a sentence takes
+  // two lines there as well; fewer sentences would be replaced before they can be read.
+  captionItems3: 3,
   captionContent3: 'tgt',
   captionFontSize: 20, // text size while the caption zone is in the caption window
   captionOpacity: 90, // background of the desktop caption overlay, in percent
