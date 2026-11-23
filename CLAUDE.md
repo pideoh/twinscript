@@ -24,7 +24,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/secrets.js` | Where the API key is kept (desktop: `window.secretStore`; browser: memory only). DOM-free |
 | `src/exporter.js` | Transcript export (txt / md / csv / srt). Pure functions |
 | `src/mock.js` | Stand-in engines for the `?mock=1` demo |
-| `src/pacer.js` | When the sentence being spoken is translated and whether a result is still shown (strategy `interval`: at most every interval seconds, no overlap, at least 4 characters, a 60 s pause after a rate limit). DOM-free, clock and timers injected |
+| `src/pacer.js` | When the sentence being spoken is translated: pacing strategies `interval` (the app's default), `steady`, `carry` and `chunk`; `?debug=1&pacer=<name>` selects one. DOM-free, clock and timers injected |
 | `src/trace.js` | Debug-only (`?debug=1`) trace of raw recognizer results with times; JSON format v1 and the download file name. DOM-free |
 | `src/debug-tools.js` | Debug-only tools wired into `app.js`: the "Audio file (debug)" input and file picker, the trace download entry |
 | `src/i18n.js` | Display-language resolution (`resolveLocale`), `t(key, params)`, applying `data-i18n*` to static HTML. Languages are registered only in its `LOCALES` array |
@@ -43,6 +43,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `.github/workflows/preview-build.yml` | Started by hand: builds signed zips of a branch as workflow artifacts, to try the app before a release. Publishes nothing |
 | `scripts/check-commits.js` | Checks that a pull request's commit subjects and title follow Conventional Commits (run in `test.yml`) |
 | `scripts/tuning/replay.mjs`, `scripts/tuning/metrics.mjs`, `scripts/tuning/clock.mjs` | Replays a recognizer trace through the segmenter, the pacer and the translator (real, or `--mock` on a simulated clock) and scores first / final delay, flicker and requests. See `docs/tuning.md` |
+| `scripts/tuning/latency.mjs` | Times one short translation request with the app's request options and alternatives, and reports thinking tokens: tells a slow model from a slow strategy |
 | `scripts/sign-mac.js`, `scripts/verify-mac-signature.js`, `scripts/ci-mac-signing-keychain.sh` | macOS releases are re-signed with a fixed self-signed certificate (electron-builder `afterSign` hook) so the app's identity, and the permissions tied to it, survive updates; the check and the CI keychain setup. `.github/workflows/sign-check.yml` exercises this on pull requests |
 
 ## Commands

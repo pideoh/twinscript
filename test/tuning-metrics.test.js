@@ -3,7 +3,9 @@ import { test } from 'node:test';
 import {
   aggregate,
   erased,
+  formatHealth,
   formatTable,
+  health,
   mean,
   median,
   percentile,
@@ -92,4 +94,21 @@ test('aggregate skips missing values and sums counts; the table has one row per 
   const table = formatTable([{ label: 'interval 1.5s', summary: a }]).split('\n');
   assert.equal(table.length, 2);
   assert.match(table[1], /^interval 1\.5s\s+2\s+100\/100\/100\s+500\/500\/600\s+0\.25\/0\.25\/0\.50\s+4\s+4\s+5\s+1$/);
+});
+
+test('the health of a run: failed requests, answer times and sentences that showed a live translation', () => {
+  const sentences = [
+    { finishedAt: 3000, displays: [{ t: 1200 }, { t: 3400 }] }, // translated while spoken
+    { finishedAt: 6000, displays: [{ t: 6500 }] }, // only the final translation
+    { finishedAt: 9000, displays: [] },
+  ];
+  const h = health(sentences, { failed: 2, lastError: 'HTTP 400:\n bad  request', answerMs: [400, 600, 2000] });
+  assert.equal(h.failed, 2);
+  assert.equal(h.liveSentences, 1);
+  assert.equal(h.sentences, 3);
+  assert.equal(h.answerMs.mean, 1000);
+  assert.deepEqual(formatHealth([{ label: 'carry 1.5s', health: h }]).split('\n'), [
+    'strategy    failed  answer ms mean/med/p90  live  last error',
+    'carry 1.5s  2       1000/600/2000           1/3   HTTP 400: bad request',
+  ]);
 });

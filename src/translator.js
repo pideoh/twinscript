@@ -30,7 +30,8 @@ export class GeminiTranslator {
 
   // into: the language to translate into when the writing system has settled it; otherwise the
   // model is given the rules and picks the direction itself. Only one of the two is ever sent.
-  #system(into) {
+  // previous: a translation of the beginning of the text that is already on screen, to continue.
+  #system(into, previous) {
     const { langA, langB, otherInto } = this.langs;
     const speakers = this.langC ? `${langA}, ${langB} and ${this.langC}` : `${langA} and ${langB}`;
     const direction = into
@@ -47,6 +48,9 @@ export class GeminiTranslator {
       'The transcript comes from speech recognition and may contain errors or fillers; infer the intended meaning from context and translate it naturally and concisely.',
       'The text may be an unfinished sentence because the speaker is still talking; translate what is there without inventing a continuation.',
       '<context> holds earlier lines for reference only; never translate it.',
+      previous
+        ? `A translation of the beginning of this text is already on screen: "${plain(previous)}". Keep its wording wherever the fuller text does not show it to be wrong, and extend it rather than rephrase it.`
+        : '',
       this.glossary ? `Background and glossary supplied by the user:\n${this.glossary}` : '',
     ]
       .filter(Boolean)
@@ -56,15 +60,16 @@ export class GeminiTranslator {
   // history: [{src, tgt}], onDelta(fullTextSoFar). Resolves with the full translation.
   // onTarget(language) is told the language the model was told to translate into, or null when
   // the model was left to pick the direction itself. into: the language to translate into, chosen
-  // by the caller; without it the writing system decides when it can.
-  async translate(text, { history = [], onDelta, onTarget, signal, into: chosen } = {}) {
+  // by the caller; without it the writing system decides when it can. previous: the translation
+  // shown so far for the beginning of this text, which the model is told to continue.
+  async translate(text, { history = [], onDelta, onTarget, signal, into: chosen, previous } = {}) {
     const context = history.map((h) => `${plain(h.src)}\n=> ${plain(h.tgt)}`).join('\n');
     // Where the writing system settles the direction, the model is told instead of asked.
     const into = chosen || targetByScript(text, this.langs);
     onTarget?.(into);
     const prompt = `${context ? `<context>\n${context}\n</context>\n` : ''}<text>\n${plain(text)}\n</text>`;
     const body = {
-      systemInstruction: { parts: [{ text: this.#system(into) }] },
+      systemInstruction: { parts: [{ text: this.#system(into, previous) }] },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
     };
@@ -82,7 +87,7 @@ export class GeminiTranslator {
       if (res.status === 400 && this.useThinkingConfig && /thinking/i.test(detail)) {
         // This model doesn't take the thinking option; drop it for good.
         this.useThinkingConfig = false;
-        return this.translate(text, { history, onDelta, onTarget, signal, into: chosen });
+        return this.translate(text, { history, onDelta, onTarget, signal, into: chosen, previous });
       }
       if (res.status === 429) throw new RateLimitError('error.rateLimit');
       let message = detail;

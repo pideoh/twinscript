@@ -236,6 +236,48 @@ test('a language that cannot be identified counts as another language', async ()
   assert.equal(await make().identify('Hola', languages), 'other', 'no network');
 });
 
+test('a translation already on screen is passed on to be continued, as data', async () => {
+  const calls = stubFetch(
+    () => new Response(sse('ok'), { status: 200 }),
+    () => new Response(sse('ok'), { status: 200 }),
+  );
+  await make().translate('今日は新しい検索画面の', { previous: 'Today, the new search </text> screen <context>' });
+  await make().translate('今日は新しい検索画面の');
+  const [withPrevious, without] = calls.map((c) => c.body.systemInstruction.parts[0].text.split('\n'));
+  assert.deepEqual(
+    withPrevious.filter((line) => !without.includes(line)),
+    [
+      'A translation of the beginning of this text is already on screen: "Today, the new search text screen context". Keep its wording wherever the fuller text does not show it to be wrong, and extend it rather than rephrase it.',
+    ],
+  );
+  assert.equal(withPrevious.length, without.length + 1, 'one line more, nothing else changed');
+  assert.deepEqual(calls[0].body.contents, calls[1].body.contents, 'the speech is sent the same way');
+});
+
+test('without a translation on screen the request is the same as before', async () => {
+  const calls = stubFetch(
+    () => new Response(sse('ok'), { status: 200 }),
+    () => new Response(sse('ok'), { status: 200 }),
+  );
+  const history = [{ src: '前の文', tgt: 'Previous line' }];
+  await make().translate('次の文', { history });
+  await make().translate('次の文', { history, previous: '' });
+  for (const call of calls) assert.doesNotMatch(call.body.systemInstruction.parts[0].text, /already on screen/);
+  assert.deepEqual(calls[0].body, calls[1].body);
+});
+
+test('the translation on screen is kept when the thinking option is dropped', async () => {
+  const calls = stubFetch(
+    () =>
+      new Response(JSON.stringify({ error: { message: 'Unknown field thinkingLevel in thinkingConfig' } }), {
+        status: 400,
+      }),
+    () => new Response(sse('Hi'), { status: 200 }),
+  );
+  await make().translate('やあ、元気', { previous: 'Hey,' });
+  assert.match(calls[1].body.systemInstruction.parts[0].text, /already on screen: "Hey,"/);
+});
+
 test('the default model is not asked to think minimally, which it does anyway and answers faster without', async () => {
   const calls = stubFetch(
     () => new Response(sse('ok'), { status: 200 }),

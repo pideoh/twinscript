@@ -116,3 +116,33 @@ export function formatTable(runs) {
       .trimEnd();
   return [row(head), ...lines.map(row)].join('\n');
 }
+
+// sentences: [{ finishedAt, displays: [{ t }] }]; counts: { failed, lastError, answerMs: [] }.
+export function health(sentences, counts = {}) {
+  const live = sentences.filter((s) => s.displays.some((d) => d.t < s.finishedAt)).length;
+  return {
+    failed: counts.failed ?? 0,
+    lastError: counts.lastError ?? null,
+    answerMs: stats(counts.answerMs ?? []),
+    liveSentences: live,
+    sentences: sentences.length,
+  };
+}
+
+export function formatHealth(runs) {
+  const head = ['strategy', 'failed', 'answer ms mean/med/p90', 'live', 'last error'];
+  const lines = runs.map(({ label, health: h }) => [
+    label,
+    String(h.failed),
+    [h.answerMs.mean, h.answerMs.median, h.answerMs.p90].map(ms).join('/'),
+    `${h.liveSentences}/${h.sentences}`,
+    h.lastError ? String(h.lastError).replace(/\s+/g, ' ').slice(0, 80) : '',
+  ]);
+  const widths = head.map((h, i) => Math.max(h.length, ...lines.map((l) => l[i].length)));
+  const row = (cells) =>
+    cells
+      .map((c, i) => c.padEnd(widths[i]))
+      .join('  ')
+      .trimEnd();
+  return [row(head), ...lines.map(row)].join('\n');
+}

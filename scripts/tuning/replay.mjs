@@ -4,7 +4,7 @@
 // translations appeared: delay and flicker. See docs/tuning.md.
 //
 //   GEMINI_API_KEY=... node scripts/tuning/replay.mjs <trace.json> [--strategy interval[,other]]
-//     [--interval 1.5] [--speed 1] [--mock] [--out result.json]
+//     [--interval 1.5] [--speed 1] [--mock [--rephrase]] [--out result.json]
 //
 // The translation flow below mirrors src/app.js (createTracker, the pacer's callbacks,
 // translateInterimLines, translateFinal, translateFinalLines, recentHistory) for two languages,
@@ -12,12 +12,12 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
-import { createPacer, DEFAULT_STRATEGY } from '../../src/pacer.js';
+import { createPacer, DEFAULT_STRATEGY, STRATEGIES } from '../../src/pacer.js';
 import { sourceByScript, targetByScript, targetLanguages } from '../../src/script-hint.js';
 import { UtteranceTracker } from '../../src/segmenter.js';
 import { GeminiTranslator, RateLimitError } from '../../src/translator.js';
 import { createVirtualClock } from './clock.mjs';
-import { aggregate, formatTable, sentenceMetrics } from './metrics.mjs';
+import { aggregate, formatHealth, formatTable, health, sentenceMetrics } from './metrics.mjs';
 
 // Codes and English names as in LANGS in src/app.js (test/tuning-replay.test.js keeps them equal).
 export const LANGS = [
@@ -43,19 +43,39 @@ const HISTORY_LINES = 3;
 const OTHER_INTO = 'all';
 const MOCK_LATENCY_MS = 400;
 
+// The units the fake translator works in: words where the speech has spaces, else characters.
+const spaced = (text) => /\s/.test(text);
+const units = (s, text) => (spaced(text) ? s.split(/\s+/).filter(Boolean) : Array.from(s));
+
 // A translator that answers after a fixed delay with the target and the text, the same every run.
+// rephrase: like a model that reorders, it puts the newest unit (word or character) first, so its
+// answer for a longer text is not an extension of its answer for a shorter one; flicker shows.
+// Given `previous` (a translation already shown), it keeps that and appends the units of the text
+// beyond as many as `previous` holds (rephrased the same way), so a strategy that carries the shown
+// translation does not flicker.
 export class MockTranslator {
-  constructor({ langA, langB, otherInto = langA, setTimer, latencyMs = MOCK_LATENCY_MS }) {
+  constructor({ langA, langB, otherInto = langA, setTimer, latencyMs = MOCK_LATENCY_MS, rephrase = false }) {
     this.langs = { langA, langB, otherInto };
     this.setTimer = setTimer;
     this.latencyMs = latencyMs;
+    this.rephrase = rephrase;
   }
 
-  async translate(text, { onDelta, onTarget, into: chosen } = {}) {
+  #render(list, text) {
+    const order = this.rephrase && list.length > 1 ? [list.at(-1), ...list.slice(0, -1)] : list;
+    return order.join(spaced(text) ? ' ' : '');
+  }
+
+  async translate(text, { onDelta, onTarget, into: chosen, previous } = {}) {
     const into = chosen || targetByScript(text, this.langs);
     onTarget?.(into);
     await new Promise((resolve) => this.setTimer(resolve, this.latencyMs));
-    const out = `[${into ?? 'auto'}] ${text}`;
+    let out;
+    if (previous) {
+      const rest = units(text, text).slice(units(previous.replace(/^\[[^\]]*\] /, ''), text).length);
+      out = rest.length ? `${previous}${spaced(text) ? ' ' : ''}${this.#render(rest, text)}` : previous;
+    } else if (this.rephrase) out = `[${into ?? 'auto'}] ${this.#render(units(text, text), text)}`;
+    else out = `[${into ?? 'auto'}] ${text}`;
     onDelta?.(out);
     return out;
   }
@@ -83,7 +103,7 @@ export async function replay({
     return lang;
   });
   const names = langs.map((l) => l.name);
-  const counts = { requests: 0, rateLimited: 0, failed: 0, answered: 0, lastError: null };
+  const counts = { requests: 0, rateLimited: 0, failed: 0, answered: 0, lastError: null, answerMs: [] };
   let traceNow = () => 0;
   const report = () =>
     onProgress?.({
@@ -97,9 +117,11 @@ export async function replay({
     });
   const counted = async (call) => {
     counts.requests++;
+    const asked = clock.now();
     try {
       const out = await call();
       counts.answered++;
+      counts.answerMs.push(clock.now() - asked);
       return out;
     } catch (err) {
       if (err instanceof RateLimitError) counts.rateLimited++;
@@ -184,23 +206,38 @@ export async function replay({
       .map(({ src, tgt, tgts }) => ({ src, tgt: (lang && tgts?.find((x) => x.lang === lang)?.text) || tgt }));
   const wait = (ms) => new Promise((resolve) => clock.setTimer(resolve, ms));
 
-  async function interimLines(rec, text, isCurrent) {
+  async function interimLines(rec, text, { isCurrent, previous, keep }) {
     const source = sourceByScript(text, names);
     if (!source) return;
     const targets = targetsFor(source);
     setTargets(rec, targets);
     const results = await Promise.allSettled(
       targets.map(async (code) => {
-        const out = await tr.translate(text, { history: recentHistory(code), into: langName(code) });
-        if (isCurrent() && out && rec.tgts?.some((x) => x.lang === code)) setLine(rec, code, out);
+        const out = await tr.translate(text, {
+          history: recentHistory(code),
+          into: langName(code),
+          previous: previous?.(code),
+        });
+        if (isCurrent() && out && rec.tgts?.some((x) => x.lang === code)) {
+          setLine(rec, code, out);
+          keep?.(code, out);
+        }
       }),
     );
     const limited = results.find((x) => x.status === 'rejected' && x.reason instanceof RateLimitError);
     if (limited) throw limited.reason;
   }
 
+  // What the pacer handed over when the sentence was finished, only for its first final translation.
+  const takePrevious = (rec) => {
+    const previous = rec.previous;
+    delete rec.previous;
+    return previous;
+  };
+
   async function translateFinal(rec) {
     if (intoSeveral(rec.src)) return translateFinalLines(rec);
+    const previous = takePrevious(rec)?.();
     const history = recentHistory();
     rec.rev++;
     const rev = rec.rev;
@@ -210,6 +247,7 @@ export async function replay({
       try {
         const out = await tr.translate(rec.src, {
           history,
+          previous,
           onDelta: (partial) => {
             if (rec.rev === rev && !swapWhenDone) setSingle(rec, partial);
           },
@@ -232,6 +270,7 @@ export async function replay({
   }
 
   async function translateFinalLines(rec) {
+    const previous = takePrevious(rec);
     rec.rev++;
     const rev = rec.rev;
     const source = sourceByScript(rec.src, names) ?? (await tr.identify(rec.src, names).catch(() => 'other'));
@@ -239,20 +278,21 @@ export async function replay({
     const targets = targetsFor(source);
     const kept = !setTargets(rec, targets);
     const swap = new Set(kept ? targets.filter((code) => rec.lines.get(code)) : []);
-    await Promise.all(targets.map((code) => translateLine(rec, rev, code, swap.has(code))));
+    await Promise.all(targets.map((code) => translateLine(rec, rev, code, swap.has(code), previous?.(code))));
     if (rec.rev === rev && rec.tgts.every((x) => x.text)) {
       rec.finalText = shownText(rec);
       rec.finalShownAt = clock.now();
     }
   }
 
-  async function translateLine(rec, rev, code, swapWhenDone) {
+  async function translateLine(rec, rev, code, swapWhenDone, previous) {
     const history = recentHistory(code);
     for (let attempt = 0; ; attempt++) {
       try {
         const out = await tr.translate(rec.src, {
           history,
           into: langName(code),
+          previous,
           onDelta: (partial) => {
             if (rec.rev === rev && !swapWhenDone) setLine(rec, code, partial);
           },
@@ -282,10 +322,10 @@ export async function replay({
     now: clock.now,
     setTimer: clock.setTimer,
     clearTimer: clock.clearTimer,
-    translate: (text, { isCurrent }) => {
+    translate: (text, context) => {
       const p = intoSeveral(text)
-        ? interimLines(live, text, isCurrent)
-        : tr.translate(text, { history: recentHistory() });
+        ? interimLines(live, text, context)
+        : tr.translate(text, { history: recentHistory(), previous: context.previous?.() });
       track(p.catch(() => {}));
       return p;
     },
@@ -310,7 +350,7 @@ export async function replay({
       if (aboveLive) return commit(newRecord(), text);
       const rec = live ?? newRecord();
       live = null;
-      pacer.finish();
+      rec.previous = pacer.finish();
       return commit(rec, text);
     },
     setLive(text) {
@@ -361,10 +401,13 @@ export async function replay({
   }));
   const rows = sentences.map((s) => ({ id: s.id, ...sentenceMetrics(s) }));
   return {
-    label: `${strategy} ${interval}s`,
+    label: strategy === 'chunk' ? strategy : `${strategy} ${interval}s`, // chunk does not use the interval
     strategy,
     options: { interval, speed },
     summary: aggregate(rows, counts),
+    // Whether the run itself was sound: failed requests, how long answers took, and how many
+    // sentences had a translation on screen before they were finished.
+    health: health(sentences, counts),
     sentences: sentences.map((s, i) => ({ ...s, metrics: rows[i] })),
   };
 }
@@ -375,10 +418,15 @@ export const USAGE = `Replays a recorded recognizer trace and scores how the tra
   node scripts/tuning/replay.mjs test/fixtures/replay-trace.json --mock
 
 Options
-  --strategy a,b   pacing strategies to compare, one run each (default: interval)
-  --interval 1.5   seconds between in-progress translations for the interval strategy
+  --strategy a,b   pacing strategies to compare, one run each (default: interval);
+                   one of ${Object.keys(STRATEGIES).join(', ')}
+  --interval 1.5   seconds between in-progress translations for interval, steady and carry
   --speed 1        play the speech faster; delays are then not comparable, use it for a dry run only
   --mock           fake translator on a simulated clock: no key, instant, same numbers every time
+  --mock=rephrase  the same, but it reorders like a real model, so flicker shows unless the
+                   strategy passes the shown translation to continue (carry, chunk)
+  --limit 120      replay only the first N seconds of the trace: a quick check
+  --together       run the strategies at the same time, so they meet the same model speed
   --out file.json  also write every sentence's timeline
   --quiet          print only the table
   --help           this text
@@ -392,7 +440,13 @@ final ms   from the end of a sentence to its complete translation (lower is bett
 flicker    share of shown translation that was erased rather than extended; 0 = it only ever grew
 erased / updates   the totals behind flicker
 requests   translation requests sent; rateLimited: how many hit the rate limit
-Each cell is mean/median/p90 over the sentences.`;
+Each cell is mean/median/p90 over the sentences.
+
+Second table: was the run sound?
+failed     requests that ended in an error other than the rate limit (with the last error)
+answer ms  how long the model took to answer a request, mean/median/p90
+live       sentences that had a translation on screen before they were finished
+A strategy with many failed requests, slow answers or a low "live" share was not measured fairly.`;
 
 export function parseArgs(argv) {
   const args = {
@@ -400,6 +454,8 @@ export function parseArgs(argv) {
     interval: 1.5,
     speed: 1,
     mock: false,
+    limit: null,
+    together: false,
     out: null,
     trace: null,
     help: false,
@@ -414,7 +470,10 @@ export function parseArgs(argv) {
     if (a === '--strategy') args.strategies = value().split(',').filter(Boolean);
     else if (a === '--interval') args.interval = Number(value());
     else if (a === '--speed') args.speed = Number(value());
+    else if (a === '--limit') args.limit = Number(value());
+    else if (a === '--together') args.together = true;
     else if (a === '--mock') args.mock = true;
+    else if (a === '--mock=rephrase') args.mock = 'rephrase';
     else if (a === '--quiet') args.quiet = true;
     else if (a === '--help' || a === '-h') args.help = true;
     else if (a === '--out') args.out = value();
@@ -425,6 +484,7 @@ export function parseArgs(argv) {
   if (!args.trace) throw new Error(`No trace file given.\n\n${USAGE}`);
   if (!(args.interval > 0)) throw new Error('--interval must be a positive number of seconds');
   if (!(args.speed > 0)) throw new Error('--speed must be a positive number');
+  if (args.limit !== null && !(args.limit > 0)) throw new Error('--limit must be a positive number of seconds');
   return args;
 }
 
@@ -452,10 +512,18 @@ export async function main(argv, { log = console.log, warn = console.error, env 
     log(USAGE);
     return [];
   }
+  const unknown = args.strategies.find((name) => !Object.hasOwn(STRATEGIES, name));
+  if (unknown) throw new Error(`Unknown strategy: ${unknown}. Known: ${Object.keys(STRATEGIES).join(', ')}`);
   const trace = JSON.parse(readFileSync(args.trace, 'utf8'));
   if (trace.version !== 1) throw new Error(`Unsupported trace version: ${trace.version}`);
   if (!Array.isArray(trace.events) || !trace.events.length) throw new Error('The trace has no recognizer results.');
   if (trace.langs.length > 2) warn(`Note: the trace has ${trace.langs.length} languages; only the first two are used.`);
+  if (args.limit !== null) {
+    const until = args.limit * 1000;
+    trace.events = trace.events.filter((e) => e.t <= until);
+    trace.durationMs = Math.min(trace.durationMs ?? until, until);
+    if (!trace.events.length) throw new Error(`The trace has no recognizer results in its first ${args.limit} s.`);
+  }
   const apiKey = env.GEMINI_API_KEY;
   if (!args.mock && !apiKey) throw new Error('Set GEMINI_API_KEY in the environment, or pass --mock.');
   const [langA, langB] = trace.langs.slice(0, 2).map((code) => LANGS.find((l) => l.code === code)?.name);
@@ -465,25 +533,28 @@ export async function main(argv, { log = console.log, warn = console.error, env 
   say(
     `Trace: ${clockTime(lengthMs)} of speech, ${trace.events.length} recognizer results (${finals} final), ${langA} / ${langB}.`,
   );
-  if (args.mock) say('Translator: mock on a simulated clock; this takes a moment.');
+  if (args.mock)
+    say(
+      `Translator: mock${args.mock === 'rephrase' ? ' that rephrases' : ''} on a simulated clock; this takes a moment.`,
+    );
   else {
     const each = lengthMs / args.speed;
+    const all = args.together ? each : each * args.strategies.length;
     say(
       `Translator: ${MODEL}. Each strategy replays in real time: about ${clockTime(each)}` +
         (args.strategies.length > 1
-          ? `, ${clockTime(each * args.strategies.length)} for all ${args.strategies.length}.`
+          ? `, ${clockTime(all)} for all ${args.strategies.length}${args.together ? ' (run together)' : ''}.`
           : '.'),
     );
     if (args.speed !== 1)
       say('Note: with --speed the speech is shortened but the model answers no faster, so delays are not comparable.');
   }
 
-  const runs = [];
-  for (const strategy of args.strategies) {
+  const runOne = async (strategy) => {
     // --mock runs on a simulated clock: instant and the same on every run.
     const clock = args.mock ? createVirtualClock(Date.parse(trace.startedAt) || Date.UTC(2026, 0, 1)) : realClock();
     const translator = args.mock
-      ? new MockTranslator({ langA, langB, setTimer: clock.setTimer })
+      ? new MockTranslator({ langA, langB, setTimer: clock.setTimer, rephrase: args.mock === 'rephrase' })
       : new GeminiTranslator({ apiKey, model: MODEL, langA, langB, otherInto: langA });
     let last = null;
     let giveUp = null;
@@ -515,13 +586,19 @@ export async function main(argv, { log = console.log, warn = console.error, env 
             );
         },
       });
-      runs.push(await Promise.race([run, failure]));
+      return await Promise.race([run, failure]);
     } finally {
       clearInterval(ticker);
+      line();
     }
-    line();
-  }
+  };
+  // One after another by default. --together starts them at once: the model's speed changes over
+  // time, and strategies replayed one after another may not have met the same conditions.
+  let runs = [];
+  if (args.together && !args.mock) runs = await Promise.all(args.strategies.map(runOne));
+  else for (const strategy of args.strategies) runs.push(await runOne(strategy));
   log(formatTable(runs));
+  log(`\n${formatHealth(runs)}`);
   say(LEGEND);
   if (args.out) {
     writeFileSync(args.out, `${JSON.stringify({ trace: args.trace, mock: args.mock, runs }, null, 2)}\n`);

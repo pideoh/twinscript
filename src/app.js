@@ -5,7 +5,7 @@ import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocal
 import { octicon } from './icons.js';
 import { MessageError } from './message-error.js';
 import { MockSummarizer, MockTranscriber, MockTranslator } from './mock.js';
-import { createPacer } from './pacer.js';
+import { createPacer, DEFAULT_STRATEGY, strategyNamed } from './pacer.js';
 import { ReadAloud } from './read-aloud.js';
 import { canRecord, Recorder } from './recorder.js';
 import { languageByScript, scriptsDiffer, sourceByScript, targetLanguages } from './script-hint.js';
@@ -72,6 +72,8 @@ const DEBUG = new URLSearchParams(location.search).has('debug'); // log raw reco
 // Debug only: the recognizer trace of the last run (src/trace.js), also readable from the console.
 let lastTrace = null;
 if (DEBUG) window.__twinscriptTrace = () => lastTrace;
+// Debug only: ?pacer=<name> picks the pacing strategy of src/pacer.js for this page load.
+const PACER = DEBUG ? strategyNamed(new URLSearchParams(location.search).get('pacer')) : DEFAULT_STRATEGY;
 
 const $ = (id) => document.getElementById(id);
 const els = Object.fromEntries(
@@ -1417,14 +1419,15 @@ function createTracker(r) {
 // The sentence being spoken is translated as it grows; src/pacer.js decides when.
 function createInterimPacer(r) {
   return createPacer({
+    strategy: PACER,
     options: {
       enabled: () => settings.interimTranslate,
       interval: () => settings.interimInterval,
     },
-    translate: (text) =>
+    translate: (text, context) =>
       r.langs.length > 2 || intoSeveral(r, text)
-        ? translateInterimLines(r, live, text)
-        : r.translator.translate(text, { history: recentHistory(r) }),
+        ? translateInterimLines(r, live, text, context)
+        : r.translator.translate(text, { history: recentHistory(r), previous: context.previous?.() }),
     show: (out) => {
       clearTargets(live);
       setText(live, 'tgt', out, 'pending');
@@ -1436,7 +1439,8 @@ function createInterimPacer(r) {
 // With a third language, or two and a sentence in neither of them: the sentence in progress goes
 // into the other languages, one request per line, but only when its writing system tells which
 // language it is in (the model is not asked while the sentence is still growing).
-async function translateInterimLines(r, seg, text) {
+// context: the pacer's; with a strategy that carries the shown translation, each line continues its own.
+async function translateInterimLines(r, seg, text, context) {
   const source = sourceByScript(
     text,
     r.langs.map((l) => l.name),
@@ -1446,8 +1450,15 @@ async function translateInterimLines(r, seg, text) {
   setTargets(seg, targets);
   const results = await Promise.allSettled(
     targets.map(async (code) => {
-      const out = await r.translator.translate(text, { history: recentHistory(r, code), into: langName(code) });
-      if (seg === live && out && seg.tgts.some((x) => x.lang === code)) setLine(seg, code, out, 'pending');
+      const out = await r.translator.translate(text, {
+        history: recentHistory(r, code),
+        into: langName(code),
+        previous: context.previous?.(code),
+      });
+      if (seg === live && out && seg.tgts.some((x) => x.lang === code)) {
+        setLine(seg, code, out, 'pending');
+        context.keep?.(code, out);
+      }
     }),
   );
   const limited = results.find((x) => x.status === 'rejected' && x.reason instanceof RateLimitError);
@@ -1483,7 +1494,8 @@ function clearTargets(seg) {
 function finalize(r, text) {
   const seg = live;
   live = null;
-  r.pacer.finish();
+  // With a strategy that carries the shown translation, the final one continues it.
+  seg.previous = r.pacer.finish();
   commit(r, seg, text);
   return seg;
 }
@@ -1505,8 +1517,17 @@ function recentHistory(r, lang) {
     .map(({ src, tgt, tgts }) => ({ src, tgt: (lang && tgts?.find((x) => x.lang === lang)?.text) || tgt }));
 }
 
+// What was shown while the sentence was spoken (previous(line), from the pacer), only for its
+// first final translation: a corrected text is translated afresh.
+function takePrevious(seg) {
+  const previous = seg.previous;
+  delete seg.previous;
+  return previous;
+}
+
 async function translateFinal(r, seg) {
   if (r.langs.length > 2 || intoSeveral(r, seg.src)) return translateFinalLines(r, seg);
+  const previous = takePrevious(seg)?.();
   const history = recentHistory(r);
   seg.rev = (seg.rev || 0) + 1; // a segment can be re-translated when its text is corrected
   const rev = seg.rev;
@@ -1520,6 +1541,7 @@ async function translateFinal(r, seg) {
       let target = null;
       const out = await r.translator.translate(seg.src, {
         history,
+        previous,
         onDelta: (partial) => {
           if (shown() && !swapWhenDone) setText(seg, 'tgt', partial);
         },
@@ -1548,6 +1570,7 @@ async function translateFinal(r, seg) {
 // from the model; then it is translated into each of the others at once, each into its own line.
 // With two languages this is only reached for a sentence the writing system shows is in neither.
 async function translateFinalLines(r, seg) {
+  const previous = takePrevious(seg);
   seg.rev = (seg.rev || 0) + 1;
   const rev = seg.rev;
   const names = r.langs.map((l) => l.name);
@@ -1559,10 +1582,10 @@ async function translateFinalLines(r, seg) {
   // Lines already showing a translation of the text in progress are swapped once, when complete.
   const kept = !setTargets(seg, targets);
   const swap = new Set(kept ? targets.filter((code) => seg.lines.get(code)?.lastChild.textContent) : []);
-  await Promise.all(targets.map((code) => translateLine(r, seg, rev, code, swap.has(code))));
+  await Promise.all(targets.map((code) => translateLine(r, seg, rev, code, swap.has(code), previous?.(code))));
 }
 
-async function translateLine(r, seg, rev, code, swapWhenDone) {
+async function translateLine(r, seg, rev, code, swapWhenDone, previous) {
   const history = recentHistory(r, code);
   const shown = () => seg.rev === rev && seg.el.isConnected;
   for (let attempt = 0; ; attempt++) {
@@ -1570,6 +1593,7 @@ async function translateLine(r, seg, rev, code, swapWhenDone) {
       const out = await r.translator.translate(seg.src, {
         history,
         into: langName(code),
+        previous,
         onDelta: (partial) => {
           if (shown() && !swapWhenDone) setLine(seg, code, partial);
         },
