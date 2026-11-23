@@ -80,6 +80,8 @@ export class GeminiLiveTranscriber {
       const result = await this.#requestToken();
       if (conn.retired || !this.running) return; // stopped or replaced while waiting
       if (result.token) {
+        // Said once per run, so the path taken can be checked from outside (--enable-logging).
+        if (!this.tokenWorked) console.info('Twinscript: the live connection uses single-use tokens.');
         this.tokenWorked = true;
         conn.viaToken = true;
         url = `${WS_BASE}.BidiGenerateContentConstrained?access_token=${encodeURIComponent(result.token)}`;

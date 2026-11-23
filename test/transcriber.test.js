@@ -487,3 +487,20 @@ test('once tokens have worked, a network outage while reconnecting does not put 
   assert.ok(new URL(sockets.at(-1).url).searchParams.get('access_token'));
   tr.stop();
 });
+
+test('the run says once which way it connects, without the key or a token', async (t) => {
+  const info = t.mock.method(console, 'info', () => {});
+  const { tr, sockets, tick } = await setup(t);
+  sockets[0].open();
+  sockets[0].receive({ setupComplete: {} });
+  sockets[0].drop();
+  await settle();
+  await tick(500);
+  await settle();
+  assert.equal(sockets.length, 2);
+  assert.equal(info.mock.callCount(), 1, 'once, not per connection');
+  const line = info.mock.calls[0].arguments.join(' ');
+  assert.match(line, /single-use tokens/);
+  assert.ok(!line.includes('KEY') && !line.includes('auth_tokens'));
+  tr.stop();
+});
