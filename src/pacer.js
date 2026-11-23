@@ -88,17 +88,22 @@ function intervalStrategy({ translate, show, now, setTimer, clearTimer, isRateLi
 // result that does not come).
 const BOUNDARY = /[、。，,.;:!?！？；：…｡､।॥]/u;
 const SENTENCE_END = /[。.!?！？…｡।॥]/u;
-const PUNCTUATION = /[\p{P}\p{S}]/gu;
+// Commas and full stops, which the recognizer adds or moves between an in-progress result and the
+// final one without changing what was said. A stop or comma between digits (3.5, 1,000) stays.
+const NEUTRAL =
+  /(?<!\p{Nd})[、。，,.｡､](?!\p{Nd})|(?<=\p{Nd})[、。，,.｡､](?!\p{Nd})|(?<!\p{Nd})[、。，,.｡､](?=\p{Nd})/gu;
 
-// Whether two texts of a sentence say the same words: equal after trimming, collapsing whitespace,
-// and ignoring case and punctuation (Unicode punctuation and symbols). The recognizer's final
-// result often differs from its last in-progress one only by a closing full stop. Empty texts are
-// never the same. Pure.
+// Whether two texts of a sentence say the same thing: equal after trimming, collapsing whitespace,
+// and ignoring case, commas and full stops. The recognizer's final result often differs from its
+// last in-progress one only by a closing full stop. Marks that change the meaning count as a
+// difference: a question or exclamation mark, a percent or currency sign, an apostrophe. Empty
+// texts are never the same. Pure.
 export function sameText(a, b) {
   const norm = (s) =>
     String(s ?? '')
       .normalize('NFKC')
-      .replace(PUNCTUATION, '')
+      .replace(/[’‘]/gu, "'")
+      .replace(NEUTRAL, '')
       .replace(/\s+/gu, ' ')
       .trim()
       .toLowerCase();

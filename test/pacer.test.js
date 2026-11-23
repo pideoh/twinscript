@@ -587,13 +587,22 @@ test('settle: what counts as the same text as the finished sentence', () => {
     ['  今日は　新しい ', '今日は 新しい', true],
     ['今日は新しい検索画面', '今日は新しい検索画面の進め方', false],
     ['今日は新しい検索画面', '今日は古い検索画面', false],
+    ['明日は来ますか', '明日は来ますか？', false],
     ['Thanks I looked at the draft', 'Thanks. I looked at the draft.', true],
-    ['great  lets review it on friday', 'Great, let’s review it on Friday!', true],
+    ['great, let’s review it on friday', "Great, let's review it on Friday.", true],
+    ['Great lets review it on Friday', 'Great, let’s review it on Friday.', false],
+    ['We can review it on Friday', 'We can review it on Friday?', false],
+    ['That is great', 'That is great!', false],
     ['Hello everyone and welcome', 'Hello everyone and welcome to the meeting.', false],
     ['I can see it', 'I can’t see it.', false],
     ['It costs 3 dollars', 'It costs $3.', false],
+    ['It grew by 3', 'It grew by 3%.', false],
+    ['Version 3.5 is out', 'Version 35 is out.', false],
+    ['Version 3.5 is out', 'Version 3.5 is out.', true],
+    ['About 1,000 users', 'About 1,000 users.', true],
     ['我们今天讨论一下', '我们今天讨论一下。', true],
-    ['我们今天讨论一下新的设计', '我们今天讨论一下，新的设计？', true],
+    ['我们今天讨论一下新的设计', '我们今天讨论一下，新的设计。', true],
+    ['我们今天讨论一下新的设计', '我们今天讨论一下，新的设计？', false],
     ['我们今天讨论一下', '我们明天讨论一下。', false],
     ['', '', false],
     ['。', '.', false],
@@ -741,7 +750,7 @@ test('settle: with one line per target, the answers of the last request are hand
   lines = ['en', 'fr'];
   pacer.update('Hasta mañana');
   await clock.advance(50);
-  const { pending } = pacer.finish('¡Hasta mañana!');
+  const { pending } = pacer.finish('Hasta mañana.');
   const result = pending.then((a) => a);
   await clock.runAll();
   const answers = await result;
