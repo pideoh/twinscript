@@ -1,4 +1,5 @@
 // Builds downloadable transcripts. Pure functions: no DOM, no storage.
+import { nestHeadings } from './markdown.js';
 
 const pad = (n, width = 2) => String(n).padStart(width, '0');
 
@@ -32,35 +33,15 @@ export const DEFAULT_LABELS = {
   // Summary section, written above the transcript in txt and md when a summary is passed in.
   transcript: 'Transcript',
   summary: 'Summary',
-  overview: 'Overview',
-  keyPoints: 'Key points',
-  decisions: 'Decisions',
-  actionItems: 'Action items',
-  owner: 'Owner',
-  due: 'Due',
   summaryTruncated: 'This summary covers only part of a long transcript.',
 };
 
-// The summary as titled blocks: [{ heading, paragraph } | { heading, items }], empty parts left out.
-function summaryBlocks(summary, L) {
-  const action = (a) => {
-    const details = [a.owner && `${L.owner}: ${oneLine(a.owner)}`, a.due && `${L.due}: ${oneLine(a.due)}`].filter(
-      Boolean,
-    );
-    return details.length ? `${oneLine(a.task)} (${details.join(', ')})` : oneLine(a.task);
-  };
-  return [
-    summary.overview && { heading: L.overview, paragraph: oneLine(summary.overview) },
-    summary.keyPoints?.length && { heading: L.keyPoints, items: summary.keyPoints.map(oneLine) },
-    summary.decisions?.length && { heading: L.decisions, items: summary.decisions.map(oneLine) },
-    summary.actionItems?.length && { heading: L.actionItems, items: summary.actionItems.map(action) },
-  ].filter(Boolean);
-}
-
 // session: { title, createdAt, activeMs, langA, langB, segments: [{ elapsed, src, tgt }] }
 // options: { format: 'txt' | 'md' | 'csv' | 'srt', content: 'both' | 'src' | 'tgt', langLabel(code), labels,
-//   summary: { overview, keyPoints, decisions, actionItems: [{ task, owner, due }], truncated } }
-// The summary, when given, opens txt and md files; csv and srt never include it.
+//   summary: { markdown, title, truncated } }
+// The summary (Markdown; `title` is the name of its template), when given, opens txt and md files,
+// as it was written in txt and with its headings under the file's own in md; csv and srt never
+// include it.
 // Returns { text, ext, mime }.
 export function buildTranscript(
   session,
@@ -77,7 +58,8 @@ export function buildTranscript(
     `${L.languages}: ${langLabel(session.langA)} ⇄ ${langLabel(session.langB)}`,
     `${L.duration}: ${formatElapsed(session.activeMs || rows.at(-1)?.time || 0)}`,
   ];
-  const blocks = summary ? summaryBlocks(summary, L) : [];
+  const summaryText = summary?.markdown?.trim() ?? '';
+  const summaryHeading = summary?.title ? `${L.summary}: ${oneLine(summary.title)}` : L.summary;
   const note = summary?.truncated ? [L.summaryTruncated, ''] : [];
 
   if (format === 'md') {
@@ -89,20 +71,8 @@ export function buildTranscript(
       const cells = content === 'both' ? [r.src, r.tgt] : lines(r);
       return `| ${formatElapsed(r.time)} | ${cells.map(cell).join(' | ')} |`;
     });
-    const summaryPart = blocks.length
-      ? [
-          `## ${L.summary}`,
-          '',
-          ...note,
-          ...blocks.flatMap((b) => [
-            `### ${b.heading}`,
-            '',
-            ...(b.items ? b.items.map((i) => `- ${i}`) : [b.paragraph]),
-            '',
-          ]),
-          `## ${L.transcript}`,
-          '',
-        ]
+    const summaryPart = summaryText
+      ? [`## ${summaryHeading}`, '', ...note, nestHeadings(summaryText, 3), '', `## ${L.transcript}`, '']
       : [];
     const text = [
       `# ${title}`,
@@ -145,16 +115,7 @@ export function buildTranscript(
     const [first, ...rest] = lines(r);
     return [`[${formatElapsed(r.time)}] ${first}`, ...rest.map((t) => `${indent}→ ${t}`)].join('\n');
   });
-  const summaryPart = blocks.length
-    ? [
-        L.summary,
-        '',
-        ...note,
-        ...blocks.flatMap((b) => [b.heading, ...(b.items ? b.items.map((i) => `- ${i}`) : [b.paragraph]), '']),
-        L.transcript,
-        '',
-      ]
-    : [];
+  const summaryPart = summaryText ? [summaryHeading, '', ...note, summaryText, '', L.transcript, ''] : [];
   const text = [
     title,
     meta.join(L.separator),

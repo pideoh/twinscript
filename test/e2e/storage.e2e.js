@@ -203,10 +203,11 @@ test('transcripts saved by an earlier version are moved to the new layout withou
     newestFirst.map((s) => hhmmss(s.activeMs)),
   );
 
-  // On disk: version 2, session records without segments, one record per segment in order.
+  // On disk: version 3, session records without segments, one record per segment in order, and
+  // a store for summaries (an old summary stays in its session record as it was).
   const disk = await dump(page);
-  assert.equal(disk.version, 2);
-  assert.deepEqual(disk.stores.sort(), ['audio', 'segments', 'sessions']);
+  assert.equal(disk.version, 3);
+  assert.deepEqual(disk.stores.sort(), ['audio', 'segments', 'sessions', 'summaries']);
   for (const old of OLD.sessions) {
     const { segments, ...meta } = old;
     const record = disk.sessions.find((s) => s.id === old.id);
@@ -253,6 +254,20 @@ test('transcripts saved by an earlier version are moved to the new layout withou
   await page.waitForSelector('#summary:not([hidden])');
   assert.ok((await page.textContent('#summaryContent')).includes('四半期の振り返りを行った。'), 'summary kept');
   assert.ok(await page.locator('#summaryStale').isHidden(), 'and still up to date');
+  // The summary an earlier version made (structured, not Markdown) is shown in today's form.
+  assert.deepEqual(await page.locator('#summaryContent h3').allTextContents(), [
+    '概要',
+    '主なポイント',
+    '決定事項',
+    'アクションアイテム',
+  ]);
+  assert.deepEqual(await page.locator('#summaryContent li').allTextContents(), [
+    '売上が伸びた',
+    '予算を増やす',
+    '計画を書く (担当: 田中, 期限: 月曜日)',
+  ]);
+  assert.match(await page.textContent('#summaryDetails'), /^クイック要約 ・ 以前のバージョンで作成$/);
+  assert.match((await page.locator('#summaryHistory option').allTextContents())[0], / ・ クイック要約$/);
 
   await openSession(page, 'Recorded call.', 2);
   await page.click('#export');

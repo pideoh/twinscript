@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mockGemini, mockSummary, reload, rows, saved, sessionNames, setup, translated } from './helpers.js';
+import { mockGemini, reload, rows, saved, sessionNames, setup, translated } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -135,124 +135,5 @@ test('PC audio that delivers nothing is reported instead of failing silently', a
     { timeout: 15_000 },
   );
   await page.click('#toggle');
-  await close();
-});
-
-const summaryJson = (overview) =>
-  JSON.stringify({
-    overview,
-    keyPoints: ['予算を確認した'],
-    decisions: ['金曜日に公開する'],
-    actionItems: [{ task: '報告書を送る', owner: '佐藤', due: '水曜日' }],
-  });
-const summaryText = (page) => page.textContent('#summaryContent');
-async function finishedSession(page, text) {
-  const gemini = await mockGemini(page, [[3, 'final', text]]);
-  await page.click('#toggle');
-  await translated(page, 1);
-  await page.click('#toggle');
-  return gemini;
-}
-
-test('a finished session can be summarized; the summary is kept, exported and marked outdated by new speech', async () => {
-  const { page, errors, close } = await openApp('', { apiKey: 'test-key', record: false });
-  assert.ok(await page.locator('#summary').isHidden(), 'nothing to summarize in an empty session');
-  const gemini = await finishedSession(page, 'Budget review starts now.');
-  assert.equal(await page.textContent('#summarize'), '要約する');
-
-  let release;
-  const held = new Promise((r) => {
-    release = r;
-  });
-  const requests = await mockSummary(page, async () => {
-    await held;
-    return { body: summaryJson('予算の確認を行った。') };
-  });
-  await page.click('#summarize');
-  await page.waitForFunction(() => document.getElementById('summarize').getAttribute('aria-busy') === 'true');
-  assert.equal(await page.textContent('#summaryStatus'), '要約しています…');
-  assert.equal(await page.getAttribute('#summarize', 'aria-disabled'), 'true');
-  release();
-  await page.waitForFunction(() => document.getElementById('summaryContent').textContent.includes('予算の確認'));
-  assert.equal(await page.textContent('#summarize'), '要約を更新');
-  assert.equal(await page.textContent('#summaryStatus'), '');
-  const text = await summaryText(page);
-  for (const part of [
-    '概要',
-    '主なポイント',
-    '予算を確認した',
-    '決定事項',
-    '金曜日に公開する',
-    '報告書を送る',
-    '担当: 佐藤',
-    '期限: 水曜日',
-  ])
-    assert.ok(text.includes(part), `the panel shows ${part}`);
-  assert.equal(requests.length, 1);
-  assert.match(requests[0].systemInstruction.parts[0].text, /Write every text value in Japanese/);
-  assert.match(
-    requests[0].contents[0].parts[0].text,
-    /Budget review starts now\.\n {2}=> 訳:Budget review starts now\./,
-  );
-  assert.equal(requests[0].generationConfig.responseMimeType, 'application/json');
-
-  // Collapsing is remembered for the user.
-  await page.click('#summaryToggle');
-  assert.ok(await page.locator('#summaryBody').isHidden());
-  await saved(page);
-  await reload(page);
-  await page.waitForSelector('#summary:not([hidden])');
-  assert.ok(await page.locator('#summaryBody').isHidden(), 'still collapsed after a reload');
-  await page.click('#summaryToggle');
-  assert.ok((await summaryText(page)).includes('予算の確認を行った。'), 'the summary survives a reload');
-  assert.ok(await page.locator('#summaryStale').isHidden());
-
-  await page.click('#export');
-  const [file] = await Promise.all([page.waitForEvent('download'), page.click('#exportTranscript')]);
-  let exported = '';
-  for await (const chunk of await file.createReadStream()) exported += chunk;
-  assert.match(exported, /要約\n\n概要\n予算の確認を行った。\n/);
-  assert.match(exported, /- 報告書を送る \(担当: 佐藤, 期限: 水曜日\)/);
-  assert.match(exported, /文字起こし\n\n\[00:00:0\d\] Budget review starts now\./);
-  await page.keyboard.press('Escape');
-
-  // More speech: the panel steps aside while capturing, then the summary is marked outdated.
-  gemini.restart();
-  await page.unroute(/streamGenerateContent/);
-  await mockGemini(page, [[3, 'final', 'One more thing.']]);
-  await page.click('#toggle');
-  await page.waitForFunction(() => document.getElementById('summary').hidden);
-  await translated(page, 2);
-  await page.click('#toggle');
-  await page.waitForSelector('#summaryStale:not([hidden])');
-  assert.equal(await page.textContent('#summaryStale'), '古い要約');
-  assert.deepEqual(errors, []);
-  await close();
-});
-
-test('a failed summary request leaves the previous summary in place and says why', async () => {
-  const { page, errors, close } = await openApp('', { apiKey: 'test-key', record: false });
-  await finishedSession(page, 'Short meeting.');
-  const answers = [
-    { body: summaryJson('最初の要約。') },
-    { status: 500, body: JSON.stringify({ error: { message: 'Internal error' } }) },
-    { status: 429, body: '{}' },
-  ];
-  await mockSummary(page, () => answers.shift());
-  await page.click('#summarize');
-  await page.waitForFunction(() => document.getElementById('summaryContent').textContent.includes('最初の要約。'));
-
-  await page.click('#summarize');
-  await page.waitForFunction(() => document.getElementById('toast').textContent.includes('要約できませんでした'));
-  assert.equal(await page.getAttribute('#toast', 'data-variant'), 'critical');
-  assert.match(await page.textContent('#toast'), /500.*Internal error/);
-  assert.ok((await summaryText(page)).includes('最初の要約。'), 'the earlier summary is kept');
-  assert.equal(await page.getAttribute('#summarize', 'aria-busy'), 'false');
-
-  await page.click('#summarize');
-  await page.waitForFunction(() => document.getElementById('toast').textContent.includes('レート制限'));
-  assert.equal(await page.getAttribute('#toast', 'data-variant'), 'warning');
-  assert.ok((await summaryText(page)).includes('最初の要約。'));
-  assert.deepEqual(errors, []);
   await close();
 });

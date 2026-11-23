@@ -2,7 +2,15 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { segmentChanges, segmentFromRecord, segmentRange, segmentRecord, splitSession } from '../src/store.js';
+import {
+  segmentChanges,
+  segmentFromRecord,
+  segmentRange,
+  segmentRecord,
+  splitSession,
+  summaryFromRecord,
+  summaryRecord,
+} from '../src/store.js';
 
 const twoLanguages = {
   id: 's1',
@@ -145,7 +153,8 @@ test("a session's segment keys sort between the bounds of its range and no other
     return a.length - b.length;
   };
   const [lower, upper] = segmentRange('s1');
-  for (const pos of [0, 1, 99999]) {
+  // Segment positions, and summary ids (strings), which use the same range.
+  for (const pos of [0, 1, 99999, '', '0f8e-summary', 'zzzz']) {
     assert.ok(order(lower, ['s1', pos]) < 0 && order(['s1', pos], upper) < 0);
   }
   for (const other of [
@@ -155,4 +164,24 @@ test("a session's segment keys sort between the bounds of its range and no other
   ]) {
     assert.ok(order(other, lower) < 0 || order(other, upper) > 0, String(other));
   }
+});
+
+test('summaries are stored one record each, apart from the session record that the list reads', () => {
+  const summary = {
+    id: 'sum-1',
+    templateId: 'preset:minutes',
+    templateName: 'Meeting minutes',
+    length: 'short',
+    language: 'ja-JP',
+    createdAt: 5,
+    markdown: '## Decisions\n\n- Ship it',
+    model: 'm',
+    truncated: false,
+    segmentCount: 3,
+  };
+  const { meta } = splitSession({ ...twoLanguages, summaries: [summary] });
+  assert.equal(meta.summaries, undefined, 'not in the session record');
+  const record = summaryRecord('s1', summary);
+  assert.deepEqual(record, { ...summary, sessionId: 's1' });
+  assert.deepEqual(summaryFromRecord(record), summary);
 });

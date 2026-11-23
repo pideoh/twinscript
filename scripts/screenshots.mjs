@@ -71,8 +71,18 @@ const shot = async (page, name) => {
 };
 async function summarize(page) {
   await page.click('#summarize');
-  await page.waitForFunction(() => document.querySelector('#summaryContent h3'), null, { timeout: 10_000 });
+  await page.waitForFunction(
+    () =>
+      document.getElementById('summarize').getAttribute('aria-busy') === 'false' &&
+      document.querySelector('#summaryContent h3, #summaryContent li'),
+    null,
+    { timeout: 10_000 },
+  );
 }
+const part = async (page, selector, name) => {
+  await page.locator(selector).screenshot({ path: join(out, `${name}.png`) });
+  console.log(name);
+};
 async function listen(page) {
   await page.click('#toggle');
   await page.waitForFunction(() => document.querySelectorAll('#log .seg').length >= 3, null, { timeout: 30_000 });
@@ -145,6 +155,31 @@ for (const scheme of ['light', 'dark']) {
     await shot(page, `three-${scheme}${name}-stopped`);
     await close();
   }
+}
+
+// Summaries (Japanese UI): the bar, a summary with a table, the history and the template editor.
+for (const scheme of ['light', 'dark']) {
+  if (!wanted(`summary-${scheme}`)) continue;
+  const { page, close } = await open({ scheme, uiLang: 'ja' });
+  await listen(page);
+  await page.click('#toggle');
+  await page.waitForTimeout(400);
+  await part(page, '#summary', `summary-${scheme}-bar`);
+  await summarize(page);
+  await page.selectOption('#summaryTemplate', 'preset:minutes');
+  await summarize(page);
+  await page.locator('#summaryContent table').scrollIntoViewIfNeeded();
+  await shot(page, `summary-${scheme}-table`);
+  await part(page, '#summaryBody', `summary-${scheme}-panel`);
+  await part(page, '#summaryHistoryBar', `summary-${scheme}-history`);
+  await page.click('#openSettings');
+  await page.click('#templateList li:nth-child(3) button');
+  await page.waitForTimeout(300);
+  await shot(page, `summary-${scheme}-editor`);
+  await page.click('#templateCancel');
+  await page.locator('#templateList').scrollIntoViewIfNeeded();
+  await shot(page, `summary-${scheme}-templates`);
+  await close();
 }
 
 // Longer or wider text in another language is where layouts break first.

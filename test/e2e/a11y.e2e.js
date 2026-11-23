@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { test } from 'node:test';
-import { mockGemini, setup, translated } from './helpers.js';
+import { mockGemini, mockSummary, setup, translated } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -58,6 +58,48 @@ for (const colorScheme of ['light', 'dark']) {
     await page.click('#toggle');
     await page.waitForFunction(() => document.querySelectorAll('#log .seg').length === 3);
     await assertAccessible(page, 'main screen with a transcript');
+
+    // The summary panel with a rendered summary (headings, lists, a table, a link) and its history.
+    await mockSummary(page, () => ({
+      body: [
+        '## Overview',
+        '',
+        'All **three** items are *done*; see [the notes](https://example.com/notes) and `v2`.',
+        '',
+        '## Action items',
+        '',
+        '| Task | Owner | Due |',
+        '| --- | --- | --- |',
+        '| Write the report | Ana | Friday |',
+        '',
+        '1. First',
+        '2. Second',
+        '   - nested',
+        '',
+        '> A quote',
+      ].join('\n'),
+    }));
+    await page.click('#summarize');
+    await page.waitForFunction(() => document.querySelector('#summaryContent table'));
+    await page.selectOption('#summaryTemplate', 'preset:minutes');
+    await page.click('#summarize');
+    await page.waitForFunction(() => document.querySelectorAll('#summaryHistory option').length === 2);
+    await assertAccessible(page, 'summary panel');
+
+    // The summary templates in the settings dialog, with the editor open.
+    await page.click('#openSettings');
+    await page.click('#templateNew');
+    await page.fill('#templateName', 'Board');
+    await page.fill('#templatePrompt', '## Resolutions');
+    await page.click('#templateSave');
+    await page.waitForSelector('#templateStatus:not([hidden])');
+    await page.click('#templateList button[aria-label="「Board」を編集"]');
+    await page.fill('#templatePrompt', '');
+    await page.click('#templateSave');
+    await page.waitForSelector('#templateError:not([hidden])');
+    await assertAccessible(page, 'template editor');
+    await page.click('#templateCancel');
+    await page.click('#settings button[value=ok]');
 
     await page.click('#export');
     await assertAccessible(page, 'download dialog');

@@ -42,17 +42,34 @@
 
     <div id="toast" class="banner" role="status" data-variant="info" hidden></div>
 
-    <section id="summary" class="summary" aria-label="Session summary" data-i18n-aria-label="summary.label" hidden>
+    <section id="summary" class="summary" aria-labelledby="summaryHeading" hidden>
+      <h2 id="summaryHeading" class="visually-hidden" data-i18n="summary.label">Session summary</h2>
       <div class="summary-bar">
         <button id="summaryToggle" type="button" class="summary-toggle" aria-expanded="true" aria-controls="summaryBody" hidden><svg class="octicon chevron" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M12.78 5.22a.749.749 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.06 0L3.22 6.28a.749.749 0 1 1 1.06-1.06L8 8.939l3.72-3.719a.749.749 0 0 1 1.06 0Z"/></svg><span data-i18n="summary.title">Summary</span></button>
         <span id="summaryStale" class="label label-attention" data-i18n="summary.stale" data-i18n-title="summary.staleHelp" title="Speech was added after this summary was generated" hidden>Outdated</span>
         <span id="summaryMeta" class="summary-meta"></span>
         <span id="summaryStatus" class="summary-meta" role="status"></span>
-        <button id="summarize" type="button" class="btn btn-small summarize"><svg class="octicon icon-rest" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M7.53 1.282a.5.5 0 0 1 .94 0l.478 1.306a7.492 7.492 0 0 0 4.464 4.464l1.305.478a.5.5 0 0 1 0 .94l-1.305.478a7.492 7.492 0 0 0-4.464 4.464l-.478 1.305a.5.5 0 0 1-.94 0l-.478-1.305a7.492 7.492 0 0 0-4.464-4.464L1.282 8.47a.5.5 0 0 1 0-.94l1.306-.478a7.492 7.492 0 0 0 4.464-4.464Z"/></svg><svg class="spinner" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-opacity="0.25" stroke-width="2" vector-effect="non-scaling-stroke"/><path d="M15 8a7.002 7.002 0 0 0-7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg><span id="summarizeLabel" data-i18n="summary.summarize">Summarize</span></button>
+        <div class="summary-options">
+          <span class="select-wrap"><select id="summaryTemplate" class="select" aria-label="Template" title="Template" data-i18n-aria-label="summary.template" data-i18n-title="summary.template"></select></span>
+          <span class="select-wrap"><select id="summaryLength" class="select" aria-label="Length" title="Length" data-i18n-aria-label="summary.length" data-i18n-title="summary.length">
+            <option value="short" data-i18n="summary.length.short">Short</option>
+            <option value="standard" data-i18n="summary.length.standard">Standard</option>
+            <option value="detailed" data-i18n="summary.length.detailed">Detailed</option>
+          </select></span>
+          <span class="select-wrap"><select id="summaryLanguage" class="select" aria-label="Language of the summary" title="Language of the summary" data-i18n-aria-label="summary.language" data-i18n-title="summary.language"></select></span>
+          <button id="summarize" type="button" class="btn btn-small summarize"><svg class="octicon icon-rest" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M7.53 1.282a.5.5 0 0 1 .94 0l.478 1.306a7.492 7.492 0 0 0 4.464 4.464l1.305.478a.5.5 0 0 1 0 .94l-1.305.478a7.492 7.492 0 0 0-4.464 4.464l-.478 1.305a.5.5 0 0 1-.94 0l-.478-1.305a7.492 7.492 0 0 0-4.464-4.464L1.282 8.47a.5.5 0 0 1 0-.94l1.306-.478a7.492 7.492 0 0 0 4.464-4.464Z"/></svg><svg class="spinner" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-opacity="0.25" stroke-width="2" vector-effect="non-scaling-stroke"/><path d="M15 8a7.002 7.002 0 0 0-7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg><span data-i18n="summary.summarize">Summarize</span></button>
+        </div>
       </div>
       <div id="summaryBody" class="summary-body" hidden>
+        <div id="summaryHistoryBar" class="summary-history">
+          <span class="select-wrap"><select id="summaryHistory" class="select" aria-label="Summaries made" title="Summaries made" data-i18n-aria-label="summary.history" data-i18n-title="summary.history"></select></span>
+          <button id="summaryCopy" type="button" class="icon-btn" title="Copy as Markdown" aria-label="Copy as Markdown" data-i18n-title="summary.copy" data-i18n-aria-label="summary.copy"><svg class="octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg></button>
+          <button id="summaryDownload" type="button" class="icon-btn" title="Download as Markdown (.md)" aria-label="Download as Markdown (.md)" data-i18n-title="summary.download" data-i18n-aria-label="summary.download"><svg class="octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z"/><path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/></svg></button>
+          <button id="summaryDelete" type="button" class="icon-btn" title="Delete this summary" aria-label="Delete this summary" data-i18n-title="summary.delete" data-i18n-aria-label="summary.delete"><svg class="octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>
+        </div>
+        <p id="summaryDetails" class="summary-note"></p>
         <p id="summaryTruncated" class="summary-note" data-i18n="summary.truncated" hidden>This summary covers only part of a long transcript.</p>
-        <div id="summaryContent"></div>
+        <div id="summaryContent" class="markdown"></div>
       </div>
     </section>
 
@@ -189,6 +206,37 @@
             <small class="caption" data-i18n="settings.clickThrough.help">While this is on, the caption window cannot be moved or closed with the mouse. Hide it with the caption window button or its shortcut.</small>
           </div>
           <small id="captionDesktopOnly" class="caption" data-i18n="settings.captionDesktopOnly" hidden>Background opacity and click-through are available in the desktop app.</small>
+        </fieldset>
+        <fieldset id="templatesGroup" class="settings-group">
+          <legend class="settings-group-title" data-i18n="templates.title">Summary templates</legend>
+          <small class="caption" data-i18n="templates.help">A template tells the summary which sections to write and what goes in each. Built-in templates can be duplicated and changed.</small>
+          <ul id="templateList" class="template-list"></ul>
+          <div class="template-actions">
+            <button type="button" id="templateNew" class="btn"><svg class="octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg><span data-i18n="templates.new">New template</span></button>
+            <button type="button" id="templateImport" class="btn"><svg class="octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z"/><path d="M11.78 4.72a.749.749 0 1 1-1.06 1.06L8.75 3.811V9.5a.75.75 0 0 1-1.5 0V3.811L5.28 5.78a.749.749 0 1 1-1.06-1.06l3.25-3.25a.749.749 0 0 1 1.06 0l3.25 3.25Z"/></svg><span data-i18n="templates.import">Import</span></button>
+            <button type="button" id="templateExport" class="btn"><svg class="octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z"/><path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/></svg><span data-i18n="templates.export">Export</span></button>
+            <input type="file" id="templateImportFile" accept=".json,application/json" hidden>
+          </div>
+          <p id="templateStatus" class="banner" data-variant="info" role="status" hidden></p>
+          <div id="templateEditor" class="template-editor" role="group" aria-labelledby="templateEditorTitle" hidden>
+            <h3 id="templateEditorTitle" class="template-editor-title">New template</h3>
+            <label class="form-control"><span class="form-label" data-i18n="templates.name">Name</span>
+              <input id="templateName" class="text-input" type="text" maxlength="80" autocomplete="off">
+            </label>
+            <label class="form-control"><span class="form-label" data-i18n="templates.description">Description</span>
+              <input id="templateDescription" class="text-input" type="text" maxlength="200" autocomplete="off">
+              <small class="caption" data-i18n="templates.description.help">One line, shown in this list.</small>
+            </label>
+            <label class="form-control"><span class="form-label" data-i18n="templates.prompt">Instructions</span>
+              <textarea id="templatePrompt" class="text-input template-prompt" rows="10" maxlength="8000" spellcheck="false"></textarea>
+              <small class="caption" data-i18n="templates.prompt.help">Name the sections and say what goes in each, for example "## Decisions: what was agreed". The length and the language are chosen when you summarize.</small>
+            </label>
+            <p id="templateError" class="banner" data-variant="critical" role="alert" hidden></p>
+            <div class="template-editor-actions">
+              <button type="button" id="templateCancel" class="btn" data-i18n="templates.cancel">Cancel</button>
+              <button type="button" id="templateSave" class="btn btn-primary" data-i18n="templates.save">Save template</button>
+            </div>
+          </div>
         </fieldset>
         <fieldset id="shortcutsGroup" class="settings-group" hidden>
           <legend class="settings-group-title" data-i18n="settings.shortcuts">Shortcuts</legend>

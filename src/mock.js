@@ -68,22 +68,174 @@ export class MockTranslator {
   }
 }
 
-// A fixed summary of the demo meeting, whatever the session contains.
+// Summaries of the demo meeting, one per preset template (custom templates get the quick one),
+// whatever the session contains. Streamed in pieces like the real answer.
+const DEMO_SUMMARIES = {
+  'preset:quick': `## Overview
+
+The weekly meeting reviewed last week's progress. The **API integration is finished** and load testing started on Friday.
+
+## Key points
+
+- The API integration is complete.
+- Load testing began on Friday.
+
+## Decisions
+
+- The full load test report will be shared by Wednesday.
+
+## Action items
+
+- Share the full load test report (Engineering team, Wednesday)
+- Review the load test results`,
+  'preset:executive': `## Conclusion
+
+The API integration is done and the project is on track; load test results arrive by **Wednesday**.
+
+## Background
+
+A regular weekly check on the integration project.
+
+## Main points discussed
+
+- The API integration was completed last week.
+- Load testing started on Friday.
+
+## Decisions
+
+- The full load test report will be shared by Wednesday.
+
+## Risks and open questions
+
+- Load test results are still pending.
+
+## Next actions
+
+- Engineering team: share the full report by Wednesday.`,
+  'preset:minutes': `## Attendees
+
+Not identifiable from the transcript.
+
+## Discussion
+
+### Last week's progress
+
+The API integration was finished and load testing started on Friday.
+
+### Load test results
+
+The full report is expected by Wednesday.
+
+## Decisions
+
+- Share the full load test report by Wednesday.
+
+## Action items
+
+| Task | Owner | Due date |
+| --- | --- | --- |
+| Share the full load test report | Engineering team | Wednesday |
+| Review the load test results | - | - |
+
+## Open issues
+
+- The load test results are not in yet.
+
+## Next meeting
+
+Not set.`,
+  'preset:actions': `- **Engineering team**: share the full load test report (Wednesday)
+- Review the load test results`,
+  'preset:customer': `## Customer's situation and problems
+
+Not discussed: this was an internal progress meeting.
+
+## Requests and concerns
+
+- When the load test results will be available.
+
+## What was agreed
+
+- The full report will be shared by Wednesday.
+
+## Our follow-ups
+
+- Share the full load test report (Engineering team, Wednesday)
+
+## Next meeting
+
+Not set.`,
+  'preset:sales': `## Context
+
+An internal weekly meeting, not a sales call.
+
+## Pain points
+
+Not discussed
+
+## Budget
+
+Not discussed
+
+## Authority
+
+Not discussed
+
+## Need
+
+Not discussed
+
+## Timeline
+
+Load test report by Wednesday.
+
+## Competitors mentioned
+
+None.
+
+## Next steps
+
+- Share the full load test report by Wednesday.`,
+  'preset:oneOnOne': `## What went well
+
+- The API integration was finished on time.
+
+## Difficulties
+
+- None raised.
+
+## Feedback
+
+- Not discussed.
+
+## Growth
+
+- Not discussed.
+
+## Action items
+
+- Share the full load test report by Wednesday.`,
+  'preset:standup': `## Done
+
+- API integration finished.
+
+## In progress
+
+- Load testing, started on Friday.
+
+## Blockers
+
+None`,
+};
+
 export class MockSummarizer {
-  async summarize() {
-    await sleep(800);
-    return {
-      summary: {
-        overview:
-          'The weekly meeting reviewed last week’s progress. The API integration is finished and load testing started on Friday.',
-        keyPoints: ['The API integration is complete.', 'Load testing began on Friday.'],
-        decisions: ['The full load test report will be shared by Wednesday.'],
-        actionItems: [
-          { task: 'Share the full load test report', owner: 'Engineering team', due: 'Wednesday' },
-          { task: 'Review the load test results', owner: null, due: null },
-        ],
-      },
-      truncated: false,
-    };
+  async summarize(_segments, { template, onDelta } = {}) {
+    const full = DEMO_SUMMARIES[template?.id] ?? DEMO_SUMMARIES['preset:quick'];
+    for (let n = 40; n < full.length; n += 40) {
+      await sleep(30);
+      onDelta?.(full.slice(0, n));
+    }
+    onDelta?.(full);
+    return { markdown: full, truncated: false };
   }
 }

@@ -754,8 +754,17 @@ input[type="range"] {
 .summary-meta:empty {
   display: none;
 }
-.summarize {
+.summary-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--base-size-8);
+  min-width: 0;
   margin-left: auto;
+}
+.summary-options .select-wrap {
+  flex: 0 1 auto;
 }
 .summarize .spinner {
   display: none;
@@ -791,38 +800,131 @@ input[type="range"] {
 .summary-note[hidden] {
   display: none;
 }
-.summary-body h3 {
-  margin: 0 0 var(--base-size-4);
-  color: var(--fgColor-default);
+.summary-note {
+  margin: 0;
+  color: var(--fgColor-muted);
   font-size: var(--text-body-size-small);
+}
+.summary-history {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-4);
+  min-width: 0;
+}
+.summary-history .select-wrap {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.summary-history[hidden] {
+  display: none;
+}
+
+/* A summary written in Markdown (src/markdown.js), in the panel's compact text. */
+.markdown {
+  display: grid;
+  gap: var(--base-size-8);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.markdown:empty {
+  display: none;
+}
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  margin: var(--base-size-8) 0 0;
+  color: var(--fgColor-default);
   font-weight: var(--base-text-weight-semibold);
   line-height: var(--base-text-lineHeight-tight);
 }
-.summary-body p,
-.summary-body ul {
-  margin: 0;
+.markdown h3 {
+  font-size: var(--text-body-size-large);
 }
-.summary-body ul {
-  padding-left: var(--base-size-20);
+.markdown h4 {
+  font-size: var(--text-body-size-medium);
 }
-.summary-body li + li {
-  margin-top: var(--base-size-2);
+.markdown h5,
+.markdown h6 {
+  font-size: var(--text-body-size-small);
 }
-#summaryContent {
-  display: grid;
-  gap: var(--base-size-12);
-}
-.summary-note,
-.summary-detail {
+.markdown h6 {
   color: var(--fgColor-muted);
 }
-.summary-note {
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote,
+.markdown pre {
   margin: 0;
+}
+.markdown ul,
+.markdown ol {
+  padding-left: var(--base-size-20);
+}
+.markdown li + li,
+.markdown li > ul,
+.markdown li > ol {
+  margin-top: var(--base-size-2);
+}
+.markdown code {
+  padding: 0 var(--base-size-4);
+  border-radius: var(--borderRadius-small);
+  background: var(--control-transparent-bgColor-hover);
+  font-family: var(--fontStack-monospace);
   font-size: var(--text-body-size-small);
 }
-.summary-detail {
-  display: block;
-  font-size: var(--text-body-size-small);
+.markdown pre {
+  padding: var(--base-size-8) var(--base-size-12);
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-default);
+  overflow-x: auto;
+}
+.markdown pre code {
+  padding: 0;
+  background: none;
+  white-space: pre;
+}
+.markdown blockquote {
+  display: grid;
+  gap: var(--base-size-8);
+  padding-left: var(--base-size-12);
+  border-left: var(--base-size-4) solid var(--borderColor-default);
+  color: var(--fgColor-muted);
+}
+.markdown hr {
+  width: 100%;
+  margin: var(--base-size-4) 0;
+  border: 0;
+  border-top: var(--borderWidth-default) solid var(--borderColor-default);
+}
+.markdown .table-wrap {
+  overflow-x: auto;
+}
+.markdown table {
+  border-collapse: collapse;
+  font-size: var(--text-body-size-medium);
+}
+.markdown th,
+.markdown td {
+  padding: var(--base-size-4) var(--base-size-8);
+  border: var(--borderWidth-default) solid var(--borderColor-default);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
+}
+.markdown th {
+  background: var(--bgColor-default);
+  font-weight: var(--base-text-weight-semibold);
+}
+.markdown .align-center {
+  text-align: center;
+}
+.markdown .align-right {
+  text-align: right;
 }
 
 /* ---------- Transcript ---------- */
@@ -1347,6 +1449,75 @@ kbd {
   color: inherit;
 }
 
+/* Summary templates in the settings dialog: a list of rows, the editor below it. */
+.template-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: var(--borderWidth-default) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+}
+.template-row {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-8);
+  padding: var(--base-size-6) var(--base-size-8) var(--base-size-6) var(--base-size-12);
+}
+.template-row + .template-row {
+  border-top: var(--borderWidth-default) solid var(--borderColor-muted);
+}
+.template-text {
+  flex: 1;
+  min-width: 0;
+}
+.template-name {
+  font-weight: var(--base-text-weight-semibold);
+}
+.template-text .label {
+  vertical-align: text-bottom;
+}
+.template-description {
+  display: block;
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+  line-height: var(--text-body-lineHeight-small);
+}
+.template-acts {
+  display: flex;
+  flex: none;
+  gap: var(--base-size-2);
+}
+.template-actions,
+.template-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--base-size-8);
+}
+.template-editor-actions {
+  justify-content: flex-end;
+}
+.template-editor {
+  display: grid;
+  gap: var(--stack-gap-normal);
+  padding: var(--base-size-16);
+  border: var(--borderWidth-default) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-muted);
+}
+.template-editor[hidden] {
+  display: none;
+}
+.template-editor-title {
+  margin: 0;
+  font-size: var(--text-title-size-small);
+  font-weight: var(--text-title-weight-small);
+}
+.template-prompt {
+  font-family: var(--fontStack-monospace);
+  font-size: var(--text-body-size-small);
+}
+
 /* ---------- Narrow screens: sidebar becomes a drawer ---------- */
 @media (max-width: 819px) {
   #menu {
@@ -1389,6 +1560,17 @@ kbd {
   /* Leave most of a phone screen to the transcript; the summary scrolls inside its panel. */
   .summary-body {
     max-height: 30vh;
+  }
+  /* The summary's choices take a row of their own and share it. */
+  .summary-options {
+    flex: 1 1 100%;
+  }
+  .summary-options .select-wrap,
+  .summary-history .select-wrap {
+    flex: 1 1 0;
+  }
+  .summary-options .select-wrap:first-child {
+    flex-basis: 100%;
   }
   /* Primer uses 16px text in form controls on small screens so iOS does not zoom on focus. */
   .select,
