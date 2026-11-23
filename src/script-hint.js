@@ -77,6 +77,16 @@ export function sourceByScript(text, languages) {
   return matching[0] ?? 'other';
 }
 
+// The languages a sentence is translated into: every one of `languages` (in the order of the
+// selects) except `source`, the one it is spoken in. Speech in none of them (source 'other') goes
+// into all of them, or only into the one `otherInto` names by its place ('A', 'B' or 'C'); 'all',
+// or a place with no language, keeps all of them.
+export function targetLanguages(languages, source, otherInto = 'all') {
+  const chosen = languages[['A', 'B', 'C'].indexOf(otherInto)];
+  if (source === 'other' && chosen) return [chosen];
+  return languages.filter((language) => language !== source);
+}
+
 // Whether text in langA can be told from text in langB by its writing system alone.
 export const scriptsDiffer = (langA, langB) => scriptOf(langA) !== scriptOf(langB);
 

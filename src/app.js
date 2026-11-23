@@ -6,7 +6,7 @@ import { MessageError } from './message-error.js';
 import { MockSummarizer, MockTranscriber, MockTranslator } from './mock.js';
 import { ReadAloud } from './read-aloud.js';
 import { canRecord, Recorder } from './recorder.js';
-import { languageByScript, scriptsDiffer, sourceByScript } from './script-hint.js';
+import { languageByScript, scriptsDiffer, sourceByScript, targetLanguages } from './script-hint.js';
 import { loadApiKey, saveApiKey } from './secrets.js';
 import { UtteranceTracker } from './segmenter.js';
 import { store } from './store.js';
@@ -46,7 +46,9 @@ const DEFAULTS = {
   glossary: '',
   vocabulary: '', // terms for the recognizer and `wrong => right` corrections, one per line
   fontSize: 18,
-  otherInto: 'A', // which of the two languages a third language is translated into
+  // Speech in none of the selected languages goes into all of them ('all') or only into the one
+  // in that place ('A', 'B' or 'C').
+  otherInto: 'all',
   readAloud: 'off', // 'off', 'A', 'B' or 'both': translations into which language are read aloud
   captionItems: 3, // sentences kept in the caption zone, including the one being spoken
   captionContent: 'both', // 'both' or 'tgt' (translation only) in the caption zone
@@ -244,6 +246,8 @@ els.langB.value = settings.langB;
 if (!LANGS.some((l) => l.code === settings.langC) || [settings.langA, settings.langB].includes(settings.langC))
   settings.langC = '';
 els.langC.value = settings.langC;
+if (!['all', 'A', 'B', 'C'].includes(settings.otherInto) || (settings.otherInto === 'C' && !settings.langC))
+  settings.otherInto = 'all';
 if (!canCaptureSystemAudio()) {
   for (const option of els.source.querySelectorAll('option:not([value=mic])')) option.remove();
   settings.source = 'mic';
@@ -281,21 +285,21 @@ function onThirdLangChange() {
   }
   langsChanged();
 }
-// The choices for a third language and for reading aloud are stored as a side (A / B) but mean
-// a language, so they follow that language when the two change places.
-function setLangs(a, b) {
-  const langOf = (side) => ({ A: settings.langA, B: settings.langB })[side];
-  const sideOf = (lang, side) => (lang === a ? 'A' : lang === b ? 'B' : side);
-  const target = langOf(settings.otherInto) ?? settings.langA;
-  const spoken = langOf(settings.readAloud);
-  settings.langA = a;
-  settings.langB = b;
-  settings.otherInto = sideOf(target, settings.otherInto);
-  if (spoken) settings.readAloud = sideOf(spoken, settings.readAloud);
+// The choices for another language and for reading aloud are stored as a place (A / B / C) but
+// mean a language, so they follow that language when it changes places. A choice of the third
+// language that is turned off becomes 'all'.
+function setLangs(a, b, c) {
+  const was = { A: settings.langA, B: settings.langB, C: settings.langC };
+  const now = { A: a, B: b, C: c };
+  const follow = (side, sides) =>
+    sides.includes(side) && was[side] ? (sides.find((s) => now[s] === was[side]) ?? side) : side;
+  settings.otherInto = follow(settings.otherInto, ['A', 'B', 'C']);
+  if (settings.otherInto === 'C' && !c) settings.otherInto = 'all';
+  settings.readAloud = follow(settings.readAloud, ['A', 'B']);
+  Object.assign(settings, { langA: a, langB: b, langC: c });
 }
 function langsChanged() {
-  setLangs(els.langA.value, els.langB.value);
-  settings.langC = els.langC.value;
+  setLangs(els.langA.value, els.langB.value, els.langC.value);
   saveSettings();
   applyCaptionOptions();
   if (current) {
@@ -352,11 +356,17 @@ function openSettings() {
 function showKeyStorage() {
   els.apiKeyStorage.textContent = t(`settings.apiKey.storage.${keyStorage}`);
 }
-// With a third language every sentence goes into the other two, so there is nothing to choose.
+// All selected languages, or one of them (the third only while there is one). A choice not yet
+// saved survives a change of display language.
 function fillOtherInto() {
-  els.otherIntoField.hidden = !!settings.langC;
-  els.otherInto.options[0].text = t('settings.otherInto.left', { lang: langLabel(settings.langA) });
-  els.otherInto.options[1].text = t('settings.otherInto.right', { lang: langLabel(settings.langB) });
+  const value = els.otherInto.value || settings.otherInto;
+  const sides = settings.langC ? ['A', 'B', 'C'] : ['A', 'B'];
+  els.otherInto.replaceChildren(
+    new Option(t('settings.otherInto.all'), 'all'),
+    ...sides.map((s) => new Option(t('settings.otherInto.only', { lang: langLabel(settings[`lang${s}`]) }), s)),
+  );
+  els.otherInto.value = value;
+  if (!els.otherInto.value) els.otherInto.value = 'all';
 }
 // Reading aloud needs the language of each translation, which only the writing system tells.
 const canReadAloudPair = () =>
@@ -559,18 +569,14 @@ function showSession(sess) {
   live = null;
   for (const seg of sess.segments) mountSegment(seg);
   els.empty.hidden = sess.segments.length > 0;
-  if (
-    LANGS.some((l) => l.code === sess.langA) &&
-    LANGS.some((l) => l.code === sess.langB) &&
-    sess.langA !== sess.langB
-  ) {
-    setLangs(sess.langA, sess.langB);
-    els.langA.value = settings.langA;
-    els.langB.value = settings.langB;
-  }
+  const [a, b] =
+    LANGS.some((l) => l.code === sess.langA) && LANGS.some((l) => l.code === sess.langB) && sess.langA !== sess.langB
+      ? [sess.langA, sess.langB]
+      : [settings.langA, settings.langB];
   const langC = sess.langC;
-  settings.langC =
-    LANGS.some((l) => l.code === langC) && langC !== settings.langA && langC !== settings.langB ? langC : '';
+  setLangs(a, b, LANGS.some((l) => l.code === langC) && langC !== a && langC !== b ? langC : '');
+  els.langA.value = settings.langA;
+  els.langB.value = settings.langB;
   els.langC.value = settings.langC;
   saveSettings();
   applyCaptionOptions();
@@ -1147,6 +1153,7 @@ async function start() {
     langs: langC ? [langA, langB, langC] : [langA, langB],
     baseMs: sess.activeMs,
     startedAt: 0,
+    otherInto: settings.otherInto,
     interim: { busy: false, lastAt: 0, pausedUntil: 0, timer: null, text: '' },
   };
   r.tracker = createTracker(r);
@@ -1183,7 +1190,9 @@ async function start() {
       langB: langB.name,
       langC: langC?.name,
       glossary: settings.glossary,
-      otherInto: (settings.otherInto === 'B' ? langB : langA).name,
+      // For the rules of two languages; 'all' gives the first language there, as before. Speech
+      // that its writing system shows to be neither language never reaches those rules with 'all'.
+      otherInto: (r.otherInto === 'B' ? langB : langA).name,
     });
     r.transcriber = new GeminiLiveTranscriber({
       apiKey,
@@ -1345,11 +1354,14 @@ function scheduleInterimTranslation(s) {
     it.busy = true;
     it.lastAt = Date.now();
     try {
-      if (s.langs.length > 2) {
+      if (s.langs.length > 2 || intoSeveral(s, text)) {
         await translateInterimLines(s, seg, text);
       } else {
         const out = await s.translator.translate(text, { history: recentHistory(s) });
-        if (seg === live && out) setText(seg, 'tgt', out, 'pending');
+        if (seg === live && out) {
+          clearTargets(seg);
+          setText(seg, 'tgt', out, 'pending');
+        }
       }
     } catch (err) {
       if (err instanceof RateLimitError) {
@@ -1363,9 +1375,9 @@ function scheduleInterimTranslation(s) {
   }, wait);
 }
 
-// With a third language: the sentence in progress goes into the other languages, one request per
-// line, but only when its writing system tells which language it is in (the model is not asked
-// while the sentence is still growing).
+// With a third language, or two and a sentence in neither of them: the sentence in progress goes
+// into the other languages, one request per line, but only when its writing system tells which
+// language it is in (the model is not asked while the sentence is still growing).
 async function translateInterimLines(r, seg, text) {
   const source = sourceByScript(
     text,
@@ -1384,8 +1396,31 @@ async function translateInterimLines(r, seg, text) {
   if (limited) throw limited.reason;
 }
 // The codes of the languages a sentence goes into: the selected ones other than the one it was
-// spoken in (source: an English name or 'other'), in the order of the selects.
-const targetsFor = (r, source) => r.langs.filter((l) => l.name !== source).map((l) => l.code);
+// spoken in (source: an English name or 'other'), in the order of the selects, narrowed by the
+// setting for other languages.
+const targetsFor = (r, source) =>
+  targetLanguages(
+    r.langs.map((l) => l.name),
+    source,
+    r.otherInto,
+  ).map((name) => r.langs.find((l) => l.name === name).code);
+// With two languages, a sentence whose writing system shows it is in neither goes into both, one
+// tagged line each, unless the setting picks one of them. Everything else takes one request with
+// the rules for two languages, which never asks the model which language it is.
+const intoSeveral = (r, text) =>
+  r.langs.length === 2 &&
+  sourceByScript(
+    text,
+    r.langs.map((l) => l.name),
+  ) === 'other' &&
+  targetsFor(r, 'other').length > 1;
+// Back to a single translation line (two languages, after lines for a sentence in neither).
+function clearTargets(seg) {
+  if (!seg.tgts) return;
+  delete seg.tgts;
+  delete seg.lang;
+  seg.lines = null;
+}
 
 function finalize(r, text) {
   const seg = live;
@@ -1415,10 +1450,11 @@ function recentHistory(r, lang) {
 }
 
 async function translateFinal(r, seg) {
-  if (r.langs.length > 2) return translateFinalLines(r, seg);
+  if (r.langs.length > 2 || intoSeveral(r, seg.src)) return translateFinalLines(r, seg);
   const history = recentHistory(r);
   seg.rev = (seg.rev || 0) + 1; // a segment can be re-translated when its text is corrected
   const rev = seg.rev;
+  clearTargets(seg);
   const shown = () => seg.rev === rev && seg.el.isConnected;
   // If a translation of the in-progress text is already on screen, swap it once when the final one
   // is complete rather than replacing it with a few words that grow again.
@@ -1454,6 +1490,7 @@ async function translateFinal(r, seg) {
 
 // With a third language: which language the sentence is in comes from its writing system, or else
 // from the model; then it is translated into each of the others at once, each into its own line.
+// With two languages this is only reached for a sentence the writing system shows is in neither.
 async function translateFinalLines(r, seg) {
   seg.rev = (seg.rev || 0) + 1;
   const rev = seg.rev;
@@ -1488,6 +1525,10 @@ async function translateLine(r, seg, rev, code, swapWhenDone) {
         .join('\n');
       if (shown()) setLine(seg, code, out);
       markDirty(r.session);
+      // Each line is in a known language, so the one(s) chosen for reading aloud are read.
+      seg.spokenLines ??= new Set();
+      if (r.langs.length === 2 && !seg.spokenLines.has(code) && readTranslation(r, out, langName(code)))
+        seg.spokenLines.add(code);
       return;
     } catch (err) {
       if (err instanceof RateLimitError && attempt < 3) {

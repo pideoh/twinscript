@@ -92,6 +92,32 @@ test('finished translations into the chosen language are read aloud once, and no
   await close();
 });
 
+test('of the two translations of speech in neither language, the one in the chosen language is read', async () => {
+  const { page, errors, close } = await openApp(
+    '',
+    { apiKey: 'test-key', readAloud: 'A', interimTranslate: false },
+    { script: fakeSpeech },
+  );
+  const send = await mockMeeting(page);
+  await page.route(/streamGenerateContent/, (route) => {
+    const system = route.request().postDataJSON().systemInstruction.parts[0].text;
+    const out = /into Japanese\./.test(system)
+      ? 'これは小さな同期モーターです。'
+      : 'This is a small synchronous motor.';
+    const body = `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: out }] } }] })}\n\n`;
+    route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+  });
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  send('inputTranscription', 'और यह है छोटे सिंक्रोनस मोटर।');
+  await page.waitForFunction(() => document.querySelectorAll('.seg .tgt-line:not(.pending)').length === 2);
+  await page.waitForFunction(() => window.spoken.length === 1);
+  assert.deepEqual(await spoken(page), [{ text: 'これは小さな同期モーターです。', lang: 'ja-JP' }]);
+  await page.click('#toggle');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
 test('turning reading aloud off silences it at once, also while listening', async () => {
   const { page, errors, close } = await openApp('', { apiKey: 'test-key', readAloud: 'both' }, { script: fakeSpeech });
   const send = await mockMeeting(page);
