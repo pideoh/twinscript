@@ -20,19 +20,20 @@ function toBase64(buffer) {
 }
 
 export class AudioCapture {
-  constructor({ onChunk, onLevel, onEnded }) {
+  constructor({ onChunk, onLevel, onEnded, onFileEnded }) {
     this.onChunk = onChunk;
     this.onLevel = onLevel;
     this.onEnded = onEnded;
+    this.onFileEnded = onFileEnded;
     this.streams = [];
     this.gains = [];
     this.systemStream = this.systemProbe = null;
   }
 
-  // source: 'mic' | 'system' | 'both'
-  async start(source) {
+  // source: 'mic' | 'system' | 'both', or 'file' (debug only) with the File to play.
+  async start(source, file) {
     try {
-      if (source !== 'mic') {
+      if (source === 'system' || source === 'both') {
         const audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
         // The desktop app captures the whole system's audio, which would include its own sounds.
         if (inDesktopApp()) audio.restrictOwnAudio = true;
@@ -51,7 +52,7 @@ export class AudioCapture {
         const why = inMacDesktopApp() ? new MessageError('error.systemAudioPermission') : undefined;
         display.getAudioTracks()[0].addEventListener('ended', () => this.onEnded?.(why));
       }
-      if (source !== 'system') {
+      if (source === 'mic' || source === 'both') {
         const mic = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
         });
@@ -85,11 +86,35 @@ export class AudioCapture {
       const mute = this.ctx.createGain();
       mute.gain.value = 0;
       this.node.connect(mute).connect(this.ctx.destination);
+      if (source === 'file') await this.#playFile(file, mix);
       if (this.ctx.state !== 'running') await this.ctx.resume();
     } catch (err) {
       this.stop();
       throw err;
     }
+  }
+
+  // Debug only: plays a decoded audio file in real time into the same chain the microphone feeds,
+  // without sending it to the speakers. Silence keeps flowing afterwards, so the recognizer hears
+  // the end of the last utterance; onFileEnded says when the file itself is over.
+  async #playFile(file, mix) {
+    let buffer;
+    try {
+      buffer = await this.ctx.decodeAudioData(await file.arrayBuffer());
+    } catch {
+      throw new MessageError('error.audioFileDecode', { name: file.name });
+    }
+    const silence = this.ctx.createConstantSource();
+    silence.offset.value = 0;
+    silence.connect(this.node);
+    silence.start();
+    const player = this.ctx.createBufferSource();
+    player.buffer = buffer;
+    player.connect(this.node);
+    player.connect(mix);
+    player.onended = () => this.onFileEnded?.();
+    player.start();
+    this.players = [silence, player];
   }
 
   // PC audio can be very quiet (it follows the playing app's own volume), so its level is evened
@@ -119,6 +144,11 @@ export class AudioCapture {
   stop() {
     for (const s of this.streams) for (const track of s.getTracks()) track.stop();
     this.streams = [];
+    for (const player of this.players ?? []) {
+      player.onended = null;
+      player.disconnect();
+    }
+    this.players = [];
     for (const gain of this.gains) gain.disconnect();
     this.gains = [];
     if (this.node) {

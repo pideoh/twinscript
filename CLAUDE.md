@@ -24,6 +24,8 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/secrets.js` | Where the API key is kept (desktop: `window.secretStore`; browser: memory only). DOM-free |
 | `src/exporter.js` | Transcript export (txt / md / csv / srt). Pure functions |
 | `src/mock.js` | Stand-in engines for the `?mock=1` demo |
+| `src/trace.js` | Debug-only (`?debug=1`) trace of raw recognizer results with times; JSON format v1 and the download file name. DOM-free |
+| `src/debug-tools.js` | Debug-only tools wired into `app.js`: the "Audio file (debug)" input and file picker, the trace download entry |
 | `src/i18n.js` | Display-language resolution (`resolveLocale`), `t(key, params)`, applying `data-i18n*` to static HTML. Languages are registered only in its `LOCALES` array |
 | `src/locales/*.js` | Message catalogs (`en` is the reference and fallback, `ja`, `zh-Hans`). Dotted keys |
 | `src/icons.js` | Octicons (SVG) for buttons that are created at runtime |
@@ -46,7 +48,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 - `npm run lint`: Biome checks formatting and lint rules; `npm run format` applies the fixes. Run before committing.
 - `npm test`: unit tests. Run after every logic change.
 - `npm run test:e2e`: only when `src/app.js`, `src/audio.js`, HTML or CSS changed.
-- `npm start`: http://localhost:5173 (`?mock=1` for a demo without a key, `?debug=1` to log raw recognizer output).
+- `npm start`: http://localhost:5173 (`?mock=1` for a demo without a key, `?debug=1` to log raw recognizer output, download a recognizer trace and use an audio file as input; see "Tuning tools" in CONTRIBUTING.md).
 - `npm run app`: start the desktop app. `npm run test:app` only when `app/` or the caption window changed.
 - `npm run dist:mac` / `npm run dist:win`: build zips into `dist/`.
 

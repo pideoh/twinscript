@@ -59,6 +59,43 @@ To try the app before a release, a maintainer can build it from any branch: Acti
 The zips are attached to that run for a week and nothing is published. The macOS build is signed like a release, so
 it replaces the installed app and keeps its permissions.
 
+## Tuning tools
+
+Opening the app with `?debug=1` (for example http://localhost:5173/?debug=1) turns on tools for tuning segmentation
+and translation timing. None of them exist without it.
+
+- **Raw recognizer output**: every interim and final result is logged to the console as `[interim]` / `[final]`.
+- **Recognizer trace**: each run records what the recognizer delivered and when. After you stop, the download dialog
+  has a "Download recognizer trace (debug)" entry that saves `twinscript-trace-<yyyymmdd-hhmmss>.json`;
+  `window.__twinscriptTrace()` in the console returns the same object.
+- **Audio file as input**: the audio input select gets "Audio file (debug)". Starting asks for a file (audio, or WebM /
+  MP4 video), which is decoded and played in real time into the recognizer, silently. The run stops by itself 2 seconds
+  after the file ends. Nothing is recorded to the session. The whole file is decoded into memory first (about 11 MB
+  per minute of stereo audio).
+
+The trace format (`src/trace.js`):
+
+```json
+{
+  "version": 1,
+  "startedAt": "2026-11-23T01:02:03.456Z",
+  "langs": ["ja-JP", "en-US"],
+  "source": "mic",
+  "events": [
+    { "t": 812, "kind": "interim", "text": "Hello" },
+    { "t": 2040, "kind": "final", "text": "Hello everyone." }
+  ],
+  "durationMs": 5310
+}
+```
+
+`source` is `mic`, `system`, `both` or `file`; `t` is whole milliseconds since audio capture started (for a file, about where its
+playback starts); `text` is the
+recognizer's text before the correction rules in Settings are applied.
+
+A trace contains what was said in the meeting. Do not commit traces or attach them to public issues;
+`*.trace.json` and `twinscript-trace-*.json` are ignored by Git.
+
 ## Adding a display language
 
 Copy `src/locales/en.js` to a new file, translate the values, and register it in the `LOCALES`

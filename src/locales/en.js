@@ -30,6 +30,7 @@ export default {
   'source.mic': 'Microphone',
   'source.system': 'PC audio',
   'source.both': 'Microphone + PC audio',
+  'source.file': 'Audio file (debug)',
 
   // transcript and caption zone
   'empty.main': 'Choose two languages and press "Start translating".',
@@ -84,6 +85,7 @@ export default {
   'export.recording': 'Recording {n} ・ {date} ・ {length}',
   'export.recordingNow': 'Recording',
   'export.save': 'Save',
+  'export.trace': 'Download recognizer trace (debug)',
 
   // downloaded transcript files
   'file.title': 'Transcript',
@@ -191,6 +193,7 @@ export default {
   // errors reported by audio.js, transcriber.js and translator.js
   'error.windowBlocked': 'The window was blocked',
   'error.noSharedAudio': 'The shared screen or tab has no audio. Turn on "Share audio" in the sharing dialog.',
+  'error.audioFileDecode': 'Could not read {name} as audio. Try a WAV, MP3, M4A, Ogg or WebM file.',
   'error.systemAudioPermission':
     'PC audio stopped. Allow Twinscript in System Settings → Privacy & Security → Screen & System Audio Recording → "System Audio Recording Only" and reopen the app. PC audio needs macOS 14.2 or later.',
   'error.connectFailed': 'Could not connect: {reason}',
