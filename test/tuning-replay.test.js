@@ -16,6 +16,10 @@ const run = (...args) =>
     env: { ...process.env, GEMINI_API_KEY: '' },
   });
 
+// The output is two tables separated by an empty line: the scores, then the health of the run.
+const scores = (stdout) => stdout.split('\n\n')[0].trimEnd().split('\n');
+const healthRows = (stdout) => stdout.split('\n\n')[1].trimEnd().split('\n');
+
 const EXPECTED = [
   'strategy       sentences  first ms mean/med/p90  final ms mean/med/p90  flicker mean/med/p90  erased  updates  requests  rateLimited',
   'interval 1.5s  6          833/550/1600           400/400/400            0.00/0.00/0.00        0       13       16        0',
@@ -35,7 +39,11 @@ test('the replay of the sample trace with the fake translator scores the same on
     );
 
     const { stdout: normal } = await run('test/fixtures/replay-trace.json', '--mock');
-    assert.deepEqual(normal.trimEnd().split('\n'), EXPECTED);
+    assert.deepEqual(scores(normal), EXPECTED);
+    assert.deepEqual(healthRows(normal), [
+      'strategy       failed  answer ms mean/med/p90  live  last error',
+      'interval 1.5s  0       400/400/400             4/6',
+    ]);
 
     const result = JSON.parse(readFileSync(out, 'utf8'));
     assert.equal(result.runs.length, 1);
@@ -60,7 +68,8 @@ test('the replay of the sample trace with the fake translator scores the same on
 
 test('several strategies run one after another, one row each', async () => {
   const { stdout } = await run('test/fixtures/replay-trace.json', '--mock', '--strategy', 'interval,interval');
-  assert.equal(stdout.trimEnd().split('\n').length, 3);
+  assert.equal(scores(stdout).length, 3);
+  assert.equal(healthRows(stdout).length, 3);
 });
 
 const STRATEGY_ROWS = {
@@ -81,10 +90,10 @@ const STRATEGY_ROWS = {
 test('every pacing strategy replays the sample trace with the same scores on every run', async () => {
   const strategies = ['--strategy', 'interval,steady,carry,chunk'];
   const { stdout } = await run('test/fixtures/replay-trace.json', '--mock', ...strategies);
-  assert.deepEqual(stdout.trimEnd().split('\n'), [EXPECTED[0], ...STRATEGY_ROWS.mock]);
+  assert.deepEqual(scores(stdout), [EXPECTED[0], ...STRATEGY_ROWS.mock]);
   const { stdout: rephrased } = await run('test/fixtures/replay-trace.json', '--mock=rephrase', ...strategies);
   assert.deepEqual(
-    rephrased.trimEnd().split('\n'),
+    scores(rephrased),
     [EXPECTED[0], ...STRATEGY_ROWS.rephrase],
     'a translator that rephrases makes interval and steady flicker; carry and chunk continue what is shown',
   );
@@ -221,7 +230,8 @@ test('the replay knows the same languages as the app', () => {
 
 test('progress is printed apart from the table, and --quiet leaves only the table', async () => {
   const loud = await run('test/fixtures/replay-trace.json', '--mock');
-  assert.equal(loud.stdout.trim().split('\n').length, 2, 'stdout holds the table only');
+  assert.equal(scores(loud.stdout).length, 2, 'stdout holds the two tables only');
+  assert.equal(healthRows(loud.stdout).length, 2);
   assert.match(loud.stderr, /Trace: 0:21 of speech, 43 recognizer results \(4 final\), Japanese \/ English\./);
   assert.match(loud.stderr, /interval: 0:\d\d \/ 0:21, 6 sentences, 16 requests/);
   assert.match(loud.stderr, /flicker +share of shown translation/);

@@ -99,6 +99,17 @@ interval 1.5s  58         1840/1620/3100         910/840/1500           0.42/0.3
 | `requests` | Translation requests sent, in-progress and final: the cost | lower |
 | `rateLimited` | Requests refused by the rate limit. More than a few make the other numbers meaningless | 0 |
 
+A second table says whether each run was sound:
+
+| Column | Meaning |
+| --- | --- |
+| `failed` | Requests that ended in an error other than the rate limit; `last error` shows the most recent one |
+| `answer ms` | How long the model took to answer a request (mean / median / p90) |
+| `live` | Sentences that had a translation on screen before they were finished, out of all sentences |
+
+Read it before the scores. A strategy whose requests failed, were answered slowly, or that showed few sentences
+live did not flicker simply because little was shown; its low flicker is not a result.
+
 Each cell with three numbers is mean / median / p90 over the sentences. The table goes to standard output and
 everything else to standard error, so `... > result.txt` saves the table alone.
 

@@ -17,7 +17,7 @@ import { sourceByScript, targetByScript, targetLanguages } from '../../src/scrip
 import { UtteranceTracker } from '../../src/segmenter.js';
 import { GeminiTranslator, RateLimitError } from '../../src/translator.js';
 import { createVirtualClock } from './clock.mjs';
-import { aggregate, formatTable, sentenceMetrics } from './metrics.mjs';
+import { aggregate, formatHealth, formatTable, health, sentenceMetrics } from './metrics.mjs';
 
 // Codes and English names as in LANGS in src/app.js (test/tuning-replay.test.js keeps them equal).
 export const LANGS = [
@@ -103,7 +103,7 @@ export async function replay({
     return lang;
   });
   const names = langs.map((l) => l.name);
-  const counts = { requests: 0, rateLimited: 0, failed: 0, answered: 0, lastError: null };
+  const counts = { requests: 0, rateLimited: 0, failed: 0, answered: 0, lastError: null, answerMs: [] };
   let traceNow = () => 0;
   const report = () =>
     onProgress?.({
@@ -117,9 +117,11 @@ export async function replay({
     });
   const counted = async (call) => {
     counts.requests++;
+    const asked = clock.now();
     try {
       const out = await call();
       counts.answered++;
+      counts.answerMs.push(clock.now() - asked);
       return out;
     } catch (err) {
       if (err instanceof RateLimitError) counts.rateLimited++;
@@ -403,6 +405,9 @@ export async function replay({
     strategy,
     options: { interval, speed },
     summary: aggregate(rows, counts),
+    // Whether the run itself was sound: failed requests, how long answers took, and how many
+    // sentences had a translation on screen before they were finished.
+    health: health(sentences, counts),
     sentences: sentences.map((s, i) => ({ ...s, metrics: rows[i] })),
   };
 }
@@ -433,7 +438,13 @@ final ms   from the end of a sentence to its complete translation (lower is bett
 flicker    share of shown translation that was erased rather than extended; 0 = it only ever grew
 erased / updates   the totals behind flicker
 requests   translation requests sent; rateLimited: how many hit the rate limit
-Each cell is mean/median/p90 over the sentences.`;
+Each cell is mean/median/p90 over the sentences.
+
+Second table: was the run sound?
+failed     requests that ended in an error other than the rate limit (with the last error)
+answer ms  how long the model took to answer a request, mean/median/p90
+live       sentences that had a translation on screen before they were finished
+A strategy with many failed requests, slow answers or a low "live" share was not measured fairly.`;
 
 export function parseArgs(argv) {
   const args = {
@@ -569,6 +580,7 @@ export async function main(argv, { log = console.log, warn = console.error, env 
     line();
   }
   log(formatTable(runs));
+  log(`\n${formatHealth(runs)}`);
   say(LEGEND);
   if (args.out) {
     writeFileSync(args.out, `${JSON.stringify({ trace: args.trace, mock: args.mock, runs }, null, 2)}\n`);
