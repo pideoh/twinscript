@@ -71,6 +71,27 @@ is rewritten. [docs/tuning.md](docs/tuning.md) describes the tools for measuring
 A trace contains what was said in the meeting. Do not commit traces or attach them to public issues;
 `*.trace.json` and `twinscript-trace-*.json` are ignored by Git.
 
+## Gemini prices
+
+The prices used to estimate costs live in the block between `// BEGIN PRICES` and `// END PRICES` in
+`src/pricing.js`: the paid tier, Standard, of each model the app uses, per 1M tokens (and per minute of audio for
+the live transcription model), with the date they were taken from
+[Google's pricing page](https://ai.google.dev/gemini-api/docs/pricing). To check or update them by hand:
+
+```sh
+node scripts/update-pricing.mjs           # compare with the page; exits 1 and lists the differences if any
+node scripts/update-pricing.mjs --write   # rewrite the block and its date when the prices changed
+```
+
+The script fails, and writes nothing, when it cannot find a model on the page or read a price. It refuses a price
+that moves by more than 5 times either way, or a model that is no longer on the page; check the page, then run it
+again with `--force` to accept such a change. `--help` lists the options.
+
+Once a month the `pricing-check` workflow runs the same check. When the prices changed it opens (or updates) a
+pull request, `fix: update the Gemini prices used for cost estimates`, with the differences in its description. A
+maintainer checks the numbers against the page and merges it; it is never merged automatically. When the page
+cannot be read or a change is refused, the run fails instead, and the update is made by hand.
+
 ## Adding a display language
 
 Copy `src/locales/en.js` to a new file, translate the values, and register it in the `LOCALES`
