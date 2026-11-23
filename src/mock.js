@@ -48,7 +48,19 @@ export class MockTranscriber {
   sendAudio() {}
 }
 
+// Made-up but plausible token counts, so the usage screen has something to show in the demo: the
+// instructions and context of a request plus about one token per three characters of its text.
+const demoUsage = (prompt, answer, overhead) => ({
+  promptTokenCount: overhead + Math.ceil(prompt.length / 3),
+  candidatesTokenCount: Math.ceil(answer.length / 3),
+});
+
 export class MockTranslator {
+  // onUsage(usageMetadata, model) is told made-up usage of each request, as if `model` answered it.
+  constructor({ model = 'demo', onUsage } = {}) {
+    this.model = model;
+    this.onUsage = onUsage;
+  }
   // into: with a third language, the language asked for (English when the demo has no such lines).
   async translate(text, { onDelta, into } = {}) {
     const hits = into
@@ -60,10 +72,12 @@ export class MockTranslator {
       onDelta?.(full.slice(0, n));
     }
     onDelta?.(full);
+    this.onUsage?.(demoUsage(text, full, 250), this.model);
     return full;
   }
   // The demo leaves every case the writing system does not settle to 'other'.
-  async identify() {
+  async identify(text = '') {
+    this.onUsage?.(demoUsage(text, '{"language":"other"}', 120), this.model);
     return 'other';
   }
 }
@@ -229,13 +243,19 @@ None`,
 };
 
 export class MockSummarizer {
-  async summarize(_segments, { template, onDelta } = {}) {
+  constructor({ model = 'demo', onUsage } = {}) {
+    this.model = model;
+    this.onUsage = onUsage;
+  }
+  async summarize(segments, { template, onDelta } = {}) {
     const full = DEMO_SUMMARIES[template?.id] ?? DEMO_SUMMARIES['preset:quick'];
     for (let n = 40; n < full.length; n += 40) {
       await sleep(30);
       onDelta?.(full.slice(0, n));
     }
     onDelta?.(full);
+    const transcript = (segments ?? []).map((seg) => `${seg.src ?? ''}${seg.tgt ?? ''}`).join('');
+    this.onUsage?.(demoUsage(transcript, full, 600), this.model);
     return { markdown: full, truncated: false };
   }
 }

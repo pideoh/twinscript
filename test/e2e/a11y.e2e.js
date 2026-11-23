@@ -59,6 +59,12 @@ for (const colorScheme of ['light', 'dark']) {
     await page.waitForFunction(() => document.querySelectorAll('#log .seg').length === 3);
     await assertAccessible(page, 'main screen with a transcript');
 
+    // The usage dialog with what the session used, and a translation model without a price.
+    await page.click('#openUsage');
+    await page.waitForSelector('#usageDialog[open]');
+    await assertAccessible(page, 'usage dialog');
+    await page.click('#usageDialog .dialog-footer button');
+
     // The summary panel with a rendered summary (headings, lists, a table, a link) and its history.
     await mockSummary(page, () => ({
       body: [
@@ -99,6 +105,14 @@ for (const colorScheme of ['light', 'dark']) {
     await page.waitForSelector('#templateError:not([hidden])');
     await assertAccessible(page, 'template editor');
     await page.click('#templateCancel');
+
+    // The prices for estimates, with a model that has no price and a value that is not a price.
+    await page.fill('#translateModel', 'my-model');
+    await page.dispatchEvent('#translateModel', 'change');
+    await page.fill('#priceFields input[data-model="my-model"][data-field="input"]', 'abc');
+    await page.waitForSelector('#pricesError:not([hidden])');
+    await assertAccessible(page, 'prices for estimates');
+    await page.fill('#translateModel', 'gemini-3.5-flash-lite');
     await page.click('#settings button[value=ok]');
 
     await page.click('#export');

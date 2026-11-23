@@ -16,9 +16,11 @@ const plain = (s) => String(s).replace(DELIMITER, '$1');
 
 export class GeminiTranslator {
   // langC: an optional third language. With it the app names the target of every request (`into`).
-  constructor({ apiKey, model, langA, langB, langC, otherInto = langA, glossary }) {
+  // onUsage(usageMetadata, model): told what each request used, as the API reported it (see #report).
+  constructor({ apiKey, model, langA, langB, langC, otherInto = langA, glossary, onUsage }) {
     this.apiKey = apiKey;
     this.model = model;
+    this.onUsage = onUsage;
     // Translation wants the least thinking. Flash-Lite models think minimally by default, and
     // measured against the service a request that says so explicitly was answered in about 3 s
     // instead of 0.6 s; so the option is only sent to models that would think more without it.
@@ -26,6 +28,17 @@ export class GeminiTranslator {
     this.langs = { langA, langB, otherInto };
     this.langC = langC;
     this.glossary = glossary;
+  }
+
+  // Every streamed chunk may carry `usageMetadata`; the last one seen is taken as the request's total.
+  // A request that failed, or was aborted, before any arrived reports nothing.
+  #report(usageMetadata) {
+    if (!usageMetadata) return;
+    try {
+      this.onUsage?.(usageMetadata, this.model);
+    } catch {
+      /* counting must never break a translation */
+    }
   }
 
   // into: the language to translate into when the writing system has settled it; otherwise the
@@ -103,28 +116,35 @@ export class GeminiTranslator {
     const decoder = new TextDecoder();
     let buffer = '';
     let out = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data:')) continue;
-        try {
-          const parts = JSON.parse(line.slice(5)).candidates?.[0]?.content?.parts || [];
-          const delta = parts
-            .filter((p) => !p.thought)
-            .map((p) => p.text || '')
-            .join('');
-          if (delta) {
-            out += delta;
-            onDelta?.(out);
+    let usage = null;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          try {
+            const chunk = JSON.parse(line.slice(5));
+            usage = chunk.usageMetadata ?? usage;
+            const parts = chunk.candidates?.[0]?.content?.parts || [];
+            const delta = parts
+              .filter((p) => !p.thought)
+              .map((p) => p.text || '')
+              .join('');
+            if (delta) {
+              out += delta;
+              onDelta?.(out);
+            }
+          } catch {
+            /* partial or keep-alive line */
           }
-        } catch {
-          /* partial or keep-alive line */
         }
       }
+    } finally {
+      this.#report(usage);
     }
     return out.trim();
   }
@@ -176,11 +196,13 @@ export class GeminiTranslator {
       }
       // The streamed chunks are pieces of one JSON document.
       let out = '';
+      let usage = null;
       for (const line of (await res.text()).split('\n')) {
         if (!line.startsWith('data:')) continue;
         try {
-          const parts = JSON.parse(line.slice(5)).candidates?.[0]?.content?.parts || [];
-          out += parts
+          const chunk = JSON.parse(line.slice(5));
+          usage = chunk.usageMetadata ?? usage;
+          out += (chunk.candidates?.[0]?.content?.parts || [])
             .filter((p) => !p.thought)
             .map((p) => p.text || '')
             .join('');
@@ -188,6 +210,7 @@ export class GeminiTranslator {
           /* partial or keep-alive line */
         }
       }
+      this.#report(usage);
       const language = JSON.parse(out).language;
       return languages.includes(language) ? language : 'other';
     } catch {

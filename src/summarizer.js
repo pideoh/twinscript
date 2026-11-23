@@ -164,9 +164,13 @@ export function legacySummaryToMarkdown(summary, labels) {
 }
 
 export class GeminiSummarizer {
-  constructor({ apiKey, model }) {
+  // onUsage(usageMetadata, model): told what the request used, as the API reported it. Every streamed
+  // chunk may carry `usageMetadata`; the last one seen is taken as the request's total. A request that
+  // failed, or was aborted, before any arrived reports nothing.
+  constructor({ apiKey, model, onUsage }) {
     this.apiKey = apiKey;
     this.model = model;
+    this.onUsage = onUsage;
     this.useThinkingConfig = true;
   }
 
@@ -204,10 +208,13 @@ export class GeminiSummarizer {
     const decoder = new TextDecoder();
     let buffer = '';
     let out = '';
+    let usage = null;
     const take = (line) => {
       if (!line.startsWith('data:')) return;
       try {
-        const parts = JSON.parse(line.slice(5)).candidates?.[0]?.content?.parts || [];
+        const chunk = JSON.parse(line.slice(5));
+        usage = chunk.usageMetadata ?? usage;
+        const parts = chunk.candidates?.[0]?.content?.parts || [];
         const piece = parts
           .filter((p) => !p.thought)
           .map((p) => p.text || '')
@@ -219,15 +226,25 @@ export class GeminiSummarizer {
         /* partial or keep-alive line */
       }
     };
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) take(line);
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) take(line);
+      }
+      take(buffer);
+    } finally {
+      if (usage) {
+        try {
+          this.onUsage?.(usage, this.model);
+        } catch {
+          /* counting must never break a summary */
+        }
+      }
     }
-    take(buffer);
 
     const markdown = cleanSummary(out);
     if (!markdown) throw new MessageError('error.summaryInvalid');

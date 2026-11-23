@@ -12,6 +12,8 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { availableLocales } from '../src/i18n.js';
+import { addListening, addTokens, emptyUsage } from '../src/usage.js';
+import { addToDaily, DAILY_KEY, emptyDaily, LIVE_MODEL } from '../src/usage-stats.js';
 
 const [out, filter] = process.argv.slice(2);
 if (!out) {
@@ -44,7 +46,15 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || 'chrome' });
 
 const wanted = (name) => !filter || name.includes(filter);
-async function open({ width = 1280, height = 800, scheme = 'light', uiLang = 'en', phone = false, langC = '' } = {}) {
+async function open({
+  width = 1280,
+  height = 800,
+  scheme = 'light',
+  uiLang = 'en',
+  phone = false,
+  langC = '',
+  usage = null, // daily usage totals to start with (the demo itself is never counted in them)
+} = {}) {
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: 2,
@@ -54,11 +64,14 @@ async function open({ width = 1280, height = 800, scheme = 'light', uiLang = 'en
     locale: 'en-US',
   });
   await context.addInitScript(
-    (settings) => {
-      if (!sessionStorage.getItem('seeded')) localStorage.setItem('rt-settings', JSON.stringify(settings));
+    ({ settings, usage, usageKey }) => {
+      if (!sessionStorage.getItem('seeded')) {
+        localStorage.setItem('rt-settings', JSON.stringify(settings));
+        if (usage) localStorage.setItem(usageKey, JSON.stringify(usage));
+      }
       sessionStorage.setItem('seeded', '1');
     },
-    { uiLang, langC },
+    { settings: { uiLang, langC }, usage, usageKey: DAILY_KEY },
   );
   const page = await context.newPage();
   page.on('pageerror', (e) => console.error('page error:', e.message));
@@ -180,6 +193,62 @@ for (const scheme of ['light', 'dark']) {
   await page.locator('#templateList').scrollIntoViewIfNeeded();
   await shot(page, `summary-${scheme}-templates`);
   await close();
+}
+
+// Usage and cost (Japanese UI): the dialog after a demo session, with made-up totals of earlier days,
+// and the prices in the settings.
+function sampleTotals() {
+  const now = new Date();
+  const day = (back) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - back, 12).getTime();
+  const meeting = (minutes, requests, summaries = 0) => {
+    let usage = addListening(emptyUsage(), LIVE_MODEL, minutes * 60_000);
+    for (let i = 0; i < requests; i++)
+      usage = addTokens(usage, 'translation', 'gemini-3.5-flash-lite', {
+        promptTokenCount: 420,
+        candidatesTokenCount: 38,
+      });
+    for (let i = 0; i < summaries; i++)
+      usage = addTokens(usage, 'summary', 'gemini-3.5-flash-lite', {
+        promptTokenCount: 9000,
+        candidatesTokenCount: 900,
+      });
+    return usage;
+  };
+  let daily = emptyDaily();
+  for (const [back, minutes, requests, summaries] of [
+    [0, 42, 610, 1],
+    [1, 55, 790, 2],
+    [6, 30, 420, 0],
+    [35, 60, 880, 1],
+    [70, 25, 300, 1],
+  ])
+    daily = addToDaily(daily, meeting(minutes, requests, summaries), day(back));
+  return daily;
+}
+for (const scheme of ['light', 'dark']) {
+  for (const [name, size] of [
+    ['', {}],
+    ['-phone', { width: 390, height: 844, phone: true }],
+  ]) {
+    if (!wanted(`usage-${scheme}${name}`)) continue;
+    const { page, close } = await open({ scheme, uiLang: 'ja', usage: sampleTotals(), ...size });
+    await listen(page);
+    await page.click('#toggle');
+    await page.waitForTimeout(400);
+    await summarize(page);
+    await page.click('#openUsage');
+    await page.waitForTimeout(200);
+    await shot(page, `usage-${scheme}${name}-dialog`);
+    await page.locator('#usageDialog .dialog-body').evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    await shot(page, `usage-${scheme}${name}-dialog-end`);
+    await page.keyboard.press('Escape');
+    await page.click('#openSettings');
+    await page.locator('#pricesGroup').scrollIntoViewIfNeeded();
+    await shot(page, `usage-${scheme}${name}-prices`);
+    await close();
+  }
 }
 
 // Longer or wider text in another language is where layouts break first.

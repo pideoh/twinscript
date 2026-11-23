@@ -7,6 +7,7 @@ import { markdownToHtml } from './markdown.js';
 import { MessageError } from './message-error.js';
 import { MockSummarizer, MockTranscriber, MockTranslator } from './mock.js';
 import { createPacer, DEFAULT_STRATEGY, strategyNamed } from './pacer.js';
+import { formatUsd, mergePrices, PRICES } from './pricing.js';
 import { ReadAloud } from './read-aloud.js';
 import { canRecord, Recorder } from './recorder.js';
 import { languageByScript, scriptsDiffer, sourceByScript, targetByScript, targetLanguages } from './script-hint.js';
@@ -31,6 +32,19 @@ import {
 import { createTrace } from './trace.js';
 import { GeminiLiveTranscriber } from './transcriber.js';
 import { GeminiTranslator, RateLimitError } from './translator.js';
+import { addListening, addTokens, addUsage, emptyUsage } from './usage.js';
+import {
+  addToDaily,
+  DAILY_KEY,
+  emptyDaily,
+  formatDuration,
+  LIVE_MODEL,
+  overridesFromFields,
+  readDaily,
+  sessionRows,
+  totalsRows,
+  usageView,
+} from './usage-stats.js';
 import { applyReplacements, parseVocabulary } from './vocabulary.js';
 
 // code: what the recognizer is told; display: the tag whose name is shown in the UI language
@@ -82,6 +96,8 @@ const DEFAULTS = {
   summaryTemplate: DEFAULT_TEMPLATE, // the template, length and language last used for a summary
   summaryLength: 'standard',
   summaryLanguage: '', // a language code, or '' for the display language
+  // Prices for cost estimates that differ from src/pricing.js: { [model]: { input?, output?, ... } }.
+  priceOverrides: {},
 };
 const HISTORY_LINES = 3;
 const SILENT_SYSTEM_AUDIO_MS = 8000; // how long PC audio may deliver nothing before the user is told
@@ -192,6 +208,19 @@ const els = Object.fromEntries(
     'templateError',
     'templateSave',
     'templateCancel',
+    'openUsage',
+    'usageDialog',
+    'usageSessionNote',
+    'usageSessionWrap',
+    'usageSession',
+    'usageTotals',
+    'usageSessions',
+    'usageUnpriced',
+    'usageNote',
+    'pricesGroup',
+    'priceFields',
+    'pricesError',
+    'pricesReset',
   ].map((id) => [id, $(id)]),
 );
 
@@ -262,6 +291,8 @@ function relocalize() {
   renderTemplateList();
   renderSummary();
   renderShortcuts();
+  if (els.settings.open) renderPriceFields();
+  if (els.usageDialog.open) renderUsage();
   if (captionWindow) {
     applyTranslations(captionWindow.document); // the caption zone lives there while it is open
     captionWindow.document.title = t('caption.title');
@@ -404,6 +435,7 @@ function openSettings() {
   closeTemplateEditor();
   els.templateStatus.hidden = true;
   renderTemplateList();
+  openPriceFields();
   els.settingsRunning.hidden = !run;
   els.settings.showModal();
 }
@@ -513,11 +545,14 @@ els.settings.addEventListener('close', () => {
   settings.captionOpacity = Number(els.captionOpacity.value);
   settings.clickThrough = els.clickThrough.checked;
   if (window.appShortcuts) settings.globalShortcuts = els.globalShortcuts.checked;
+  const prices = pendingOverrides();
+  if (prices) settings.priceOverrides = prices; // invalid prices keep the ones saved before
   saveSettings();
 });
 
 // ---------- sessions (saved conversations) ----------
 // { id, title, customTitle, createdAt, updatedAt, langA, langB, langC?, activeMs, segmentCount?,
+//   usage?, usagePartial?, demo? (see "usage and cost estimates" below),
 //   segments: [{ id, at, elapsed, src, tgt, lang?, tgts? }], recordings: [{ id, startedAt, elapsedStart, durationMs, mime }],
 //   summaries: [{ id, templateId, templateName, length, language, createdAt, markdown, model, truncated,
 //                 segmentCount }] (oldest first),
@@ -569,6 +604,7 @@ function blankSession() {
     langB: settings.langB,
     ...(settings.langC && { langC: settings.langC }),
     activeMs: 0,
+    usage: emptyUsage(), // what it used of the API (src/usage.js); absent in sessions made before it was counted
     segments: [],
     summaries: [],
     recordings: [],
@@ -1295,7 +1331,10 @@ els.summarize.onclick = async () => {
   const language = els.summaryLanguage.value || displayLangCode() || 'en-US';
   const segments = sess.segments.map(({ elapsed, src, tgt }) => ({ elapsed, src, tgt }));
   const model = MOCK ? 'demo' : settings.translateModel;
-  const summarizer = MOCK ? new MockSummarizer() : new GeminiSummarizer({ apiKey, model });
+  const onUsage = (usageMetadata, used) => recordUsage(sess, addTokens(emptyUsage(), 'summary', used, usageMetadata));
+  const summarizer = MOCK
+    ? new MockSummarizer({ model: settings.translateModel, onUsage })
+    : new GeminiSummarizer({ apiKey, model, onUsage });
   summarizing = { session: sess, text: '' };
   summaryOpen = true; // the answer is shown as it arrives
   renderSummary();
@@ -1552,6 +1591,314 @@ els.templateImportFile.onchange = async () => {
   }
 };
 
+// ---------- usage and cost estimates ----------
+// Each session keeps what it used in `usage` (src/usage.js), saved with its metadata. The same usage
+// is added to running totals per calendar day in localStorage (src/usage-stats.js), which outlive the
+// sessions. In the demo mode the made-up usage goes into its session only, which is marked `demo`;
+// the daily totals, the only source of the totals shown, never see it. `usagePartial` marks a session
+// from before usage was counted that was used again afterwards: only the later part is known.
+function currentPrices() {
+  try {
+    return mergePrices(PRICES, settings.priceOverrides);
+  } catch {
+    return PRICES; // stored overrides that are not valid (edited by hand) are ignored
+  }
+}
+function readDailyTotals() {
+  try {
+    return readDaily(localStorage.getItem(DAILY_KEY));
+  } catch {
+    return emptyDaily();
+  }
+}
+function addToDailyTotals(usage) {
+  try {
+    // Read again each time: another window of the app may have added to them.
+    const daily = readDailyTotals();
+    if (!daily.readOnly) localStorage.setItem(DAILY_KEY, JSON.stringify(addToDaily(daily, usage)));
+  } catch {
+    /* private mode or full storage: the session keeps its own record */
+  }
+}
+// Adds `usage`, what one request or a stretch of listening used, to `sess` and to the totals.
+function recordUsage(sess, usage) {
+  if (!sess.usage) {
+    if (sess.activeMs > 0 || !isEmpty(sess)) sess.usagePartial = true;
+    sess.usage = emptyUsage();
+  }
+  try {
+    sess.usage = addUsage(sess.usage, usage);
+  } catch {
+    /* a record written by a newer version is left as it is */
+  }
+  if (MOCK) sess.demo = true;
+  else addToDailyTotals(usage);
+  markDirty(sess);
+  if (els.usageDialog.open) renderUsage();
+}
+// Listening time counts while the recognizer is connected (state 'listening').
+function accrueListening(r) {
+  if (!r.listeningSince) return;
+  const now = Date.now();
+  recordUsage(r.session, addListening(emptyUsage(), LIVE_MODEL, now - r.listeningSince));
+  r.listeningSince = now;
+}
+
+const formatCount = (n) => new Intl.NumberFormat(getLocale()).format(n);
+const costText = (part) => (part.noPrice ? t('usage.noPrice') : formatUsd(part.usd));
+function cell(text, { header = false, num = false, className = '' } = {}) {
+  const el = document.createElement(header ? 'th' : 'td');
+  if (header) el.scope = 'row';
+  el.className = [num && 'num', className].filter(Boolean).join(' ');
+  el.textContent = text;
+  return el;
+}
+const row = (...cells) => {
+  const tr = document.createElement('tr');
+  tr.append(...cells);
+  return tr;
+};
+// One row of the tables with the columns label, listening time, requests, tokens in and out, cost.
+// Cells left null stay empty (listening time has no tokens; translation has no listening time).
+function usageRow(label, { listeningMs = null, requests = null, input = null, output = null, cost }, total = false) {
+  const text = (value, format) => (value === null ? '' : format(value));
+  const tr = row(
+    cell(label, { header: true }),
+    cell(text(listeningMs, formatDuration), { num: true }),
+    cell(text(requests, formatCount), { num: true }),
+    cell(text(input, formatCount), { num: true }),
+    cell(text(output, formatCount), { num: true }),
+    cell(costText(cost), { num: true }),
+  );
+  if (total) tr.className = 'usage-total';
+  return tr;
+}
+const viewRow = (label, view, total = false) =>
+  usageRow(
+    label,
+    {
+      listeningMs: view.listeningMs,
+      requests: view.requests,
+      input: view.inputTokens,
+      output: view.outputTokens,
+      cost: view.cost.total,
+    },
+    total,
+  );
+function sessionLabel(text) {
+  const label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = text;
+  return label;
+}
+
+function renderUsage() {
+  if (run) accrueListening(run);
+  const prices = currentPrices();
+  const unpriced = new Set();
+
+  // This session: its three parts and their sum.
+  const sess = current;
+  const recorded = !!sess?.usage;
+  const notes = [];
+  if (!recorded) notes.push(t('usage.notRecordedSession'));
+  if (sess?.usagePartial) notes.push(t('usage.partialSession'));
+  if (sess?.demo) notes.push(t('usage.demoSession'));
+  els.usageSessionNote.textContent = notes.join(' ');
+  els.usageSessionNote.hidden = !notes.length;
+  els.usageSessionWrap.hidden = !recorded;
+  if (recorded) {
+    const view = usageView(sess.usage, prices);
+    for (const model of view.unpriced) unpriced.add(model);
+    const tokens = (kind) => ({
+      requests: view[kind].requests,
+      input: view[kind].inputTokens,
+      output: view[kind].outputTokens,
+      cost: view.cost[kind],
+    });
+    els.usageSession.replaceChildren(
+      usageRow(t('usage.listening'), { listeningMs: view.listeningMs, cost: view.cost.transcription }),
+      usageRow(t('usage.translation'), tokens('translation')),
+      usageRow(t('usage.summary'), tokens('summary')),
+      viewRow(t('usage.total'), view, true),
+    );
+  }
+
+  // Totals per period, from the daily totals.
+  els.usageTotals.replaceChildren(
+    ...totalsRows(readDailyTotals(), prices).map((r) => {
+      for (const model of r.unpriced) unpriced.add(model);
+      return viewRow(t(`usage.period.${r.period}`), r);
+    }),
+  );
+
+  // Saved sessions, most recent first.
+  const rows = sessionRows(sessions, prices);
+  els.usageSessions.replaceChildren(
+    ...rows.map((r) => {
+      const title = cell(r.title || formatDateTime(r.createdAt), { header: true, className: 'usage-title' });
+      if (r.demo) title.append(' ', sessionLabel(t('usage.demo')));
+      if (r.partial) title.append(' ', sessionLabel(t('usage.partial')));
+      if (!r.recorded) {
+        const none = cell(t('usage.notRecorded'), { className: 'muted' });
+        none.colSpan = 2;
+        return row(cell(formatDateTime(r.createdAt)), title, none);
+      }
+      for (const model of r.view.unpriced) unpriced.add(model);
+      return row(
+        cell(formatDateTime(r.createdAt)),
+        title,
+        cell(formatDuration(r.view.listeningMs), { num: true }),
+        cell(costText(r.view.cost.total), { num: true }),
+      );
+    }),
+  );
+  if (!rows.length) {
+    const none = cell(t('usage.noSessions'), { className: 'muted' });
+    none.colSpan = 4;
+    els.usageSessions.append(row(none));
+  }
+
+  els.usageUnpriced.textContent = unpriced.size ? t('usage.unpriced', { models: [...unpriced].join(', ') }) : '';
+  els.usageUnpriced.hidden = !unpriced.size;
+  const [y, m, d] = PRICES.asOf.split('-').map(Number);
+  const date = new Intl.DateTimeFormat(getLocale(), { dateStyle: 'medium' }).format(new Date(y, m - 1, d));
+  const custom = Object.keys(settings.priceOverrides ?? {}).length > 0;
+  els.usageNote.textContent = [t('usage.note', { date }), custom ? t('usage.customPrices') : '']
+    .filter(Boolean)
+    .join(' ');
+}
+
+els.openUsage.onclick = () => {
+  renderUsage();
+  els.usageDialog.showModal();
+};
+
+// ---------- prices for estimates (settings dialog) ----------
+// The models in use and the prices each is estimated with: listening time for the live model, tokens
+// for the translation model (which also writes the summaries).
+const PRICE_UNITS = { listening: ['inputPerMinute', 'outputPerMinute'], tokens: ['input', 'output'] };
+let priceDraft = {}; // { [model]: { [field]: text } } as typed, until the dialog closes
+let pricesReset = false; // Reset was pressed: overrides of models not shown are dropped too
+function priceModels() {
+  const translation = els.translateModel.value.trim() || DEFAULTS.translateModel;
+  return translation === LIVE_MODEL
+    ? [[LIVE_MODEL, [...PRICE_UNITS.listening, ...PRICE_UNITS.tokens]]]
+    : [
+        [LIVE_MODEL, PRICE_UNITS.listening],
+        [translation, PRICE_UNITS.tokens],
+      ];
+}
+const priceText = (prices, model, field) => (prices[model]?.[field] === undefined ? '' : String(prices[model][field]));
+function fillPriceDraft(prices) {
+  priceDraft = {};
+  for (const [model, fields] of priceModels()) {
+    priceDraft[model] = Object.fromEntries(fields.map((field) => [field, priceText(prices, model, field)]));
+  }
+  renderPriceFields();
+}
+function openPriceFields() {
+  pricesReset = false;
+  fillPriceDraft(currentPrices().models);
+}
+function renderPriceFields() {
+  const prices = currentPrices().models;
+  els.priceFields.replaceChildren(
+    ...priceModels().map(([model, fields], i) => {
+      priceDraft[model] ??= {};
+      const group = document.createElement('div');
+      group.className = 'price-model';
+      group.setAttribute('role', 'group');
+      const title = document.createElement('h3');
+      title.className = 'price-model-title';
+      title.id = `priceModel${i}`;
+      title.textContent = model;
+      group.setAttribute('aria-labelledby', title.id);
+      group.append(title);
+      if (!PRICES.models[model]) {
+        const help = document.createElement('small');
+        help.className = 'caption';
+        help.textContent = t('prices.noPrice');
+        group.append(help);
+      }
+      const grid = document.createElement('div');
+      grid.className = 'price-grid';
+      for (const field of fields) {
+        const label = document.createElement('label');
+        label.className = 'form-control';
+        const name = document.createElement('span');
+        name.className = 'form-label';
+        name.textContent = t(`prices.field.${field}`);
+        const input = document.createElement('input');
+        input.className = 'text-input';
+        input.type = 'text';
+        input.inputMode = 'decimal';
+        input.autocomplete = 'off';
+        input.spellcheck = false;
+        input.dataset.model = model;
+        input.dataset.field = field;
+        priceDraft[model][field] ??= priceText(prices, model, field);
+        input.value = priceDraft[model][field];
+        input.oninput = () => {
+          priceDraft[model][field] = input.value;
+          checkPrices();
+        };
+        label.append(name, input);
+        grid.append(label);
+      }
+      group.append(grid);
+      return group;
+    }),
+  );
+  checkPrices();
+}
+// The overrides the fields describe, or null while any of them is not a price.
+function pendingOverrides() {
+  const shown = Object.fromEntries(priceModels().map(([model]) => [model, priceDraft[model] ?? {}]));
+  const overrides = overridesFromFields(shown, PRICES);
+  // Overrides of a model not shown now (an earlier translation model) are kept, unless reset.
+  if (!pricesReset) {
+    for (const [model, values] of Object.entries(settings.priceOverrides ?? {})) {
+      if (!(model in shown)) overrides[model] = values;
+    }
+  }
+  try {
+    mergePrices(PRICES, overrides);
+    return overrides;
+  } catch {
+    return null;
+  }
+}
+function checkPrices() {
+  let invalid = false;
+  for (const input of els.priceFields.querySelectorAll('input')) {
+    const text = input.value.trim();
+    const bad = text !== '' && !(Number(text.replace(',', '.')) >= 0);
+    if (bad) {
+      input.setAttribute('aria-invalid', 'true');
+      input.setAttribute('aria-describedby', 'pricesError');
+    } else {
+      input.removeAttribute('aria-invalid');
+      input.removeAttribute('aria-describedby');
+    }
+    invalid ||= bad;
+  }
+  invalid ||= !pendingOverrides();
+  els.pricesError.textContent = invalid ? t('prices.invalid') : '';
+  els.pricesError.hidden = !invalid;
+}
+els.pricesReset.onclick = () => {
+  pricesReset = true;
+  fillPriceDraft(PRICES.models);
+};
+// A different translation model has prices of its own. The fields are rebuilt only then: the change
+// event also comes when the field merely loses focus, often to a price field that must stay in place.
+els.translateModel.addEventListener('change', () => {
+  const shown = [...els.priceFields.querySelectorAll('h3')].map((h) => h.textContent);
+  const wanted = priceModels().map(([model]) => model);
+  if (shown.join('\n') !== wanted.join('\n')) renderPriceFields();
+});
+
 // ---------- live run ----------
 let wakeLock = null;
 
@@ -1622,7 +1969,12 @@ async function start() {
       if (run === r) r.trace?.add('final', text);
       if (run === r) r.tracker.final(applyReplacements(text, vocabulary.rules));
     },
-    onState: (state) => run === r && setStatus(state),
+    onState: (state) => {
+      if (run !== r) return;
+      accrueListening(r);
+      r.listeningSince = state === 'listening' ? Date.now() : 0;
+      setStatus(state);
+    },
     onError: (err) => {
       if (run === r) {
         toast(errorText(err), 10000, 'critical');
@@ -1630,13 +1982,17 @@ async function start() {
       }
     },
   };
+  // Every translation request of the run (in progress, final, per-target lines, identify) is counted.
+  const onUsage = (usageMetadata, model) =>
+    recordUsage(sess, addTokens(emptyUsage(), 'translation', model, usageMetadata));
   if (MOCK) {
-    r.translator = new MockTranslator();
+    r.translator = new MockTranslator({ model: settings.translateModel, onUsage });
     r.transcriber = new MockTranscriber(handlers);
   } else {
     r.translator = new GeminiTranslator({
       apiKey,
       model: settings.translateModel,
+      onUsage,
       langA: langA.name,
       langB: langB.name,
       langC: langC?.name,
@@ -1690,7 +2046,11 @@ async function start() {
       els.clock.textContent = formatElapsed(elapsedNow());
     }, 500);
     if (r.capture && r.capture.systemLevel() !== null) watchSystemAudio(r);
-    r.autosave = setInterval(() => markDirty(sess), 5000); // keeps elapsed time and recording length current
+    // Keeps elapsed time, listening time and recording length current.
+    r.autosave = setInterval(() => {
+      accrueListening(r);
+      markDirty(sess);
+    }, 5000);
     requestWakeLock();
   } catch (err) {
     if (run !== r) return;
@@ -1735,6 +2095,8 @@ function startRecording(r) {
 function stop() {
   const r = run;
   if (!r) return;
+  accrueListening(r);
+  r.listeningSince = 0;
   r.transcriber?.stop();
   reader.stop();
   r.tracker.flush(); // keep whatever was heard so far instead of dropping it

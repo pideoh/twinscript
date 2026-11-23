@@ -255,3 +255,25 @@ test('text in an old summary stays text: its Markdown and HTML are escaped, malf
   );
   assert.equal(legacySummaryToMarkdown(null), '');
 });
+
+test('a summary reports the usage of its last chunk with the model, and nothing when there is none', async () => {
+  const chunk = (text, usageMetadata) =>
+    `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }], ...(usageMetadata && { usageMetadata }) })}\n\n`;
+  const last = { promptTokenCount: 900, candidatesTokenCount: 120, thoughtsTokenCount: 40 };
+  stubFetch(
+    () => new Response(chunk('## Overview\n\n', { promptTokenCount: 900 }) + chunk('Done.', last), { status: 200 }),
+    () => new Response(sse(answer), { status: 200 }),
+    () => new Response('{"error":{"message":"bad"}}', { status: 500 }),
+  );
+  const reports = [];
+  const summarizer = new GeminiSummarizer({
+    apiKey: 'KEY',
+    model: 'm-1',
+    onUsage: (usageMetadata, model) => reports.push({ usageMetadata, model }),
+  });
+  await summarizer.summarize(segments, options);
+  assert.deepEqual(reports, [{ usageMetadata: last, model: 'm-1' }]);
+  await summarizer.summarize(segments, options);
+  await assert.rejects(summarizer.summarize(segments, options));
+  assert.equal(reports.length, 1, 'no usage, no report');
+});
