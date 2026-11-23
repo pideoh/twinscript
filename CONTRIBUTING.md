@@ -59,6 +59,30 @@ To try the app before a release, a maintainer can build it from any branch: Acti
 The zips are attached to that run for a week and nothing is published. The macOS build is signed like a release, so
 it replaces the installed app and keeps its permissions.
 
+## Tuning tools
+
+When the sentence being spoken is translated is decided by `src/pacer.js`. To compare ways of pacing those
+requests, replay a recognizer trace through it with the real translation model:
+
+```sh
+GEMINI_API_KEY=... node scripts/tuning/replay.mjs trace.json [--strategy interval[,other]] [--interval 1.5] [--speed 1] [--out result.json]
+node scripts/tuning/replay.mjs test/fixtures/replay-trace.json --mock   # no key: a fake translator on a simulated clock
+```
+
+A trace is JSON: `{ version: 1, startedAt, langs: ['ja-JP', 'en-US'], source, durationMs, events: [{ t, kind, text }] }`,
+where `t` is milliseconds since the start and `kind` is `interim` or `final`. Only the first two languages are used.
+The tool prints one row per strategy (mean / median / p90 over sentences) and writes every sentence's timeline to `--out`:
+
+- `first ms`: from a sentence's first in-progress text to its first translation on screen. Lower is better.
+- `final ms`: from the sentence being finished to its complete final translation on screen.
+- `flicker`: characters of shown translations that were erased rather than extended, divided by the length of the
+  final translation. 0 means the translation only ever grew; 1 means as much was rewritten as finally remained.
+  `erased` and `updates` are the totals behind it.
+- `requests` and `rateLimited`: translation requests sent (in-progress and final) and how many hit the rate limit.
+
+`--speed` shortens the speech, not the model's answers, so delays measured at a higher speed are not comparable.
+Results with the real model vary from run to run; compare strategies on the same trace, more than once.
+
 ## Adding a display language
 
 Copy `src/locales/en.js` to a new file, translate the values, and register it in the `LOCALES`

@@ -4,6 +4,7 @@ import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocal
 import { octicon } from './icons.js';
 import { MessageError } from './message-error.js';
 import { MockSummarizer, MockTranscriber, MockTranslator } from './mock.js';
+import { createPacer } from './pacer.js';
 import { ReadAloud } from './read-aloud.js';
 import { canRecord, Recorder } from './recorder.js';
 import { languageByScript, scriptsDiffer, sourceByScript, targetLanguages } from './script-hint.js';
@@ -62,7 +63,6 @@ const DEFAULTS = {
   globalShortcuts: true, // desktop app: start / stop and the caption window from any app
   interimInterval: 1.5, // seconds between re-translations of the sentence being spoken
 };
-const INTERIM_COOLDOWN_MS = 60_000;
 const HISTORY_LINES = 3;
 const SILENT_SYSTEM_AUDIO_MS = 8000; // how long PC audio may deliver nothing before the user is told
 const MOCK = new URLSearchParams(location.search).has('mock');
@@ -1205,9 +1205,9 @@ async function start() {
     baseMs: sess.activeMs,
     startedAt: 0,
     otherInto: settings.otherInto,
-    interim: { busy: false, lastAt: 0, pausedUntil: 0, timer: null, text: '' },
   };
   r.tracker = createTracker(r);
+  r.pacer = createInterimPacer(r);
   run = r;
   setRunning(true);
   setStatus('connecting');
@@ -1331,7 +1331,7 @@ function stop() {
     live = null;
   }
   trimCaptions(0);
-  clearTimeout(r.interim.timer);
+  r.pacer.cancel();
   clearInterval(r.ticker);
   clearInterval(r.systemWatch);
   clearInterval(r.autosave);
@@ -1377,53 +1377,34 @@ function createTracker(r) {
       if (!text) {
         live?.el.remove();
         live = null;
-        clearTimeout(r.interim.timer);
-        r.interim.timer = null;
-        r.interim.text = '';
+        r.pacer.cancel();
         return;
       }
       if (!live) live = createSegment();
       setText(live, 'src', text);
-      r.interim.text = text;
-      scheduleInterimTranslation(r);
+      r.pacer.update(text);
     },
     correct: (seg, text) => commit(r, seg, text),
   });
 }
 
-function scheduleInterimTranslation(s) {
-  const it = s.interim;
-  if (!settings.interimTranslate || it.busy || it.timer || !live) return;
-  const now = Date.now();
-  if (now < it.pausedUntil) return;
-  const wait = Math.max(0, it.lastAt + settings.interimInterval * 1000 - now);
-  it.timer = setTimeout(async () => {
-    it.timer = null;
-    const seg = live;
-    const text = it.text;
-    if (run !== s || !seg || text.length < 4) return;
-    it.busy = true;
-    it.lastAt = Date.now();
-    try {
-      if (s.langs.length > 2 || intoSeveral(s, text)) {
-        await translateInterimLines(s, seg, text);
-      } else {
-        const out = await s.translator.translate(text, { history: recentHistory(s) });
-        if (seg === live && out) {
-          clearTargets(seg);
-          setText(seg, 'tgt', out, 'pending');
-        }
-      }
-    } catch (err) {
-      if (err instanceof RateLimitError) {
-        it.pausedUntil = Date.now() + INTERIM_COOLDOWN_MS;
-        toast(t('toast.rateLimited'), 6000, 'warning');
-      }
-    } finally {
-      it.busy = false;
-      if (run === s && live === seg && it.text !== text) scheduleInterimTranslation(s);
-    }
-  }, wait);
+// The sentence being spoken is translated as it grows; src/pacer.js decides when.
+function createInterimPacer(r) {
+  return createPacer({
+    options: {
+      enabled: () => settings.interimTranslate,
+      interval: () => settings.interimInterval,
+    },
+    translate: (text) =>
+      r.langs.length > 2 || intoSeveral(r, text)
+        ? translateInterimLines(r, live, text)
+        : r.translator.translate(text, { history: recentHistory(r) }),
+    show: (out) => {
+      clearTargets(live);
+      setText(live, 'tgt', out, 'pending');
+    },
+    onRateLimit: () => toast(t('toast.rateLimited'), 6000, 'warning'),
+  });
 }
 
 // With a third language, or two and a sentence in neither of them: the sentence in progress goes
@@ -1476,9 +1457,7 @@ function clearTargets(seg) {
 function finalize(r, text) {
   const seg = live;
   live = null;
-  clearTimeout(r.interim.timer);
-  r.interim.timer = null;
-  r.interim.text = '';
+  r.pacer.finish();
   commit(r, seg, text);
   return seg;
 }
