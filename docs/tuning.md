@@ -211,3 +211,22 @@ answered in about 1.9 s on average during that run.
 answered in about 0.7 s, 27 sentences settled without a final request; the final translation came after 455 ms on
 average against 668 ms, with 207 requests against 239 and the same flicker (0.30 against 0.27). The slower the model
 answers, the more a settled sentence saves.
+
+## Speaker labels across parts
+
+A recording longer than 25 minutes is labelled in parts, and each part after the first starts with reference clips
+of the speakers found so far (`src/speakers.js` explains how). With `?debug=1`, "Label speakers" logs one line per
+part to the console, `[speakers]` followed by JSON with numbers only, never speech:
+
+| Field | |
+| --- | --- |
+| `part`, `parts` | Which part, of how many |
+| `durationMs`, `referenceMs` | Length of the part, and of the reference clips sent before it |
+| `words`, `unknownWords` | Words in the part, and those left without a speaker |
+| `speakers` | Speakers heard in the part |
+| `clips` | Per reference clip: its speaker, its words, `share` (the part of them that got the clip's top label), `ok`, and `reason` when not ok: `empty`, `split` (share under 70 %) or `clash` (two clips with one label) |
+| `overlap` | The cross-check on the minute shared with the previous part: `compared` labels and whether they `agreed` (null when nothing could be compared) |
+| `uncertain` | Whether the part was marked uncertain |
+
+Shares close to 1 and `agreed: true` mean the parts were joined as intended. To judge the matching on a real
+meeting, check a few lines of each part by ear against these numbers.

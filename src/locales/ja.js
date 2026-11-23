@@ -49,6 +49,7 @@ export default {
   'summary.working': '要約しています…',
   'summary.stale': '古い要約',
   'summary.staleHelp': 'この要約の作成後に発言が追加されました',
+  'summary.staleSpeakersHelp': 'この要約の作成後に話者が識別されました',
   'summary.truncated': '長い文字起こしのため、この要約は一部のみを対象にしています。',
   'summary.overview': '概要',
   'summary.keyPoints': '主なポイント',
@@ -77,6 +78,32 @@ export default {
   'summary.deleteConfirm': '{date} の要約「{template}」を削除しますか？',
   'summary.copied': '要約を Markdown でコピーしました。',
   'summary.copyFailed': 'コピーできませんでした: {message}',
+  'speakers.label': '話者を識別',
+  'speakers.edit': '話者',
+  'speakers.cancel': 'キャンセル',
+  'speakers.title': '話者',
+  'speakers.lineSpeaker': 'この行の話者',
+  'speakers.names': '名前',
+  'speakers.namesHelp': '名前は、このセッションでその話者のすべての行に使われます。空欄にすると既定の名前になります。',
+  'speakers.uncertain': '録音の一部で話者を確実に対応付けられませんでした。各行の話者を確認してください。',
+  'speakers.cancelEdit': 'キャンセル',
+  'speakers.save': '保存',
+  'speakers.default': '話者{n}',
+  'speakers.none': '話者なし',
+  'speakers.lineButton': '{name}（話者を変更）',
+  'speakers.lineButtonNone': 'この行の話者を設定',
+  'speakers.consent':
+    '話者を聞き分けるため、このセッションの録音を Google（Gemini API）にアップロードして解析します。アップロードしたファイルは、解析が終わるとすぐに削除します。続けますか？',
+  'speakers.replaceConfirm':
+    '話者をもう一度識別しますか？このセッションの現在の話者、名前、手で直した内容は置き換えられます。',
+  'speakers.preparing': '音声を準備しています…',
+  'speakers.uploading': 'パート {part}/{parts} をアップロードしています…',
+  'speakers.analyzing': 'パート {part}/{parts} を解析しています…',
+  'speakers.done': '話者を識別しました（{count}人）。',
+  'speakers.doneUncertain':
+    '話者を識別しました（{count}人）。一部を確実に対応付けられなかったので、各行を確認してください。',
+  'speakers.cancelled': '話者の識別を中止しました。',
+  'speakers.madeAt': '{date} に録音から識別しました。',
   'template.quick.name': 'クイック要約',
   'template.quick.description': '概要、主なポイント、決定事項、アクションアイテム',
   'template.executive.name': 'エグゼクティブサマリー',
@@ -169,6 +196,7 @@ export default {
   'file.translation': '訳文',
   'file.separator': '　',
   'file.transcript': '文字起こし',
+  'file.speaker': '話者',
 
   // settings dialog
   'settings.title': '設定',
@@ -258,6 +286,7 @@ export default {
     'ほかの Twinscript のウィンドウを閉じてください。古い版が開いていて、閉じると保存済みのセッションが表示されます',
   'toast.demo': 'デモモード: 実際の音声認識・翻訳は行いません',
   'toast.summaryFailed': '要約できませんでした: {message}',
+  'toast.speakersFailed': '話者を識別できませんでした: {message}',
 
   // errors reported by audio.js, transcriber.js and translator.js
   'error.windowBlocked': 'ウィンドウがブロックされました',
@@ -275,6 +304,13 @@ export default {
   'error.summarize': '要約エラー ({status}): {message}',
   'error.summaryRateLimit': 'APIのレート制限に達しました。1分ほど待ってから再度お試しください。',
   'error.summaryInvalid': '応答を要約として読み取れませんでした。再度お試しください。',
+  'error.speakersUpload': 'アップロードエラー ({status}): {message}',
+  'error.speakersAnalyze': '話者の解析エラー ({status}): {message}',
+  'error.speakersRateLimit': 'APIのレート制限に達しました。1分ほど待ってから再度お試しください。',
+  'error.speakersIncomplete': '解析が2回とも途中で終わりました。しばらくしてから再度お試しください。',
+  'error.speakersStatus': '解析が「{status}」の状態で終わりました。',
+  'error.speakersNone': '録音に音声が見つかりませんでした。',
+  'error.speakersNoAudio': 'このセッションの録音を読み込めませんでした。',
 
   // usage and cost screen, prices for estimates
   'header.usage': '利用量と料金',
@@ -295,6 +331,7 @@ export default {
   'usage.listening': 'ライブ文字起こし',
   'usage.translation': '翻訳',
   'usage.summary': '要約',
+  'usage.speakers': '話者の識別',
   'usage.total': '合計',
   'usage.period.today': '今日',
   'usage.period.thisMonth': '今月',

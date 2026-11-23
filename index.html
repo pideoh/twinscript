@@ -50,6 +50,12 @@
         <span id="summaryStale" class="label label-attention" data-i18n="summary.stale" data-i18n-title="summary.staleHelp" title="Speech was added after this summary was generated" hidden>Outdated</span>
         <span id="summaryMeta" class="summary-meta"></span>
         <span id="summaryStatus" class="summary-meta" role="status"></span>
+        <div id="speakerTools" class="speaker-tools" hidden>
+          <span id="speakersStatus" class="summary-meta" role="status"></span>
+          <button id="editSpeakers" type="button" class="btn btn-small" hidden><svg class="octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M2 5.5a3.5 3.5 0 1 1 5.898 2.549 5.508 5.508 0 0 1 3.034 4.084.75.75 0 1 1-1.482.235 4 4 0 0 0-7.9 0 .75.75 0 0 1-1.482-.236A5.507 5.507 0 0 1 3.102 8.05 3.493 3.493 0 0 1 2 5.5ZM11 4a3.001 3.001 0 0 1 2.22 5.018 5.01 5.01 0 0 1 2.56 3.012.749.749 0 0 1-.885.954.752.752 0 0 1-.549-.514 3.507 3.507 0 0 0-2.522-2.372.75.75 0 0 1-.574-.73v-.352a.75.75 0 0 1 .416-.672A1.5 1.5 0 0 0 11 5.5.75.75 0 0 1 11 4Zm-5.5-.5a2 2 0 1 0-.001 3.999A2 2 0 0 0 5.5 3.5Z"/></svg><span data-i18n="speakers.edit">Speakers</span></button>
+          <button id="labelSpeakers" type="button" class="btn btn-small label-speakers"><svg class="octicon icon-rest" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M2 5.5a3.5 3.5 0 1 1 5.898 2.549 5.508 5.508 0 0 1 3.034 4.084.75.75 0 1 1-1.482.235 4 4 0 0 0-7.9 0 .75.75 0 0 1-1.482-.236A5.507 5.507 0 0 1 3.102 8.05 3.493 3.493 0 0 1 2 5.5ZM11 4a3.001 3.001 0 0 1 2.22 5.018 5.01 5.01 0 0 1 2.56 3.012.749.749 0 0 1-.885.954.752.752 0 0 1-.549-.514 3.507 3.507 0 0 0-2.522-2.372.75.75 0 0 1-.574-.73v-.352a.75.75 0 0 1 .416-.672A1.5 1.5 0 0 0 11 5.5.75.75 0 0 1 11 4Zm-5.5-.5a2 2 0 1 0-.001 3.999A2 2 0 0 0 5.5 3.5Z"/></svg><svg class="spinner" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-opacity="0.25" stroke-width="2" vector-effect="non-scaling-stroke"/><path d="M15 8a7.002 7.002 0 0 0-7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg><span data-i18n="speakers.label">Label speakers</span></button>
+          <button id="cancelSpeakers" type="button" class="btn btn-small" hidden><svg class="octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg><span data-i18n="speakers.cancel">Cancel</span></button>
+        </div>
         <div class="summary-options">
           <span class="select-wrap"><select id="summaryTemplate" class="select" aria-label="Template" title="Template" data-i18n-aria-label="summary.template" data-i18n-title="summary.template"></select></span>
           <span class="select-wrap"><select id="summaryLength" class="select" aria-label="Length" title="Length" data-i18n-aria-label="summary.length" data-i18n-title="summary.length">
@@ -127,6 +133,33 @@
       <footer class="dialog-footer">
         <button value="close" class="btn" data-i18n="export.close">Close</button>
         <button type="button" id="exportTranscript" class="btn btn-primary" data-i18n="export.saveTranscript">Save transcript</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="speakerDialog" class="dialog" aria-labelledby="speakerTitle">
+    <form method="dialog" class="dialog-form">
+      <header class="dialog-header">
+        <h2 id="speakerTitle" class="dialog-title" data-i18n="speakers.title">Speakers</h2>
+        <button value="close" class="icon-btn" title="Close" aria-label="Close" data-i18n-title="export.close" data-i18n-aria-label="export.close"><svg class="octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg></button>
+      </header>
+      <div class="dialog-body">
+        <div id="speakerLine" class="form-control" hidden>
+          <label class="form-label" for="speakerLineSelect" data-i18n="speakers.lineSpeaker">Speaker of this line</label>
+          <p id="speakerLineText" class="caption speaker-line-text"></p>
+          <span class="select-wrap"><select id="speakerLineSelect" class="select" aria-describedby="speakerLineText"></select></span>
+        </div>
+        <fieldset class="speaker-names">
+          <legend class="form-label" data-i18n="speakers.names">Names</legend>
+          <div id="speakerNames" class="speaker-name-list"></div>
+          <small class="caption" data-i18n="speakers.namesHelp">A name applies to every line of this speaker in this session. Leave it empty to use the default.</small>
+        </fieldset>
+        <p id="speakerUncertain" class="banner" data-variant="warning" data-i18n="speakers.uncertain" hidden>Some parts of the recording could not be matched with certainty. Check the speakers of the lines.</p>
+        <p id="speakerNote" class="caption"></p>
+      </div>
+      <footer class="dialog-footer">
+        <button value="close" class="btn" data-i18n="speakers.cancelEdit">Cancel</button>
+        <button type="button" id="speakerSave" class="btn btn-primary" data-i18n="speakers.save">Save</button>
       </footer>
     </form>
   </dialog>

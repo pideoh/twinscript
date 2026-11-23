@@ -5,7 +5,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { test } from 'node:test';
-import { mockGemini, mockSummary, setup, translated } from './helpers.js';
+import {
+  mockGemini,
+  mockSpeakers,
+  mockSummary,
+  seededAnswer,
+  seedRecordedSession,
+  setup,
+  translated,
+} from './helpers.js';
 
 const { openApp } = setup();
 
@@ -118,6 +126,40 @@ for (const colorScheme of ['light', 'dark']) {
     await page.click('#export');
     await assertAccessible(page, 'download dialog');
 
+    assert.deepEqual(errors, []);
+    await close();
+  });
+
+  test(`speaker labels, their progress and their editor pass the accessibility checks in the ${colorScheme} theme`, async () => {
+    const { page, errors, close } = await openApp('', { apiKey: 'test-key' }, undefined, { colorScheme });
+    await seedRecordedSession(page);
+    page.on('dialog', (dialog) => dialog.accept());
+    let release;
+    const held = new Promise((r) => {
+      release = r;
+    });
+    await mockSpeakers(page, {
+      analyze: async () => {
+        await held;
+        return { body: seededAnswer() };
+      },
+    });
+    await assertAccessible(page, 'a recorded session, before labelling');
+    await page.click('#labelSpeakers');
+    await page.waitForSelector('#cancelSpeakers:not([hidden])');
+    await assertAccessible(page, 'speaker labelling in progress');
+    release();
+    await page.waitForSelector('#editSpeakers:not([hidden])');
+    // One line without a speaker, whose slot is a button too.
+    await page.click('#log .seg >> nth=0 >> .speaker');
+    await page.selectOption('#speakerLineSelect', '');
+    await assertAccessible(page, 'speaker editor, opened from a line');
+    await page.click('#speakerSave');
+    await page.waitForSelector('#log .seg .speaker.none');
+    await assertAccessible(page, 'transcript with speaker labels');
+    await page.click('#editSpeakers');
+    await page.waitForSelector('#speakerDialog[open]');
+    await assertAccessible(page, 'speaker editor');
     assert.deepEqual(errors, []);
     await close();
   });

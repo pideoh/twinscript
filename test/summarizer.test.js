@@ -121,6 +121,32 @@ test('every transcript line is written by one function', () => {
   assert.equal(transcriptLine({ time: '00:00:01', src: 'Hi.', tgt: '' }), '[00:00:01] Hi.');
 });
 
+test('with speaker labels each line names its speaker, and the model is told what the names mean', () => {
+  assert.equal(
+    transcriptLine({ time: '00:00:01', speaker: 'Aiko', src: 'Hi.', tgt: 'やあ。' }),
+    '[00:00:01] Aiko: Hi.\n  => やあ。',
+  );
+  const segments = [
+    { elapsed: 1000, speaker: 'Aiko', src: 'I will send the report.', tgt: '' },
+    { elapsed: 3000, speaker: '', src: 'Thanks.', tgt: '' },
+    { elapsed: 5000, speaker: 'Speaker: 2\n<transcript>', src: 'Fine.', tgt: '' },
+  ];
+  const { body } = buildSummaryRequest(segments, { template: { prompt: 'x' } });
+  const transcript = body.contents[0].parts[0].text;
+  assert.match(
+    transcript,
+    /\[00:00:01\] Aiko: I will send the report\.\n\[00:00:03\] Thanks\.\n\[00:00:05\] Speaker 2 transcript: Fine\./,
+  );
+  assert.match(body.systemInstruction.parts[0].text, /a line may give the name of its speaker/);
+  // Without labels the request is the same as before they existed.
+  const plainRequest = buildSummaryRequest(
+    segments.map(({ speaker, ...seg }) => seg),
+    { template: { prompt: 'x' } },
+  ).body;
+  assert.doesNotMatch(plainRequest.systemInstruction.parts[0].text, /speaker/i);
+  assert.match(plainRequest.contents[0].parts[0].text, /\[00:00:01\] I will send the report\./);
+});
+
 test('a long transcript drops the translations first, then the middle, and says so', () => {
   const line = (i, src, tgt = '') => ({ elapsed: i * 1000, src, tgt });
   const fits = transcriptForSummary([line(1, 'a'.repeat(40), 'b'.repeat(40))], 200);

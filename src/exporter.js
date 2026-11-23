@@ -29,6 +29,7 @@ export const DEFAULT_LABELS = {
   time: 'Time',
   source: 'Source',
   translation: 'Translation',
+  speaker: 'Speaker',
   separator: '   ',
   // Summary section, written above the transcript in txt and md when a summary is passed in.
   transcript: 'Transcript',
@@ -36,7 +37,10 @@ export const DEFAULT_LABELS = {
   summaryTruncated: 'This summary covers only part of a long transcript.',
 };
 
-// session: { title, createdAt, activeMs, langA, langB, segments: [{ elapsed, src, tgt }] }
+// session: { title, createdAt, activeMs, langA, langB, segments: [{ elapsed, src, tgt, speaker? }] }
+// `speaker` is the name of who said a segment (speaker labels). When any row has one, each format
+// carries it: txt and srt put "Name: " before the text, md and csv get a speaker column after the
+// time. Without names the files are exactly as before speakers existed.
 // options: { format: 'txt' | 'md' | 'csv' | 'srt', content: 'both' | 'src' | 'tgt', langLabel(code), labels,
 //   summary: { markdown, title, truncated } }
 // The summary (Markdown; `title` is the name of its template), when given, opens txt and md files,
@@ -49,8 +53,15 @@ export function buildTranscript(
 ) {
   const L = { ...DEFAULT_LABELS, ...labels };
   const rows = session.segments
-    .map((seg) => ({ time: seg.elapsed || 0, src: oneLine(seg.src), tgt: oneLine(seg.tgt) }))
+    .map((seg) => ({
+      time: seg.elapsed || 0,
+      speaker: oneLine(seg.speaker),
+      src: oneLine(seg.src),
+      tgt: oneLine(seg.tgt),
+    }))
     .filter((r) => (content === 'tgt' ? r.tgt : r.src));
+  const named = rows.some((r) => r.speaker);
+  const who = (r) => (r.speaker ? `${r.speaker}: ` : '');
   const lines = (r) => (content === 'src' ? [r.src] : content === 'tgt' ? [r.tgt] : [r.src, r.tgt].filter(Boolean));
   const title = session.title || L.title;
   const meta = [
@@ -65,10 +76,13 @@ export function buildTranscript(
   if (format === 'md') {
     // Backslashes first, so a "\|" already in the text cannot end the cell.
     const cell = (t) => t.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
-    const head =
-      content === 'both' ? [L.time, L.source, L.translation] : [L.time, content === 'src' ? L.source : L.translation];
+    const head = [
+      L.time,
+      ...(named ? [L.speaker] : []),
+      ...(content === 'both' ? [L.source, L.translation] : [content === 'src' ? L.source : L.translation]),
+    ];
     const body = rows.map((r) => {
-      const cells = content === 'both' ? [r.src, r.tgt] : lines(r);
+      const cells = [...(named ? [r.speaker] : []), ...(content === 'both' ? [r.src, r.tgt] : lines(r))];
       return `| ${formatElapsed(r.time)} | ${cells.map(cell).join(' | ')} |`;
     });
     const summaryPart = summaryText
@@ -90,10 +104,13 @@ export function buildTranscript(
 
   if (format === 'csv') {
     const quote = (t) => `"${t.replace(/"/g, '""')}"`;
-    const head =
-      content === 'both' ? ['time', 'source', 'translation'] : ['time', content === 'src' ? 'source' : 'translation'];
+    const head = [
+      'time',
+      ...(named ? ['speaker'] : []),
+      ...(content === 'both' ? ['source', 'translation'] : [content === 'src' ? 'source' : 'translation']),
+    ];
     const body = rows.map((r) => {
-      const cells = content === 'both' ? [r.src, r.tgt] : lines(r);
+      const cells = [...(named ? [r.speaker] : []), ...(content === 'both' ? [r.src, r.tgt] : lines(r))];
       return [formatElapsed(r.time), ...cells.map(quote)].join(',');
     });
     // BOM so that Excel opens it as UTF-8.
@@ -104,7 +121,8 @@ export function buildTranscript(
     const blocks = rows.map((r, i) => {
       const next = rows[i + 1]?.time ?? Infinity;
       const end = Math.max(r.time + 500, Math.min(next, r.time + 8000));
-      return `${i + 1}\n${srtTime(r.time)} --> ${srtTime(end)}\n${lines(r).join('\n')}\n`;
+      const [first, ...rest] = lines(r);
+      return `${i + 1}\n${srtTime(r.time)} --> ${srtTime(end)}\n${[`${who(r)}${first}`, ...rest].join('\n')}\n`;
     });
     return { text: blocks.join('\n'), ext: 'srt', mime: 'application/x-subrip' };
   }
@@ -113,7 +131,7 @@ export function buildTranscript(
   const indent = ' '.repeat('[00:00:00] '.length);
   const body = rows.map((r) => {
     const [first, ...rest] = lines(r);
-    return [`[${formatElapsed(r.time)}] ${first}`, ...rest.map((t) => `${indent}→ ${t}`)].join('\n');
+    return [`[${formatElapsed(r.time)}] ${who(r)}${first}`, ...rest.map((t) => `${indent}→ ${t}`)].join('\n');
   });
   const summaryPart = summaryText ? [summaryHeading, '', ...note, summaryText, '', L.transcript, ''] : [];
   const text = [

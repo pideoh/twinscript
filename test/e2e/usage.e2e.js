@@ -44,13 +44,14 @@ test('a session shows its requests, tokens and estimated cost, and the totals ke
 
   await openUsage(page);
   const session = await cells(page, 'usageSession');
-  assert.equal(session.length, 4);
-  const [listening, translation, summary, total] = session;
+  assert.equal(session.length, 5);
+  const [listening, translation, summary, speakers, total] = session;
   assert.equal(listening[0], 'ライブ文字起こし');
   assert.match(listening[1], /^0:00:\d\d$/);
   assert.match(listening[5], /^\$0\.\d+$/);
   assert.deepEqual(translation, ['翻訳', '', '2', '2,000', '400', '$0.0016']);
   assert.deepEqual(summary, ['要約', '', '0', '0', '0', '$0.00']);
+  assert.deepEqual(speakers, ['話者の識別', '', '0', '0', '0', '$0.00']);
   assert.deepEqual(total.slice(0, 5), ['合計', listening[1], '2', '2,000', '400']);
   assert.match(total[5], /^\$0\.\d+$/);
   assert.ok(await page.isHidden('#usageSessionNote'));
@@ -168,7 +169,7 @@ test('changed prices change the amounts, Reset restores them, and invalid prices
   await saveSettings(page);
   await openUsage(page);
   assert.equal((await cells(page, 'usageSession'))[1][5], '$0.0035'); // (1,000 x 3 + 200 x 2.5) / 1M
-  assert.equal((await cells(page, 'usageTotals'))[0][5], (await cells(page, 'usageSession'))[3][5]);
+  assert.equal((await cells(page, 'usageTotals'))[0][5], (await cells(page, 'usageSession'))[4][5]);
   assert.match(await page.textContent('#usageNote'), /設定で変更/);
   await closeUsage(page);
 
@@ -208,7 +209,7 @@ test('a translation model without a price shows "no price" until one is added', 
   });
   await talk(page, ['One is done.']);
   await openUsage(page);
-  const [listening, translation, , total] = await cells(page, 'usageSession');
+  const [listening, translation, , , total] = await cells(page, 'usageSession');
   assert.deepEqual(translation, ['翻訳', '', '1', '1,000', '200', '価格なし']);
   assert.equal(total[5], listening[5], 'the total leaves the unpriced usage out');
   assert.match(await page.textContent('#usageUnpriced'), /my-model.*金額には含めていません/);

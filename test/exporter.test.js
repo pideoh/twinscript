@@ -215,6 +215,61 @@ test('csv and srt never include the summary', () => {
   }
 });
 
+const labeled = {
+  ...session,
+  segments: [
+    { ...session.segments[0], speaker: '佐藤' },
+    { ...session.segments[1], speaker: 'Speaker 2' },
+    { ...session.segments[2], speaker: '' },
+  ],
+};
+
+test('with speaker labels, text and subtitles put the name before each line', () => {
+  const txt = buildTranscript(labeled, { langLabel, labels }).text.split('\n').slice(3);
+  assert.deepEqual(txt, [
+    '[00:00:03] 佐藤: こんにちは。',
+    '           → Hello.',
+    '',
+    '[00:01:05] Speaker 2: He said "go" | now, right?',
+    '           → 彼は「行け」と言った。',
+    '',
+    '[01:02:05] まだ翻訳されていない文',
+    '',
+  ]);
+  const srt = buildTranscript(labeled, { format: 'srt' }).text;
+  assert.match(srt, /^1\n00:00:03,200 --> 00:00:11,200\n佐藤: こんにちは。\nHello\.\n/);
+  assert.match(srt, /\n3\n01:02:05,000 --> 01:02:13,000\nまだ翻訳されていない文\n$/);
+  const tgtOnly = buildTranscript(labeled, { format: 'srt', content: 'tgt' }).text;
+  assert.match(tgtOnly, /^1\n00:00:03,200 --> 00:00:11,200\n佐藤: Hello\.\n/);
+});
+
+test('with speaker labels, Markdown and CSV get a speaker column after the time', () => {
+  const md = buildTranscript(labeled, { format: 'md', langLabel, labels: { ...labels, speaker: '話者' } }).text;
+  assert.match(
+    md,
+    /\| 時間 \| 話者 \| 原文 \| 訳文 \|\n\| --- \| --- \| --- \| --- \|\n\| 00:00:03 \| 佐藤 \| こんにちは。 \| Hello\. \|/,
+  );
+  assert.match(md, /\| 01:02:05 \| {2}\| まだ翻訳されていない文 \| {2}\|/);
+  const csv = buildTranscript(labeled, { format: 'csv', content: 'src' }).text;
+  assert.equal(
+    csv,
+    '﻿time,speaker,source\r\n00:00:03,"佐藤","こんにちは。"\r\n00:01:05,"Speaker 2","He said ""go"" | now, right?"\r\n01:02:05,"","まだ翻訳されていない文"\r\n',
+  );
+});
+
+test('files of a session without speaker labels are the same as before labels existed', () => {
+  const none = { ...session, segments: session.segments.map((seg) => ({ ...seg, speaker: '' })) };
+  for (const format of ['txt', 'md', 'csv', 'srt']) {
+    for (const content of ['both', 'src', 'tgt']) {
+      assert.equal(
+        buildTranscript(none, { format, content, langLabel, labels }).text,
+        buildTranscript(session, { format, content, langLabel, labels }).text,
+        `${format} ${content}`,
+      );
+    }
+  }
+});
+
 test('safeFileName strips characters that are invalid in file names', () => {
   assert.equal(safeFileName('a/b:c*?"<>|d'), 'a b c d');
   assert.equal(safeFileName(''), 'transcript');

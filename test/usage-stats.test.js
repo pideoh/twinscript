@@ -235,3 +235,18 @@ test('typed prices become overrides of the listed ones', () => {
   assert.throws(() => mergePrices(PRICES, bad), RangeError);
   assert.deepEqual(overridesFromFields({ [LITE]: { input: '0.3', output: '2.5' } }, PRICES), {});
 });
+
+test('speaker labels are a part of their own in the view, priced as the transcription model, and in the total', () => {
+  let usage = addTokens(emptyUsage(), 'summary', LITE, { promptTokenCount: 1000, candidatesTokenCount: 100 });
+  usage = addTokens(usage, 'diarization', 'gemini-3.5-transcribe', {
+    promptTokenCount: 45_000,
+    candidatesTokenCount: 5000,
+  });
+  const view = usageView(usage, PRICES);
+  assert.deepEqual(view.diarization, { requests: 1, inputTokens: 45_000, outputTokens: 5000 });
+  assert.equal(view.requests, 2);
+  assert.equal(view.inputTokens, 46_000);
+  close(view.cost.diarization.usd, (45_000 * 2 + 5000 * 12) / 1e6);
+  close(view.cost.total.usd, (45_000 * 2 + 5000 * 12) / 1e6 + (1000 * 0.3 + 100 * 2.5) / 1e6);
+  assert.deepEqual(view.unpriced, []);
+});
