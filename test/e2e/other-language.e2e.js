@@ -72,7 +72,7 @@ test('with two languages, speech written in neither is translated into both, eac
   const live = await page
     .locator('.seg.live .tgt-line')
     .evaluateAll((ls) => ls.map((l) => l.querySelector('.lang-tag').textContent));
-  assert.deepEqual(live, ['ja', 'en'], 'the sentence in progress too');
+  assert.deepEqual(live, ['JA', 'EN'], 'the sentence in progress too');
   await done(page, 2);
   await page.click('#toggle');
 
@@ -80,8 +80,8 @@ test('with two languages, speech written in neither is translated into both, eac
     {
       src: HINDI,
       lines: [
-        ['ja', `[Japanese] ${HINDI}`],
-        ['en', `[English] ${HINDI}`],
+        ['JA', `[Japanese] ${HINDI}`],
+        ['EN', `[English] ${HINDI}`],
       ],
     },
     { src: JAPANESE, lines: [] },
@@ -156,12 +156,12 @@ test('with three languages, choosing one of them sends a fourth language into th
   await linesDone(page, [1, 2]);
   await page.click('#toggle');
   assert.deepEqual(await tagged(page), [
-    { src: HINDI, lines: [['zh-Hans', `[Simplified Chinese] ${HINDI}`]] },
+    { src: HINDI, lines: [['ZH', `[Simplified Chinese] ${HINDI}`]] },
     {
       src: JAPANESE,
       lines: [
-        ['en', `[English] ${JAPANESE}`],
-        ['zh-Hans', `[Simplified Chinese] ${JAPANESE}`],
+        ['EN', `[English] ${JAPANESE}`],
+        ['ZH', `[Simplified Chinese] ${JAPANESE}`],
       ],
     },
   ]);
