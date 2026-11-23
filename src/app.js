@@ -803,7 +803,9 @@ function mountSegment(seg, isLive = false) {
     for (const { lang, text } of seg.tgts) if (text) setLine(seg, lang, text);
   } else {
     tgtEl.textContent = seg.tgt;
+    tgtEl.dataset.lang = seg.tgt ? singleTag(seg, seg.tgt) : '';
   }
+  tagSource(seg); // also for a segment loaded from storage, which does not go through setText
   if (run) {
     els.nowList.append(el);
     trimCaptions();
