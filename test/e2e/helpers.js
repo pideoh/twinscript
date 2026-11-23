@@ -114,10 +114,14 @@ const grantToken = (route) =>
     body: JSON.stringify({ name: `auth_tokens/e2e-${++tokensIssued}` }),
   });
 
+// What every mocked translation reports as used, in the last (here the only) chunk of its answer.
+export const MOCK_USAGE = { promptTokenCount: 1000, candidatesTokenCount: 150, thoughtsTokenCount: 50 };
+
 // Mocks the Gemini endpoints: the live transcription (WebSocket), its token request and translation.
 // `script` is a list of [audioChunkNumber, 'interim' | 'final', text]. `tokens` is how the token
 // request is answered: 'grant', 'unreachable' (a network failure) or an HTTP status with
 // `tokenError` as the error message. Returns the token requests and the WebSocket addresses seen.
+// Each translation answers with MOCK_USAGE as its usageMetadata.
 export async function mockGemini(page, script, { tokens = 'grant', tokenError = '' } = {}) {
   let chunks = 0;
   const tokenRequests = [];
@@ -149,8 +153,8 @@ export async function mockGemini(page, script, { tokens = 'grant', tokenError = 
   await page.route(/streamGenerateContent/, (route) => {
     const prompt = route.request().postDataJSON().contents[0].parts[0].text;
     const text = prompt.match(/<text>\n([\s\S]*)\n<\/text>/)[1];
-    const body = `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: `訳:${text}` }] } }] })}\n\n`;
-    route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+    const chunk = { candidates: [{ content: { parts: [{ text: `訳:${text}` }] } }], usageMetadata: MOCK_USAGE };
+    route.fulfill({ status: 200, contentType: 'text/event-stream', body: `data: ${JSON.stringify(chunk)}\n\n` });
   });
   return {
     restart: () => {

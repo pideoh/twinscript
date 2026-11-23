@@ -298,3 +298,98 @@ test('the default model is not asked to think minimally, which it does anyway an
   await lite.identify('了解', ['Japanese', 'English']);
   assert.equal(calls[2].body.generationConfig.thinkingConfig, undefined);
 });
+
+// A streamed answer whose chunks report usage as the API does: each chunk may carry usageMetadata, and
+// the last one holds the request's total.
+const sseWithUsage = (texts, usages) =>
+  texts
+    .map(
+      (t, i) =>
+        `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: t }] } }], ...(usages[i] && { usageMetadata: usages[i] }) })}\n\n`,
+    )
+    .join('');
+const counted = () => {
+  const reports = [];
+  const translator = new GeminiTranslator({
+    apiKey: 'K',
+    model: 'm-1',
+    langA: 'Japanese',
+    langB: 'English',
+    onUsage: (usageMetadata, model) => reports.push({ usageMetadata, model }),
+  });
+  return { translator, reports };
+};
+
+test('each translation reports the usage of its last chunk, once, with the model', async () => {
+  const first = { promptTokenCount: 40 };
+  const last = { promptTokenCount: 40, candidatesTokenCount: 7, thoughtsTokenCount: 2, totalTokenCount: 49 };
+  stubFetch(() => new Response(sseWithUsage(['Hello, ', 'world.'], [first, last]), { status: 200 }));
+  const { translator, reports } = counted();
+  assert.equal(await translator.translate('こんにちは、世界。'), 'Hello, world.');
+  assert.deepEqual(reports, [{ usageMetadata: last, model: 'm-1' }]);
+});
+
+test('a request whose answer carries no usage reports nothing', async () => {
+  stubFetch(
+    () => new Response(sse('Hi'), { status: 200 }),
+    () => new Response(sse('{"language":"English"}'), { status: 200 }),
+    () => new Response('{"error":{"message":"bad"}}', { status: 500 }),
+    () => new Response('', { status: 429 }),
+  );
+  const { translator, reports } = counted();
+  await translator.translate('やあ');
+  await translator.identify('Hi', ['Japanese', 'English']);
+  await assert.rejects(translator.translate('やあ'));
+  await assert.rejects(translator.translate('やあ'), RateLimitError);
+  assert.deepEqual(reports, []);
+});
+
+test('asking which language a sentence is in is counted too, even when the answer cannot be read', async () => {
+  const usage = { promptTokenCount: 30, candidatesTokenCount: 5 };
+  stubFetch(
+    () => new Response(sseWithUsage(['{"language":"English"}'], [usage]), { status: 200 }),
+    () => new Response(sseWithUsage(['not json'], [usage]), { status: 200 }),
+  );
+  const { translator, reports } = counted();
+  assert.equal(await translator.identify('Hi', ['Japanese', 'English']), 'English');
+  assert.equal(await translator.identify('Hi', ['Japanese', 'English']), 'other');
+  assert.deepEqual(
+    reports.map((r) => r.usageMetadata),
+    [usage, usage],
+  );
+});
+
+test('a translation broken off after usage arrived reports that usage', async () => {
+  const usage = { promptTokenCount: 12, candidatesTokenCount: 3 };
+  const encoder = new TextEncoder();
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(sseWithUsage(['Hel'], [usage])));
+    },
+    pull(controller) {
+      // Once the first chunk has been read, the request is aborted.
+      controller.error(new DOMException('The operation was aborted.', 'AbortError'));
+    },
+  });
+  stubFetch(() => new Response(body, { status: 200 }));
+  const { translator, reports } = counted();
+  await assert.rejects(translator.translate('こんにちは'), { name: 'AbortError' });
+  assert.deepEqual(
+    reports.map((r) => r.usageMetadata),
+    [usage],
+  );
+});
+
+test('a failing usage callback does not break the translation', async () => {
+  stubFetch(() => new Response(sseWithUsage(['Hi'], [{ promptTokenCount: 1 }]), { status: 200 }));
+  const translator = new GeminiTranslator({
+    apiKey: 'K',
+    model: 'm-1',
+    langA: 'Japanese',
+    langB: 'English',
+    onUsage: () => {
+      throw new Error('boom');
+    },
+  });
+  assert.equal(await translator.translate('やあ'), 'Hi');
+});

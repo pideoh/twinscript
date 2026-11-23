@@ -158,6 +158,21 @@ Twinscript may use it, choose "Always Allow"; the app uses it only to read and s
 
 These are the prices at the time of writing; Google's [pricing page](https://ai.google.dev/gemini-api/docs/pricing) has the current ones.
 
+### Usage and cost
+
+The graph button in the header opens what was used and an estimate of its cost in US dollars: for the session on
+screen (listening time, translation and summary requests and their tokens), totals for today, this month, last month
+and everything recorded, and each saved session.
+
+- Listening time is counted while the transcription is connected; translations and summaries by the tokens the API
+  reports for each request. Sessions saved before this screen existed show "not recorded".
+- The totals are kept in the app per day (the last 400 days) and stay when a session is deleted. The demo
+  (`?mock=1`) shows made-up usage for its sessions and never adds it to the totals.
+- Amounts are estimates at the paid-tier prices listed in the app, with the date they were taken. With a free key
+  nothing is charged. Google's billing is what counts.
+- The prices can be changed in Settings → Prices for estimates, for example when they change or when you use another
+  translation model, which has no price until you add one. "Reset to defaults" brings back the listed prices.
+
 ## Limitations
 
 - It cannot tell speakers apart (who said what).

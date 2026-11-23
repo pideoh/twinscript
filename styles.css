@@ -1518,6 +1518,100 @@ kbd {
   font-size: var(--text-body-size-small);
 }
 
+/* Prices for estimates in the settings dialog: one group of fields per model. */
+.price-fields {
+  display: grid;
+  gap: var(--stack-gap-normal);
+}
+.price-model {
+  display: grid;
+  gap: var(--base-size-8);
+  min-width: 0;
+}
+.price-model-title {
+  margin: 0;
+  font-family: var(--fontStack-monospace);
+  font-size: var(--text-body-size-medium);
+  font-weight: var(--base-text-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.price-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--base-size-8) var(--base-size-16);
+}
+.text-input[aria-invalid="true"] {
+  border-color: var(--fgColor-danger);
+}
+
+/* ---------- Usage dialog: tables of what was used and its estimated cost ---------- */
+.usage-section {
+  display: grid;
+  gap: var(--base-size-8);
+  min-width: 0;
+}
+.usage-heading,
+.usage-section p,
+.usage-note {
+  margin: 0;
+}
+.usage-heading {
+  font-size: var(--text-body-size-large);
+  font-weight: var(--base-text-weight-semibold);
+}
+.usage-table-wrap {
+  overflow-x: auto;
+  border: var(--borderWidth-default) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+}
+.usage-table-wrap[hidden],
+.usage-section .caption[hidden] {
+  display: none;
+}
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-body-size-medium);
+}
+.usage-table th,
+.usage-table td {
+  padding: var(--base-size-6) var(--base-size-8);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap; /* on a narrow screen the table scrolls sideways instead */
+}
+.usage-table .usage-title {
+  min-width: 10rem;
+  white-space: normal;
+}
+.usage-table thead th {
+  background: var(--bgColor-muted);
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+  font-weight: var(--base-text-weight-semibold);
+  border-bottom: var(--borderWidth-default) solid var(--borderColor-default);
+}
+.usage-table tbody tr + tr > * {
+  border-top: var(--borderWidth-default) solid var(--borderColor-muted);
+}
+.usage-table tbody th {
+  font-weight: var(--base-text-weight-normal);
+}
+.usage-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.usage-table .muted {
+  color: var(--fgColor-muted);
+}
+.usage-table .label {
+  vertical-align: text-bottom;
+}
+.usage-table .usage-total > * {
+  border-top: var(--borderWidth-default) solid var(--borderColor-default);
+  font-weight: var(--base-text-weight-semibold);
+}
+
 /* ---------- Narrow screens: sidebar becomes a drawer ---------- */
 @media (max-width: 819px) {
   #menu {
