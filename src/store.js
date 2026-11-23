@@ -21,7 +21,8 @@ let dbPromise;
 export const segmentRange = (sessionId) => [[sessionId], [sessionId, []]];
 
 // The stored form of an in-memory segment (which also carries DOM nodes and translation state).
-export function segmentRecord(sessionId, pos, { id, at, elapsed, src, tgt, lang, tgts }) {
+// `speaker` is the id of who said it, once the session's speakers have been labelled.
+export function segmentRecord(sessionId, pos, { id, at, elapsed, src, tgt, lang, tgts, speaker }) {
   return {
     sessionId,
     pos,
@@ -32,6 +33,7 @@ export function segmentRecord(sessionId, pos, { id, at, elapsed, src, tgt, lang,
     tgt,
     ...(lang && { lang }),
     ...(tgts && { tgts: tgts.map(({ lang, text }) => ({ lang, text })) }),
+    ...(speaker && { speaker }),
   };
 }
 
@@ -54,6 +56,7 @@ export const sameSegment = (a, b) =>
   a.src === b.src &&
   a.tgt === b.tgt &&
   a.lang === b.lang &&
+  a.speaker === b.speaker &&
   sameTargets(a.tgts, b.tgts);
 
 // Splits a session into the record for `sessions` and the records for `segments`. A session whose

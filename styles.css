@@ -766,14 +766,34 @@ input[type="range"] {
 .summary-options .select-wrap {
   flex: 0 1 auto;
 }
-.summarize .spinner {
+/* Speaker labels: their actions and progress, before the summary's. */
+.speaker-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--base-size-8);
+  min-width: 0;
+  margin-left: auto;
+}
+.speaker-tools[hidden],
+.speaker-tools .btn[hidden] {
+  display: none;
+}
+.speaker-tools:not([hidden]) + .summary-options {
+  margin-left: 0;
+}
+.summarize .spinner,
+.label-speakers .spinner {
   display: none;
   flex: none;
 }
-.summarize[aria-busy="true"] .icon-rest {
+.summarize[aria-busy="true"] .icon-rest,
+.label-speakers[aria-busy="true"] .icon-rest {
   display: none;
 }
-.summarize[aria-busy="true"] .spinner {
+.summarize[aria-busy="true"] .spinner,
+.label-speakers[aria-busy="true"] .spinner {
   display: inline-block;
   animation: spin 1s linear infinite;
 }
@@ -783,7 +803,8 @@ input[type="range"] {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .summarize[aria-busy="true"] .spinner {
+  .summarize[aria-busy="true"] .spinner,
+  .label-speakers[aria-busy="true"] .spinner {
     animation-duration: 3s;
   }
 }
@@ -1045,6 +1066,64 @@ input[type="range"] {
 .tgt-text {
   min-width: 0;
 }
+/* Speaker labels: the name of who said a line, before its source text, as quiet as the language codes
+   and in a column of fixed width so the text stays aligned. Only in the transcript of a labelled
+   session; a line without a speaker keeps the space (its button shows an icon on hover or focus). */
+.seg .speaker {
+  display: none;
+}
+.has-speakers .seg .speaker {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  width: calc(var(--base-size-64) + var(--base-size-32));
+  max-width: 100%;
+  min-height: var(--control-medium-size);
+  margin-block: calc(-1 * var(--base-size-6));
+  padding: 0 var(--base-size-4);
+  border: 0;
+  border-radius: var(--borderRadius-medium);
+  background: transparent;
+  color: var(--fgColor-muted);
+  font: inherit;
+  font-size: var(--text-body-size-small);
+  text-align: left;
+  cursor: pointer;
+}
+.has-speakers .seg .speaker:hover {
+  background: var(--button-invisible-bgColor-hover);
+  color: var(--fgColor-default);
+}
+.has-speakers .seg .speaker:active {
+  background: var(--button-invisible-bgColor-active);
+}
+.speaker-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.seg .speaker.none .octicon {
+  visibility: hidden;
+}
+.seg:hover .speaker.none .octicon,
+.seg .speaker.none:focus-visible .octicon {
+  visibility: visible;
+}
+@media (hover: none) {
+  .seg .speaker.none .octicon {
+    visibility: visible;
+  }
+}
+/* Narrow: the time and the speaker share the first row, the text runs below. */
+.has-speakers .seg {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+.has-speakers .seg .src,
+.has-speakers .seg .tgt {
+  grid-column: 1 / -1;
+}
 .seg .tgt-line.pending .tgt-text {
   color: var(--fgColor-muted);
   font-weight: var(--base-text-weight-normal);
@@ -1061,6 +1140,14 @@ input[type="range"] {
   }
   .seg .src {
     font-size: 1em;
+  }
+  .has-speakers .seg {
+    grid-template-columns: auto auto 1fr 1fr;
+    align-items: baseline;
+  }
+  .has-speakers .seg .src,
+  .has-speakers .seg .tgt {
+    grid-column: auto;
   }
 }
 #anchor {
@@ -1364,6 +1451,31 @@ body.running #log .seg .tgt {
   cursor: pointer;
 }
 
+/* The speaker editor. */
+.speaker-names {
+  display: grid;
+  gap: var(--base-size-12);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.speaker-names legend {
+  float: left; /* lets the legend sit in the grid like any other row */
+  width: 100%;
+  padding: 0;
+}
+.speaker-name-list {
+  display: grid;
+  gap: var(--base-size-12);
+}
+.speaker-line-text {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Groups of related settings: a heading over the controls, separated by a rule. */
 .settings-group {
   display: grid;
@@ -1655,8 +1767,9 @@ kbd {
   .summary-body {
     max-height: 30vh;
   }
-  /* The summary's choices take a row of their own and share it. */
-  .summary-options {
+  /* The summary's choices take a row of their own and share it; so do the speaker actions. */
+  .summary-options,
+  .speaker-tools {
     flex: 1 1 100%;
   }
   .summary-options .select-wrap,

@@ -7,7 +7,7 @@ const LITE = 'gemini-3.5-flash-lite';
 
 test('a new usage record is empty, versioned and plain JSON', () => {
   const usage = emptyUsage();
-  assert.deepEqual(usage, { version: USAGE_VERSION, transcription: {}, translation: {}, summary: {} });
+  assert.deepEqual(usage, { version: USAGE_VERSION, transcription: {}, translation: {}, summary: {}, diarization: {} });
   assert.deepEqual(JSON.parse(JSON.stringify(usage)), usage);
 });
 
@@ -68,6 +68,7 @@ test('sessions add up to a total, including partial and stored records', () => {
       'other-model': { requests: 1, inputTokens: 5, outputTokens: 0 },
     },
     summary: {},
+    diarization: {},
   });
   assert.deepEqual(addUsage(a, undefined), a);
   assert.deepEqual(addUsage({ translation: { [LITE]: { requests: 2 } } }, {}).translation[LITE], {
@@ -77,4 +78,14 @@ test('sessions add up to a total, including partial and stored records', () => {
   });
   assert.deepEqual([emptyUsage(), a, b].reduce(addUsage, emptyUsage()), total);
   assert.throws(() => addUsage(a, { version: USAGE_VERSION + 1 }), RangeError);
+});
+
+test('speaker labels are counted as a kind of their own, and records from before them read as having none', () => {
+  const old = { version: USAGE_VERSION, transcription: {}, translation: {}, summary: {} };
+  const usage = addTokens(old, 'diarization', 'gemini-3.5-transcribe', {
+    promptTokenCount: 900,
+    candidatesTokenCount: 80,
+  });
+  assert.deepEqual(usage.diarization, { 'gemini-3.5-transcribe': { requests: 1, inputTokens: 900, outputTokens: 80 } });
+  assert.deepEqual(addUsage(old, {}).diarization, {});
 });

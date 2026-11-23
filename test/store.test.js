@@ -122,6 +122,25 @@ test('only new and changed segments are written again', () => {
   assert.equal(segmentChanges(splitSession(changed).segments, three).puts.length, 1, 'one line of a segment');
 });
 
+test('a segment keeps its speaker, and labelling rewrites only the segments whose speaker changed', () => {
+  const session = structuredClone(twoLanguages);
+  const before = splitSession(session).segments;
+  assert.ok(!('speaker' in before[0]), 'no speaker field until there is one');
+  session.segments[0].speaker = 's1';
+  session.segments[2].speaker = 's2';
+  const labeled = splitSession(session).segments;
+  assert.equal(labeled[0].speaker, 's1');
+  assert.deepEqual(
+    segmentChanges(labeled, before).puts.map((r) => r.pos),
+    [0, 2],
+  );
+  session.segments[2].speaker = 's1'; // corrected by hand
+  assert.deepEqual(
+    segmentChanges(splitSession(session).segments, labeled).puts.map((r) => r.pos),
+    [2],
+  );
+});
+
 test('removed or reordered segments are rewritten or trimmed', () => {
   const session = structuredClone(twoLanguages);
   const before = splitSession(session).segments;

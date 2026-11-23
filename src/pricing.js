@@ -21,6 +21,10 @@ export const PRICES = {
       inputPerMinute: 0.005,
       outputPerMinute: 0.004,
     },
+    'gemini-3.5-transcribe': {
+      input: 2,
+      output: 12,
+    },
     'gemini-3.5-flash-lite': {
       input: 0.3,
       output: 2.5,
@@ -33,7 +37,7 @@ export const PRICES = {
 export const PRICE_FIELDS = ['input', 'output', 'inputPerMinute', 'outputPerMinute'];
 
 /** The kinds of usage, in the order a breakdown lists them. */
-export const COST_KINDS = ['transcription', 'translation', 'summary'];
+export const COST_KINDS = ['transcription', 'translation', 'summary', 'diarization'];
 
 const TOKENS_PER_PRICE_UNIT = 1_000_000;
 const MS_PER_MINUTE = 60_000;
@@ -90,7 +94,7 @@ function tokenCost(prices, inputTokens, outputTokens) {
 
 /**
  * What a usage record (src/usage.js) cost under a price table. Returns
- *   { currency, transcription, translation, summary, total }
+ *   { currency, transcription, translation, summary, diarization, total }
  * where each part is { usd, unpriced, byModel }:
  *   usd       the cost of the usage whose model has a price;
  *   unpriced  the models that were used but have no price ("no price", not zero). When it is not empty,

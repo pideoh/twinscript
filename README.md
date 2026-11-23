@@ -14,6 +14,7 @@ Choose two languages and press "Start translating": Twinscript detects which one
 - **Reads translations aloud**: finished translations can be spoken with your system's voices.
 - **Keeps a record**: sessions are saved with their audio, and transcripts export with a timeline as text, Markdown, CSV or SRT.
 - **Summaries after the meeting**: summarize a finished session with a template (quick summary, executive summary, meeting minutes, action items, customer meeting, sales call (BANT), 1:1, stand-up, or your own), choosing the length and the language it is written in. Every summary is kept with the session, so you can switch between them, copy one as Markdown or download it as `.md`. Your own templates are written in the settings and can be exported to a JSON file and imported again.
+- **Who said what**: after a meeting, the speakers are told apart from its recording, and each line of the transcript shows who said it. Give the speakers their names, correct a line by hand; summaries and exports use the names.
 - **Better with names**: register company and product names as terms, and correct mishearings with `wrong => right` rules.
 - The interface is available in English, Japanese and Simplified Chinese.
 
@@ -132,6 +133,28 @@ afterwards. [docs/tuning.md](docs/tuning.md) describes how it is measured.
   source and translation, source only, or translation only) and the recordings.
 - Everything is stored on your computer, inside the app. Nothing is synced anywhere.
 
+## Speaker labels
+
+After a session, "Label speakers" (next to the summary controls) tells the speakers apart from the session's recording
+and labels each line of the transcript with its speaker: "Speaker 1", "Speaker 2", … in the order they first speak.
+
+- The recording is uploaded to Google's Gemini API for this (`gemini-3.5-transcribe`) and deleted there as soon as it
+  has been analyzed, also when the analysis fails or is cancelled. The app explains this and asks once before the first
+  use.
+- Progress is shown per step (preparing the audio, uploading, analyzing part 1 of n) and it can be cancelled.
+- "Speakers" opens the names: a name applies to every line of that speaker in the session. Activating the name on a line
+  opens the same editor, where that line's speaker can be corrected (or set to none).
+- Summaries made afterwards name who said, decided or will do what; a summary made before the labels is marked
+  outdated. Downloads carry the speaker: before the text in `.txt` and `.srt`, in a column of its own in `.md` and
+  `.csv`. Sessions without labels download as before.
+- Up to 8 speakers can be told apart; with three or more the result is less reliable. Check the lines, and correct them
+  where needed.
+- A recording longer than 25 minutes is analyzed in parts. Each part starts with short clips of the speakers found so
+  far, so that a speaker keeps one label across parts. When that match is not certain, the speakers concerned are left
+  without a label in that part rather than guessed, and the editor says so.
+- Labeling again replaces the labels, names and corrections, after asking.
+- Only sessions with a recording can be labeled; the captions while listening do not show speakers.
+
 ## Privacy
 
 Twinscript has no server. Audio and text go directly from your computer to Google's Gemini API with your own API key,
@@ -145,6 +168,7 @@ connects with the key in the address instead for the rest of the session and log
 On macOS the encryption key lives in the Keychain, in an item named "Twinscript Safe Storage". If macOS asks whether
 Twinscript may use it, choose "Always Allow"; the app uses it only to read and save your API key.
 
+- Speaker labels upload the session's recording to the Gemini API (Files API) and delete it after the analysis.
 - On Gemini's free tier, what you send is used to improve Google's products. Use a paid key for confidential meetings.
 - Recording or transcribing other people may require their consent.
 
@@ -153,6 +177,9 @@ Twinscript may use it, choose "Always Allow"; the app uses it only to read and s
 - **Free tier**: both models work on it. It is rate-limited.
 - **Paid tier** (a key linked to Google Cloud billing): transcription costs about $0.009 per minute (about $0.54 per hour)
   plus a small token fee for translation. What you send is not used for training.
+- **Speaker labels** (`gemini-3.5-transcribe`): $2.00 per 1M input tokens, about $0.003 per minute of audio, and
+  $12.00 per 1M output tokens for the transcript with word times. The audio sent is somewhat longer than the recording:
+  each part after the first starts with clips of the known speakers, and parts of a long recording overlap by a minute.
 - A sentence that is translated into several languages takes one translation request (and its token fee) per language:
   every sentence with a third language, and speech in a language you did not select when it goes into all of them.
 
@@ -161,11 +188,11 @@ These are the prices at the time of writing; Google's [pricing page](https://ai.
 ### Usage and cost
 
 The graph button in the header opens what was used and an estimate of its cost in US dollars: for the session on
-screen (listening time, translation and summary requests and their tokens), totals for today, this month, last month
+screen (listening time, translation, summary and speaker-label requests and their tokens), totals for today, this month, last month
 and everything recorded, and each saved session.
 
-- Listening time is counted while the transcription is connected; translations and summaries by the tokens the API
-  reports for each request. Sessions saved before this screen existed show "not recorded".
+- Listening time is counted while the transcription is connected; translations, summaries and speaker labels by the
+  tokens the API reports for each request. Sessions saved before this screen existed show "not recorded".
 - The totals are kept in the app per day (the last 400 days) and stay when a session is deleted. The demo
   (`?mock=1`) shows made-up usage for its sessions and never adds it to the totals.
 - Amounts are estimates at the paid-tier prices listed in the app, with the date they were taken. With a free key
@@ -175,7 +202,7 @@ and everything recorded, and each saved session.
 
 ## Limitations
 
-- It cannot tell speakers apart (who said what).
+- Speakers are told apart only after a session, from its recording, not while listening.
 - A transcription session lasts at most 10 minutes, so the app switches to a new connection in the background, at a pause in speech.
 - When the free tier hits its rate limit, translation of sentences in progress pauses for a minute; finished sentences are still translated.
 - With a third language, the language of a sentence is told from its writing system. Languages that share it with
@@ -190,6 +217,7 @@ and everything recorded, and each saved session.
 | --- | --- |
 | Transcription (streaming, with interim results) | Gemini Live API `gemini-3.5-transcribe-live` |
 | Translation (streaming) | `gemini-3.5-flash-lite` (can be changed in settings) |
+| Speaker labels (after a session, from its recording) | `gemini-3.5-transcribe` |
 
 How it translates is described under [How it translates](#how-it-translates-modeled-on-simultaneous-interpreting).
 

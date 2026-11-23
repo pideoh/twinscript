@@ -50,6 +50,7 @@ export default {
   'summary.working': 'Summarizing…',
   'summary.stale': 'Outdated',
   'summary.staleHelp': 'Speech was added after this summary was generated',
+  'summary.staleSpeakersHelp': 'The speakers were labeled after this summary was generated',
   'summary.truncated': 'This summary covers only part of a long transcript.',
   'summary.overview': 'Overview',
   'summary.keyPoints': 'Key points',
@@ -78,6 +79,33 @@ export default {
   'summary.deleteConfirm': 'Delete the summary "{template}" of {date}?',
   'summary.copied': 'Copied the summary as Markdown.',
   'summary.copyFailed': 'Could not copy: {message}',
+  'speakers.label': 'Label speakers',
+  'speakers.edit': 'Speakers',
+  'speakers.cancel': 'Cancel',
+  'speakers.title': 'Speakers',
+  'speakers.lineSpeaker': 'Speaker of this line',
+  'speakers.names': 'Names',
+  'speakers.namesHelp':
+    'A name applies to every line of that speaker in this session. Leave it empty to use the default.',
+  'speakers.uncertain':
+    'Parts of the recording could not be matched to the speakers with certainty. Check the speakers of the lines.',
+  'speakers.cancelEdit': 'Cancel',
+  'speakers.save': 'Save',
+  'speakers.default': 'Speaker {n}',
+  'speakers.none': 'No speaker',
+  'speakers.lineButton': '{name}: change the speaker',
+  'speakers.lineButtonNone': 'Set the speaker of this line',
+  'speakers.consent':
+    'To tell the speakers apart, the recording of this session is uploaded to Google (Gemini API) and analyzed there. Each upload is deleted as soon as it has been analyzed. Continue?',
+  'speakers.replaceConfirm':
+    'Label the speakers again? The current speakers, names and corrections of this session are replaced.',
+  'speakers.preparing': 'Preparing the audio…',
+  'speakers.uploading': 'Uploading part {part} of {parts}…',
+  'speakers.analyzing': 'Analyzing part {part} of {parts}…',
+  'speakers.done': 'Speakers labeled: {count}.',
+  'speakers.doneUncertain': 'Speakers labeled: {count}. Parts could not be matched with certainty; check the lines.',
+  'speakers.cancelled': 'Speaker labeling was cancelled.',
+  'speakers.madeAt': 'Labeled from the recording on {date}.',
   'template.quick.name': 'Quick summary',
   'template.quick.description': 'Overview, key points, decisions and action items',
   'template.executive.name': 'Executive summary',
@@ -170,6 +198,7 @@ export default {
   'file.translation': 'Translation',
   'file.separator': '   ',
   'file.transcript': 'Transcript',
+  'file.speaker': 'Speaker',
 
   // settings dialog
   'settings.title': 'Settings',
@@ -265,6 +294,7 @@ export default {
     'Close the other Twinscript windows: an older version is open, and saved sessions appear once it is closed',
   'toast.demo': 'Demo mode: no real speech recognition or translation',
   'toast.summaryFailed': 'Could not summarize: {message}',
+  'toast.speakersFailed': 'Could not label the speakers: {message}',
 
   // errors reported by audio.js, transcriber.js and translator.js
   'error.windowBlocked': 'The window was blocked',
@@ -280,6 +310,13 @@ export default {
   'error.summarize': 'Summary error ({status}): {message}',
   'error.summaryRateLimit': 'The API rate limit was reached. Try again in a minute.',
   'error.summaryInvalid': 'The response could not be read as a summary. Try again.',
+  'error.speakersUpload': 'Upload error ({status}): {message}',
+  'error.speakersAnalyze': 'Speaker analysis error ({status}): {message}',
+  'error.speakersRateLimit': 'The API rate limit was reached. Try again in a minute.',
+  'error.speakersIncomplete': 'The analysis was cut off twice. Try again later.',
+  'error.speakersStatus': 'The analysis ended with the status "{status}".',
+  'error.speakersNone': 'No speech was found in the recording.',
+  'error.speakersNoAudio': 'The recording of this session could not be read.',
 
   // usage and cost screen, prices for estimates
   'header.usage': 'Usage and cost',
@@ -300,6 +337,7 @@ export default {
   'usage.listening': 'Live transcription',
   'usage.translation': 'Translation',
   'usage.summary': 'Summaries',
+  'usage.speakers': 'Speaker labels',
   'usage.total': 'Total',
   'usage.period.today': 'Today',
   'usage.period.thisMonth': 'This month',

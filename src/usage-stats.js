@@ -118,9 +118,10 @@ function tokenTotals(entries) {
 
 /**
  * What the screen shows of one usage record:
- *   { listeningMs, translation, summary, requests, inputTokens, outputTokens, cost, unpriced }
- * translation and summary are { requests, inputTokens, outputTokens } over all models; requests and the
- * token counts are their sums. cost has the parts transcription, translation, summary and total, each
+ *   { listeningMs, translation, summary, diarization, requests, inputTokens, outputTokens, cost, unpriced }
+ * translation, summary and diarization (speaker labels) are { requests, inputTokens, outputTokens } over all
+ * models; requests and the token counts are their sums. cost has the parts transcription, translation,
+ * summary, diarization and total, each
  * { usd, noPrice, partial } (see costPart). unpriced: the models used that have no price.
  */
 export function usageView(usage, prices) {
@@ -132,10 +133,10 @@ export function usageView(usage, prices) {
     unpriced: cost.total.unpriced,
   };
   for (const kind of TOKEN_KINDS) view[kind] = tokenTotals(record[kind]);
-  view.requests = view.translation.requests + view.summary.requests;
-  view.inputTokens = view.translation.inputTokens + view.summary.inputTokens;
-  view.outputTokens = view.translation.outputTokens + view.summary.outputTokens;
-  for (const part of ['transcription', 'translation', 'summary', 'total']) view.cost[part] = costPart(cost[part]);
+  for (const field of ['requests', 'inputTokens', 'outputTokens']) {
+    view[field] = TOKEN_KINDS.reduce((n, kind) => n + view[kind][field], 0);
+  }
+  for (const part of ['transcription', ...TOKEN_KINDS, 'total']) view.cost[part] = costPart(cost[part]);
   return view;
 }
 

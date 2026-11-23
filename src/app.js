@@ -1,5 +1,6 @@
 import { AudioCapture, canCaptureSystemAudio, inMacDesktopApp } from './audio.js';
 import { addFileSourceOption, FILE_TAIL_MS, pickAudioFile, traceDownloadButton } from './debug-tools.js';
+import { MODEL as DIARIZE_MODEL, GeminiDiarizer, labelSpeakers } from './diarizer.js';
 import { buildTranscript, formatDateTime, formatElapsed, safeFileName } from './exporter.js';
 import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './i18n.js';
 import { octicon } from './icons.js';
@@ -13,6 +14,8 @@ import { canRecord, Recorder } from './recorder.js';
 import { languageByScript, scriptsDiffer, sourceByScript, targetByScript, targetLanguages } from './script-hint.js';
 import { loadApiKey, saveApiKey } from './secrets.js';
 import { UtteranceTracker } from './segmenter.js';
+import { decodeRecording } from './speaker-audio.js';
+import { assignSpeakers, recordingTimeline } from './speakers.js';
 import { store } from './store.js';
 import { GeminiSummarizer, legacySummaryToMarkdown } from './summarizer.js';
 import {
@@ -194,6 +197,19 @@ const els = Object.fromEntries(
     'summaryDetails',
     'summaryTruncated',
     'summaryContent',
+    'speakerTools',
+    'speakersStatus',
+    'labelSpeakers',
+    'editSpeakers',
+    'cancelSpeakers',
+    'speakerDialog',
+    'speakerLine',
+    'speakerLineText',
+    'speakerLineSelect',
+    'speakerNames',
+    'speakerUncertain',
+    'speakerNote',
+    'speakerSave',
     'templateList',
     'templateNew',
     'templateImport',
@@ -290,6 +306,7 @@ function relocalize() {
   fillSummaryTemplates();
   renderTemplateList();
   renderSummary();
+  renderSpeakers();
   renderShortcuts();
   if (els.settings.open) renderPriceFields();
   if (els.usageDialog.open) renderUsage();
@@ -553,7 +570,9 @@ els.settings.addEventListener('close', () => {
 // ---------- sessions (saved conversations) ----------
 // { id, title, customTitle, createdAt, updatedAt, langA, langB, langC?, activeMs, segmentCount?,
 //   usage?, usagePartial?, demo? (see "usage and cost estimates" below),
-//   segments: [{ id, at, elapsed, src, tgt, lang?, tgts? }], recordings: [{ id, startedAt, elapsedStart, durationMs, mime }],
+//   speakerLabels?: { speakers: [{ id, name }], madeAt, uncertain, model } (see "speaker labels" below),
+//   segments: [{ id, at, elapsed, src, tgt, lang?, tgts?, speaker? }],
+//   recordings: [{ id, startedAt, elapsedStart, durationMs, mime }],
 //   summaries: [{ id, templateId, templateName, length, language, createdAt, markdown, model, truncated,
 //                 segmentCount }] (oldest first),
 //   summary?: { overview, keyPoints, decisions, actionItems: [{ task, owner, due }], truncated,
@@ -613,7 +632,7 @@ function blankSession() {
 
 const serialize = (sess) => ({
   ...sess,
-  segments: sess.segments.map(({ id, at, elapsed, src, tgt, lang, tgts }) => ({
+  segments: sess.segments.map(({ id, at, elapsed, src, tgt, lang, tgts, speaker }) => ({
     id,
     at,
     elapsed,
@@ -621,6 +640,7 @@ const serialize = (sess) => ({
     tgt,
     ...(lang && { lang }),
     ...(tgts && { tgts: tgts.map(({ lang, text }) => ({ lang, text })) }),
+    ...(speaker && { speaker }),
   })),
 });
 
@@ -684,6 +704,7 @@ async function showSession(sess) {
   }
   for (const node of els.log.querySelectorAll('.seg')) node.remove();
   live = null;
+  els.log.classList.toggle('has-speakers', hasLabels(sess));
   for (const seg of sess.segments) mountSegment(seg);
   els.empty.hidden = sess.segments.length > 0;
   const [a, b] =
@@ -790,14 +811,20 @@ function mountSegment(seg, isLive = false) {
   const timeEl = document.createElement('div');
   timeEl.className = 'time';
   timeEl.textContent = formatElapsed(seg.elapsed);
+  // Who said it, once the speakers are labelled; shown only in the transcript (not the caption zone).
+  const speakerEl = document.createElement('button');
+  speakerEl.type = 'button';
+  speakerEl.className = 'speaker';
+  speakerEl.onclick = () => openSpeakerEditor(seg);
   const srcEl = document.createElement('div');
   srcEl.className = 'src';
   srcEl.textContent = seg.src;
   const tgtEl = document.createElement('div');
   tgtEl.className = `tgt${isLive ? ' pending' : ''}`;
-  el.append(timeEl, srcEl, tgtEl);
+  el.append(timeEl, speakerEl, srcEl, tgtEl);
   els.empty.hidden = true;
-  Object.assign(seg, { el, srcEl, tgtEl });
+  Object.assign(seg, { el, speakerEl, srcEl, tgtEl });
+  showSpeaker(seg);
   if (seg.tgts) {
     showTargets(seg);
     for (const { lang, text } of seg.tgts) if (text) setLine(seg, lang, text);
@@ -1121,7 +1148,10 @@ els.export.onclick = () => {
 els.exportTranscript.onclick = () => {
   if (!current.segments.length) return toast(t('toast.noTranscript'));
   const latest = summariesOf(current).at(-1);
-  const { text, ext, mime } = buildTranscript(serialize(current), {
+  const exported = serialize(current);
+  // Names, not ids, go into the file; a session without labels has none.
+  for (const seg of exported.segments) seg.speaker = speakerName(current, seg.speaker);
+  const { text, ext, mime } = buildTranscript(exported, {
     format: els.exportFormat.value,
     content: els.exportContent.value,
     langLabel,
@@ -1129,9 +1159,18 @@ els.exportTranscript.onclick = () => {
     summary: latest && { markdown: latest.markdown, title: latest.templateName, truncated: latest.truncated },
     labels: {
       ...Object.fromEntries(
-        ['title', 'date', 'languages', 'duration', 'time', 'source', 'translation', 'separator', 'transcript'].map(
-          (k) => [k, t(`file.${k}`)],
-        ),
+        [
+          'title',
+          'date',
+          'languages',
+          'duration',
+          'time',
+          'speaker',
+          'source',
+          'translation',
+          'separator',
+          'transcript',
+        ].map((k) => [k, t(`file.${k}`)]),
       ),
       summary: t('summary.title'),
       summaryTruncated: t('summary.truncated'),
@@ -1258,7 +1297,12 @@ function renderSummary() {
   els.summaryMeta.textContent = busy || list.length ? '' : t('summary.none');
   els.summaryToggle.hidden = !busy && !list.length;
   els.summaryToggle.setAttribute('aria-expanded', String(summaryOpen));
-  els.summaryStale.hidden = !shown || sess.segments.length <= shown.segmentCount;
+  // Outdated: speech was added after the summary, or the speakers were labelled after it.
+  const relabeled = !!shown && hasLabels(sess) && sess.speakerLabels.madeAt > shown.createdAt;
+  els.summaryStale.hidden = !shown || (sess.segments.length <= shown.segmentCount && !relabeled);
+  els.summaryStale.title = t(
+    relabeled && sess.segments.length <= (shown?.segmentCount ?? 0) ? 'summary.staleSpeakersHelp' : 'summary.staleHelp',
+  );
   els.summaryBody.hidden = (!busy && !shown) || !summaryOpen;
   els.summaryHistoryBar.hidden = !shown;
   if (shown) {
@@ -1282,6 +1326,7 @@ function renderSummary() {
   els.summaryDetails.hidden = !shown;
   els.summaryTruncated.hidden = !shown?.truncated;
   showMarkdown(busy ? summarizing.text : (shown?.markdown ?? ''));
+  renderSpeakerTools();
 }
 
 // While the answer streams in, the panel follows it at most once a frame.
@@ -1329,7 +1374,13 @@ els.summarize.onclick = async () => {
   const template = templateById(els.summaryTemplate.value) ?? presetById(DEFAULT_TEMPLATE);
   const length = LENGTHS.includes(els.summaryLength.value) ? els.summaryLength.value : 'standard';
   const language = els.summaryLanguage.value || displayLangCode() || 'en-US';
-  const segments = sess.segments.map(({ elapsed, src, tgt }) => ({ elapsed, src, tgt }));
+  // With speaker labels each line carries its speaker's name.
+  const segments = sess.segments.map(({ elapsed, src, tgt, speaker }) => ({
+    elapsed,
+    src,
+    tgt,
+    ...(speakerName(sess, speaker) && { speaker: speakerName(sess, speaker) }),
+  }));
   const model = MOCK ? 'demo' : settings.translateModel;
   const onUsage = (usageMetadata, used) => recordUsage(sess, addTokens(emptyUsage(), 'summary', used, usageMetadata));
   const summarizer = MOCK
@@ -1421,6 +1472,227 @@ els.summaryDelete.onclick = () => {
   renderSummary();
   (els.summaryHistoryBar.hidden || els.summaryBody.hidden ? els.summarize : els.summaryHistory).focus();
 };
+
+// ---------- speaker labels ----------
+// After a session, who spoke when is told from its recording by the transcription model (src/speakers.js,
+// src/diarizer.js). The session keeps `speakerLabels` (its speakers, numbered by their first line, when
+// they were labelled, and whether any part of the recording could not be matched with certainty) and each
+// segment the id of its `speaker`. An empty name is the default one, "Speaker n" in the display language.
+// Labelling again replaces all of it. One labelling at a time; it goes on if another session is opened.
+const SPEAKERS_CONSENT_KEY = 'rt-speakers-consent';
+const MAX_SPEAKER_NAME = 40;
+let labeling = null; // { session, controller, text } while speakers are being labelled
+let speakerEditing = null; // { session, seg } while the editor is open; seg null when opened from the bar
+
+function hasLabels(sess) {
+  return Array.isArray(sess?.speakerLabels?.speakers);
+}
+// The name shown for a speaker id of `sess`, or '' for none.
+function speakerName(sess, id) {
+  const list = hasLabels(sess) && id ? sess.speakerLabels.speakers : [];
+  const i = list.findIndex((s) => s.id === id);
+  return i === -1 ? '' : list[i].name || t('speakers.default', { n: i + 1 });
+}
+// A stopped session with speech and a recording can be labelled.
+const canLabel = (sess) => !run && hasFinished(sess) && sess.recordings.some((rec) => rec.durationMs > 0);
+
+// A line's speaker: its name, quiet, in a column of its own; an empty slot (an icon on hover) without one.
+function showSpeaker(seg) {
+  const button = seg.speakerEl;
+  if (!button || !hasLabels(current)) return;
+  const name = speakerName(current, seg.speaker);
+  button.classList.toggle('none', !name);
+  if (name) {
+    const text = document.createElement('span');
+    text.className = 'speaker-name';
+    text.textContent = name;
+    button.replaceChildren(text);
+    button.title = name;
+  } else {
+    button.replaceChildren(octicon('person'));
+    button.removeAttribute('title');
+  }
+  button.setAttribute('aria-label', name ? t('speakers.lineButton', { name }) : t('speakers.lineButtonNone'));
+}
+function renderSpeakers() {
+  if (!current) return;
+  els.log.classList.toggle('has-speakers', hasLabels(current));
+  for (const seg of current.segments ?? []) showSpeaker(seg);
+  renderSpeakerTools();
+}
+function renderSpeakerTools() {
+  const sess = current;
+  const busy = labeling?.session === sess;
+  const ready = canLabel(sess);
+  els.speakerTools.hidden = !busy && !ready && !hasLabels(sess);
+  els.labelSpeakers.hidden = !busy && !ready;
+  els.labelSpeakers.setAttribute('aria-busy', String(busy));
+  els.labelSpeakers.setAttribute('aria-disabled', String(!!labeling));
+  els.cancelSpeakers.hidden = !busy;
+  els.editSpeakers.hidden = busy || !hasLabels(sess);
+  els.speakersStatus.textContent = busy ? labeling.text : '';
+}
+function setLabelingText(text) {
+  labeling.text = text;
+  if (labeling.session === current) els.speakersStatus.textContent = text;
+}
+
+// Whether the user agreed that recordings are uploaded for this; asked once.
+function speakersConsented() {
+  try {
+    if (localStorage.getItem(SPEAKERS_CONSENT_KEY) === '1') return true;
+  } catch {
+    /* private mode: ask every time */
+  }
+  if (!confirm(t('speakers.consent'))) return false;
+  try {
+    localStorage.setItem(SPEAKERS_CONSENT_KEY, '1');
+  } catch {
+    /* private mode */
+  }
+  return true;
+}
+
+els.labelSpeakers.onclick = async () => {
+  const sess = current;
+  if (labeling || !canLabel(sess)) return;
+  if (!apiKey) {
+    toast(t('toast.apiKeyFirst'), 6000, 'warning');
+    return openSettings();
+  }
+  if (!speakersConsented()) return;
+  if (hasLabels(sess) && !confirm(t('speakers.replaceConfirm'))) return;
+  const controller = new AbortController();
+  labeling = { session: sess, controller, text: t('speakers.preparing') };
+  renderSpeakerTools();
+  flushSaves(); // so the lengths of the recordings are on disk
+  try {
+    // Each recording is decoded on its own and kept as 16 kHz mono samples (about 115 MB an hour).
+    const decoded = [];
+    for (const rec of sess.recordings) {
+      const chunks = await store.getAudioChunks(sess.id, rec.id).catch(() => []);
+      controller.signal.throwIfAborted();
+      if (!chunks.length) continue;
+      try {
+        const audio = await decodeRecording(new Blob(chunks, { type: rec.mime }));
+        if (audio.samples.length) decoded.push({ elapsedStart: rec.elapsedStart ?? 0, ...audio });
+      } catch {
+        /* a recording that cannot be decoded: its lines get no speaker */
+      }
+      controller.signal.throwIfAborted();
+    }
+    if (!decoded.length) throw new MessageError('error.speakersNoAudio');
+    const timeline = recordingTimeline(decoded);
+    const result = await labelSpeakers({
+      pieces: decoded,
+      diarizer: new GeminiDiarizer({ apiKey }),
+      signal: controller.signal,
+      onProgress: ({ step, part, parts }) =>
+        setLabelingText(t(step === 'upload' ? 'speakers.uploading' : 'speakers.analyzing', { part, parts })),
+      onUsage: (usageMetadata, model) =>
+        recordUsage(sess, addTokens(emptyUsage(), 'diarization', model, usageMetadata)),
+      // How the parts were matched, to judge it on real meetings: numbers only, no speech.
+      onPart: DEBUG ? (report) => console.log('[speakers]', JSON.stringify(report)) : undefined,
+    });
+    decoded.length = 0;
+    // Speakers are numbered by their first line; one who got no line is not listed.
+    const ids = assignSpeakers(sess.segments, result.words, timeline);
+    const order = [...new Set(ids.filter(Boolean))];
+    const renumber = new Map(order.map((id, i) => [id, `s${i + 1}`]));
+    sess.segments.forEach((seg, i) => {
+      if (ids[i]) seg.speaker = renumber.get(ids[i]);
+      else delete seg.speaker;
+    });
+    sess.speakerLabels = {
+      speakers: order.map((_, i) => ({ id: `s${i + 1}`, name: '' })),
+      madeAt: Date.now(),
+      uncertain: result.uncertain,
+      model: DIARIZE_MODEL,
+    };
+    markDirty(sess);
+    if (sess === current) renderSpeakers();
+    toast(
+      t(result.uncertain ? 'speakers.doneUncertain' : 'speakers.done', { count: order.length }),
+      result.uncertain ? 10000 : 6000,
+      result.uncertain ? 'warning' : 'info',
+    );
+  } catch (err) {
+    // The labels made before, if any, stay as they were.
+    if (err?.name === 'AbortError') toast(t('speakers.cancelled'));
+    else if (err instanceof RateLimitError) toast(errorText(err), 10000, 'warning');
+    else toast(t('toast.speakersFailed', { message: errorText(err) }), 10000, 'critical');
+  } finally {
+    labeling = null;
+    renderSummary();
+  }
+};
+els.cancelSpeakers.onclick = () => labeling?.controller.abort();
+
+// The editor: the names of the session's speakers and, when opened from a line, that line's speaker.
+function openSpeakerEditor(seg = null) {
+  const sess = current;
+  if (!hasLabels(sess) || labeling?.session === sess || run) return;
+  const list = sess.speakerLabels.speakers;
+  speakerEditing = { session: sess, seg };
+  els.speakerLine.hidden = !seg;
+  if (seg) {
+    els.speakerLineSelect.replaceChildren(
+      new Option(t('speakers.none'), ''),
+      ...list.map((s) => new Option(speakerName(sess, s.id), s.id)),
+    );
+    els.speakerLineSelect.value = list.some((s) => s.id === seg.speaker) ? seg.speaker : '';
+    els.speakerLineText.textContent = `${formatElapsed(seg.elapsed)}  ${seg.src}`;
+  }
+  els.speakerNames.replaceChildren(
+    ...list.map((s, i) => {
+      const label = document.createElement('label');
+      label.className = 'form-control';
+      const name = document.createElement('span');
+      name.className = 'form-label';
+      name.textContent = t('speakers.default', { n: i + 1 });
+      const input = document.createElement('input');
+      input.className = 'text-input';
+      input.type = 'text';
+      input.maxLength = MAX_SPEAKER_NAME;
+      input.autocomplete = 'off';
+      input.dataset.id = s.id;
+      input.value = s.name;
+      input.placeholder = t('speakers.default', { n: i + 1 });
+      // Enter saves (in a dialog form it would close the dialog without saving).
+      input.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        els.speakerSave.click();
+      });
+      label.append(name, input);
+      return label;
+    }),
+  );
+  els.speakerUncertain.hidden = !sess.speakerLabels.uncertain;
+  els.speakerNote.textContent = t('speakers.madeAt', { date: formatDateTime(sess.speakerLabels.madeAt) });
+  els.speakerDialog.showModal();
+  (seg ? els.speakerLineSelect : els.speakerNames.querySelector('input'))?.focus();
+}
+els.editSpeakers.onclick = () => openSpeakerEditor();
+els.speakerSave.onclick = () => {
+  const { session: sess, seg } = speakerEditing ?? {};
+  if (!sess || !hasLabels(sess)) return els.speakerDialog.close();
+  for (const input of els.speakerNames.querySelectorAll('input')) {
+    const speaker = sess.speakerLabels.speakers.find((s) => s.id === input.dataset.id);
+    if (speaker) speaker.name = input.value.replace(/\s+/g, ' ').trim().slice(0, MAX_SPEAKER_NAME);
+  }
+  if (seg) {
+    const id = els.speakerLineSelect.value;
+    if (id) seg.speaker = id;
+    else delete seg.speaker;
+  }
+  markDirty(sess);
+  if (sess === current) renderSpeakers();
+  els.speakerDialog.close();
+};
+els.speakerDialog.addEventListener('close', () => {
+  speakerEditing = null;
+});
 
 // ---------- summary templates (settings dialog) ----------
 let editingTemplate = null; // { id } of the template in the editor; id null for a new one
@@ -1720,6 +1992,7 @@ function renderUsage() {
       usageRow(t('usage.listening'), { listeningMs: view.listeningMs, cost: view.cost.transcription }),
       usageRow(t('usage.translation'), tokens('translation')),
       usageRow(t('usage.summary'), tokens('summary')),
+      usageRow(t('usage.speakers'), tokens('diarization')),
       viewRow(t('usage.total'), view, true),
     );
   }
@@ -1776,18 +2049,22 @@ els.openUsage.onclick = () => {
 
 // ---------- prices for estimates (settings dialog) ----------
 // The models in use and the prices each is estimated with: listening time for the live model, tokens
-// for the translation model (which also writes the summaries).
+// for the translation model (which also writes the summaries) and for the speaker-label model.
 const PRICE_UNITS = { listening: ['inputPerMinute', 'outputPerMinute'], tokens: ['input', 'output'] };
 let priceDraft = {}; // { [model]: { [field]: text } } as typed, until the dialog closes
 let pricesReset = false; // Reset was pressed: overrides of models not shown are dropped too
 function priceModels() {
   const translation = els.translateModel.value.trim() || DEFAULTS.translateModel;
-  return translation === LIVE_MODEL
-    ? [[LIVE_MODEL, [...PRICE_UNITS.listening, ...PRICE_UNITS.tokens]]]
-    : [
-        [LIVE_MODEL, PRICE_UNITS.listening],
-        [translation, PRICE_UNITS.tokens],
-      ];
+  const models =
+    translation === LIVE_MODEL
+      ? [[LIVE_MODEL, [...PRICE_UNITS.listening, ...PRICE_UNITS.tokens]]]
+      : [
+          [LIVE_MODEL, PRICE_UNITS.listening],
+          [translation, PRICE_UNITS.tokens],
+        ];
+  // The model that labels speakers, in tokens.
+  if (!models.some(([model]) => model === DIARIZE_MODEL)) models.push([DIARIZE_MODEL, PRICE_UNITS.tokens]);
+  return models;
 }
 const priceText = (prices, model, field) => (prices[model]?.[field] === undefined ? '' : String(prices[model][field]));
 function fillPriceDraft(prices) {

@@ -134,7 +134,7 @@ test('the written table reads back with the new prices and date, and the rest of
   assert.deepEqual(await readPricesBlock(written), {
     ...PRICES,
     asOf: '2027-01-02',
-    models: { [LITE]: { input: 0.3, output: 2.75 } },
+    models: { 'gemini-3.5-transcribe': { input: 2, output: 12 }, [LITE]: { input: 0.3, output: 2.75 } },
   });
   assert.equal(replacePricesBlock(written, table), written);
   assert.equal(written.slice(written.indexOf('// END PRICES')), SOURCE.slice(SOURCE.indexOf('// END PRICES')));
