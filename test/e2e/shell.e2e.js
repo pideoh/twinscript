@@ -221,7 +221,7 @@ test('changing the display language in settings updates the screen at once and i
   assert.equal(await page.getAttribute('html', 'lang'), 'en');
   assert.equal(await page.textContent('#settings h2'), 'Settings');
   assert.equal(await page.textContent('#captionItemsOut'), '1 sentence');
-  assert.equal(await optionText(page, '#otherInto', 'A'), 'Japanese (left language)');
+  assert.equal(await optionText(page, '#otherInto', 'A'), 'Japanese only');
   assert.equal(await optionText(page, '#uiLang', 'auto'), 'Auto');
   assert.equal(await page.textContent('#toggle'), 'Stop', 'the button keeps its running state');
   assert.equal(await page.textContent('#statusText'), 'Listening');
@@ -251,7 +251,7 @@ test('changing the display language in settings updates the screen at once and i
 });
 
 test('a third language keeps going to the same language after the two are swapped', async () => {
-  const { page, errors, close } = await openApp();
+  const { page, errors, close } = await openApp('', { otherInto: 'A' });
   await page.click('#swap');
   assert.equal(await page.inputValue('#langA'), 'en-US');
   await page.click('#openSettings');
