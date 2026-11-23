@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0](https://github.com/pideoh/twinscript/compare/v0.9.0...v0.10.0) (2026-11-23)
+
+
+### Features
+
+* extend the translation of a sentence in progress instead of rewriting it ([#69](https://github.com/pideoh/twinscript/issues/69)) ([a039ab5](https://github.com/pideoh/twinscript/commit/a039ab536fa97abb1ea53d9203e20d9a6201abc1))
+* **tuning:** add steady, carry and chunk pacing strategies behind the debug switch ([#66](https://github.com/pideoh/twinscript/issues/66)) ([b283229](https://github.com/pideoh/twinscript/commit/b283229a689924e37f9b5f8b6485a093853703ae))
+
+
+### Bug Fixes
+
+* do not send a redundant thinking option to the default translation model ([b49176f](https://github.com/pideoh/twinscript/commit/b49176f424fc1c9fb4edbb233c1930f3f41f9d6a))
+
 ## [0.9.0](https://github.com/pideoh/twinscript/compare/v0.8.0...v0.9.0) (2026-11-23)
 
 
