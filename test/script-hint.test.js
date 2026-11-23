@@ -96,3 +96,13 @@ test('with three languages, the model is asked when the writing system does not 
   const han = ['English', 'Simplified Chinese', 'Traditional Chinese'];
   assert.equal(sourceByScript('我们这一代人要为未来思考', han), null);
 });
+
+test('a short Japanese interjection is still Japanese', () => {
+  const jaEn = { langA: 'Japanese', langB: 'English', otherInto: 'Japanese' };
+  assert.equal(targetByScript('おお。', jaEn), 'English');
+  assert.equal(targetByScript('はい', jaEn), 'English');
+  assert.equal(targetByScript('うん。', jaEn), 'English');
+  assert.equal(targetByScript('おー。', jaEn), 'English');
+  assert.equal(targetByScript('ね', jaEn), null, 'one letter is too little');
+  assert.equal(targetByScript('OK', jaEn), null, 'short Latin text may be any language');
+});
