@@ -37,6 +37,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `test/e2e/*.e2e.js`, `test/e2e/helpers.js` | Browser tests: Chrome, a fake microphone and mocked Gemini endpoints. Split into files by topic so they run in parallel; shared setup is in `helpers.js`. `a11y.e2e.js` runs axe-core on the main screen and dialogs in both themes |
 | `test/app/desktop.app.js` | Desktop smoke tests (need a display, so not run in CI) |
 | `.github/workflows/release.yml`, `release-please-config.json`, `.release-please-manifest.json` | release-please keeps a release pull request open on `main`; merging it tags `vX.Y.Z`, creates the GitHub Release, and the workflow builds and uploads the zips |
+| `.github/workflows/preview-build.yml` | Started by hand: builds signed zips of a branch as workflow artifacts, to try the app before a release. Publishes nothing |
 | `scripts/check-commits.js` | Checks that a pull request's commit subjects and title follow Conventional Commits (run in `test.yml`) |
 | `scripts/sign-mac.js`, `scripts/verify-mac-signature.js`, `scripts/ci-mac-signing-keychain.sh` | macOS releases are re-signed with a fixed self-signed certificate (electron-builder `afterSign` hook) so the app's identity, and the permissions tied to it, survive updates; the check and the CI keychain setup. `.github/workflows/sign-check.yml` exercises this on pull requests |
 

@@ -1,0 +1,78 @@
+# Builds the desktop app from a branch for trying it before a release. Started by hand
+# (Actions → preview-build → Run workflow, where the branch is chosen); nothing is published.
+# The zips are kept as workflow artifacts for a week. The macOS build is signed with the same
+# certificate as a release, so it replaces the installed app and keeps its permissions.
+name: preview-build
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: What to build
+        type: choice
+        default: mac-arm64
+        options: [mac-arm64, mac-x64, win-x64, all]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: mac-arm64
+            os: macos-latest
+            args: --mac zip --arm64
+          - name: mac-x64
+            os: macos-latest
+            args: --mac zip --x64
+          - name: win-x64
+            os: windows-latest
+            args: --win zip --x64
+    runs-on: ${{ matrix.os }}
+    env:
+      ELECTRON_BUILDER_COMPRESSION_LEVEL: 1
+      WANTED: ${{ inputs.target }}
+    steps:
+      # A matrix cannot be filtered by an input, so the jobs that were not asked for end here.
+      - name: Decide whether this build was asked for
+        id: want
+        shell: bash
+        run: |
+          if [ "$WANTED" = "all" ] || [ "$WANTED" = "${{ matrix.name }}" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v7
+        if: steps.want.outputs.run == 'true'
+      - uses: actions/setup-node@v7
+        if: steps.want.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: steps.want.outputs.run == 'true'
+      - name: Set up the macOS signing certificate
+        if: steps.want.outputs.run == 'true' && runner.os == 'macOS'
+        env:
+          MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: sh scripts/ci-mac-signing-keychain.sh setup
+      - run: npx electron-builder ${{ matrix.args }} --publish never
+        if: steps.want.outputs.run == 'true'
+        shell: bash
+      - name: Check the macOS signature
+        if: steps.want.outputs.run == 'true' && runner.os == 'macOS'
+        run: |
+          mkdir "$RUNNER_TEMP/unzipped"
+          ditto -x -k dist/*.zip "$RUNNER_TEMP/unzipped"
+          node scripts/verify-mac-signature.js "$RUNNER_TEMP/unzipped/Twinscript.app" io.github.pideoh.twinscript
+      - name: Remove the signing keychain
+        if: always() && steps.want.outputs.run == 'true' && runner.os == 'macOS'
+        run: sh scripts/ci-mac-signing-keychain.sh cleanup
+      - uses: actions/upload-artifact@v7
+        if: steps.want.outputs.run == 'true'
+        with:
+          name: twinscript-preview-${{ matrix.name }}-${{ github.sha }}
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0 # already compressed
