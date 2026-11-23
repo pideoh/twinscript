@@ -163,6 +163,7 @@ export default {
   // notifications
   'toast.saveFailed': '保存に失敗しました: {message}',
   'toast.deleteFailed': '削除に失敗しました: {message}',
+  'toast.openFailed': '文字起こしを開けませんでした: {message}',
   'toast.stopToSwitch': '翻訳を停止してから切り替えてください',
   'toast.stopToDelete': '翻訳を停止してから削除してください',
   'toast.captionWindowFailed': '字幕ウィンドウを開けませんでした: {message}',

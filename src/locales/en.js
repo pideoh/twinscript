@@ -169,6 +169,7 @@ export default {
   // notifications
   'toast.saveFailed': 'Could not save: {message}',
   'toast.deleteFailed': 'Could not delete: {message}',
+  'toast.openFailed': 'Could not open the transcript: {message}',
   'toast.stopToSwitch': 'Stop translating before switching sessions',
   'toast.stopToDelete': 'Stop translating before deleting this session',
   'toast.captionWindowFailed': 'Could not open the caption window: {message}',

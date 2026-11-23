@@ -160,6 +160,7 @@ export default {
   // notifications
   'toast.saveFailed': '保存失败：{message}',
   'toast.deleteFailed': '删除失败：{message}',
+  'toast.openFailed': '无法打开转录文本：{message}',
   'toast.stopToSwitch': '请先停止翻译再切换会话',
   'toast.stopToDelete': '请先停止翻译再删除此会话',
   'toast.captionWindowFailed': '无法打开字幕窗口：{message}',
