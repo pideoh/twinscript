@@ -136,87 +136,70 @@ test('labels default to English and the CSV header never changes', () => {
   assert.ok(buildTranscript(untitled, { format: 'csv', labels }).text.startsWith('\ufefftime,source,translation\r\n'));
 });
 
+// The latest summary of a session, as the app passes it in: Markdown and the name of its template.
 const summary = {
-  overview: 'The team reviewed progress.',
-  keyPoints: ['API integration is done.', 'Load testing | started.'],
-  decisions: [],
-  actionItems: [
-    { task: 'Send the report', owner: 'Ana', due: 'Wednesday' },
-    { task: 'Book a room', owner: null, due: 'Friday' },
-    { task: 'Check logs', owner: null, due: null },
-  ],
+  markdown:
+    '## Overview\n\nThe team reviewed progress.\n\n## Action items\n\n- Send the report (Ana, Wednesday)\n\n```\n# not a heading\n```',
+  title: 'Quick summary',
   truncated: false,
 };
 
-test('a text file opens with the summary when there is one', () => {
+test('a text file opens with the summary as it was written, under the name of its template', () => {
   const lines = buildTranscript(session, { langLabel, summary }).text.split('\n');
-  assert.deepEqual(lines.slice(2, 19), [
+  assert.deepEqual(lines.slice(2, 20), [
     '',
-    'Summary',
+    'Summary: Quick summary',
     '',
-    'Overview',
+    '## Overview',
+    '',
     'The team reviewed progress.',
     '',
-    'Key points',
-    '- API integration is done.',
-    '- Load testing | started.',
+    '## Action items',
     '',
-    'Action items',
-    '- Send the report (Owner: Ana, Due: Wednesday)',
-    '- Book a room (Due: Friday)',
-    '- Check logs',
+    '- Send the report (Ana, Wednesday)',
+    '',
+    '```',
+    '# not a heading',
+    '```',
     '',
     'Transcript',
     '',
+    '[00:00:03] こんにちは。',
   ]);
-  assert.equal(lines[19], '[00:00:03] こんにちは。');
-  assert.ok(!lines.includes('Decisions'), 'an empty section is left out');
   const without = buildTranscript(session, { langLabel, labels }).text;
   assert.ok(!without.includes('Summary') && !without.includes('Transcript'), 'no summary, no extra headings');
 });
 
-test('a markdown file opens with the summary in the UI language, and notes a truncated transcript', () => {
-  const jaLabels = {
-    ...labels,
-    summary: '要約',
-    overview: '概要',
-    keyPoints: '主なポイント',
-    actionItems: 'アクションアイテム',
-    owner: '担当',
-    due: '期限',
-    transcript: '文字起こし',
-    summaryTruncated: '一部のみ',
-  };
+test('a markdown file nests the summary under its own headings, in the UI language, and notes a truncated transcript', () => {
+  const jaLabels = { ...labels, summary: '要約', transcript: '文字起こし', summaryTruncated: '一部のみ' };
   const lines = buildTranscript(session, {
     format: 'md',
     langLabel,
     labels: jaLabels,
-    summary: { ...summary, truncated: true },
+    summary: { ...summary, title: '議事録', truncated: true },
   }).text.split('\n');
-  assert.deepEqual(lines.slice(3, 24), [
+  assert.deepEqual(lines.slice(3, 22), [
     '',
-    '## 要約',
+    '## 要約: 議事録',
     '',
     '一部のみ',
     '',
-    '### 概要',
+    '### Overview',
     '',
     'The team reviewed progress.',
     '',
-    '### 主なポイント',
+    '### Action items',
     '',
-    '- API integration is done.',
-    '- Load testing | started.',
+    '- Send the report (Ana, Wednesday)',
     '',
-    '### アクションアイテム',
-    '',
-    '- Send the report (担当: Ana, 期限: Wednesday)',
-    '- Book a room (期限: Friday)',
-    '- Check logs',
+    '```',
+    '# not a heading',
+    '```',
     '',
     '## 文字起こし',
+    '',
   ]);
-  assert.equal(lines[25], '| 時間 | 原文 | 訳文 |');
+  assert.equal(lines[22], '| 時間 | 原文 | 訳文 |');
   assert.equal(
     buildTranscript(session, { format: 'md', langLabel, labels }).text.split('\n')[4],
     '| 時間 | 原文 | 訳文 |',

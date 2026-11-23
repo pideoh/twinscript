@@ -16,11 +16,13 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/script-hint.js` | Writing-system hints: which way a transcript is translated (`targetByScript`), which of the selected languages it is in (`sourceByScript`, `languageByScript`), whether a pair can be told apart (`scriptsDiffer`). Pure functions |
 | `src/read-aloud.js` | Reads finished translations aloud with the system's speech synthesis: a short queue that drops the oldest waiting sentence, voice choice, language-code mapping. DOM-free, synthesizer injected |
 | `src/vocabulary.js` | Parses the "Terms and corrections" setting into recognizer terms (max 1,000) and `wrong => right` rules, and applies the rules to recognized text. Pure functions |
-| `src/summarizer.js` | Summary of a finished session (overview, key points, decisions, action items) as structured JSON from the translation model. DOM-free |
+| `src/summarizer.js` | Summary of a finished session as Markdown, written to a template, a length and a language by the translation model; `legacySummaryToMarkdown` shows summaries made by earlier versions. DOM-free |
+| `src/summary-templates.js` | The eight preset templates (`{ id, name, description, prompt }`) and custom ones: validation, import / export, storage in `localStorage` under `rt-summary-templates` |
+| `src/markdown.js` | Safe Markdown renderer for summaries (headings, lists, tables, emphasis, code, http/https links); everything else, raw HTML included, is shown as text. DOM-free |
 | `src/audio.js`, `src/pcm-worklet.js` | Microphone / tab audio capture, 16 kHz PCM in 100 ms chunks, mix for recording |
 | `src/auto-gain.js` | Raises quiet PC audio to a usable level (not applied to the microphone). Pure class |
 | `src/recorder.js` | Records with MediaRecorder, handing over a chunk every 5 seconds |
-| `src/store.js` | IndexedDB, version 2: `sessions` (metadata and `segmentCount`, no segments), `segments` (one record per segment, key `[sessionId, pos]`, loaded when a session is opened; a save writes only changed segments) and `audio` (recording chunks). The upgrade from version 1 moves segments out of the session records. Three-language sessions add `langC` and, per segment, `lang` and `tgts`; `tgt` stays the translations joined by line breaks |
+| `src/store.js` | IndexedDB, version 3: `sessions` (metadata and `segmentCount`, no segments), `segments` (one record per segment, key `[sessionId, pos]`, loaded when a session is opened; a save writes only changed segments), `summaries` (one record per summary, key `[sessionId, id]`) and `audio` (recording chunks). The upgrade from version 1 moves segments out of the session records. Three-language sessions add `langC` and, per segment, `lang` and `tgts`; `tgt` stays the translations joined by line breaks |
 | `src/secrets.js` | Where the API key is kept (desktop: `window.secretStore`; browser: memory only). DOM-free |
 | `src/exporter.js` | Transcript export (txt / md / csv / srt). Pure functions |
 | `src/mock.js` | Stand-in engines for the `?mock=1` demo |

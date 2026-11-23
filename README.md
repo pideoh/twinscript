@@ -13,7 +13,7 @@ Choose two languages and press "Start translating": Twinscript detects which one
 - **Captions on top**: a caption window that stays above slides and meeting apps, including full screen.
 - **Reads translations aloud**: finished translations can be spoken with your system's voices.
 - **Keeps a record**: sessions are saved with their audio, and transcripts export with a timeline as text, Markdown, CSV or SRT.
-- **Summary after the meeting**: an AI summary of a finished session with an overview, key points, decisions and action items.
+- **Summaries after the meeting**: summarize a finished session with a template (quick summary, executive summary, meeting minutes, action items, customer meeting, sales call (BANT), 1:1, stand-up, or your own), choosing the length and the language it is written in. Every summary is kept with the session, so you can switch between them, copy one as Markdown or download it as `.md`. Your own templates are written in the settings and can be exported to a JSON file and imported again.
 - **Better with names**: register company and product names as terms, and correct mishearings with `wrong => right` rules.
 - The interface is available in English, Japanese and Simplified Chinese.
 

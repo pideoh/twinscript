@@ -3,16 +3,21 @@
 //   segments  keyPath ['sessionId', 'pos']: one record per segment, `pos` being its index in the
 //             session, so a session's segments are one key range, in order, and one segment can be
 //             rewritten on its own.
+//   summaries keyPath ['sessionId', 'id']: every summary made of a session, one record each
+//             (they can be made as often as wanted, so they stay out of the list of sessions).
 //   audio     auto-increment: recorded chunks { sessionId, recId, blob }.
 // Version 1 kept the segments inside the session record; the upgrade to version 2 moves them out.
+// Version 3 adds `summaries`. A session saved by an earlier version may still hold its one
+// summary in the old shape (`summary`, structured JSON) in its record: it is left there and shown
+// by the app as the oldest entry of the session's summaries.
 
 const DB_NAME = 'twinscript';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 let dbPromise;
 
 // ---------- pure helpers (no IndexedDB; unit-tested) ----------
 
-// All segment keys of a session lie between these (arrays sort after numbers).
+// All segment (and summary) keys of a session lie between these: arrays sort after numbers and strings.
 export const segmentRange = (sessionId) => [[sessionId], [sessionId, []]];
 
 // The stored form of an in-memory segment (which also carries DOM nodes and translation state).
@@ -55,8 +60,10 @@ export const sameSegment = (a, b) =>
 // segments are not loaded (`segments` absent) keeps the count it was listed with and yields no
 // segment records. Used for saving and, on records read from disk, by the upgrade from version 1,
 // which keeps every field a stored segment has.
+// The session's summaries (`summaries`, in memory once loaded) are not part of either: they are
+// written one by one (store.putSummary).
 export function splitSession(session, { fromDisk = false } = {}) {
-  const { segments, ...meta } = session;
+  const { segments, summaries, ...meta } = session;
   if (!Array.isArray(segments)) return { meta: { ...meta, segmentCount: meta.segmentCount ?? 0 }, segments: null };
   return {
     meta: { ...meta, segmentCount: segments.length },
@@ -97,6 +104,14 @@ function upgrade(db, tx, oldVersion) {
       cursor.continue();
     };
   }
+  if (oldVersion < 3) db.createObjectStore('summaries', { keyPath: ['sessionId', 'id'] });
+}
+
+// The stored form of a summary, and back.
+export const summaryRecord = (sessionId, summary) => ({ ...summary, sessionId });
+export function summaryFromRecord(record) {
+  const { sessionId, ...summary } = record;
+  return summary;
 }
 
 // Called when the upgrade has to wait because another window of an earlier version still has the
@@ -178,11 +193,28 @@ export const store = {
     });
   },
 
+  // A session's summaries, oldest first.
+  async loadSummaries(sessionId) {
+    const records = await done(
+      (await open()).transaction('summaries').objectStore('summaries').getAll(rangeOf(sessionId)),
+    );
+    return records.map(summaryFromRecord).sort((a, b) => a.createdAt - b.createdAt);
+  },
+
+  putSummary(sessionId, summary) {
+    return write('summaries', (tx) => tx.objectStore('summaries').put(summaryRecord(sessionId, summary)));
+  },
+
+  deleteSummary(sessionId, id) {
+    return write('summaries', (tx) => tx.objectStore('summaries').delete([sessionId, id]));
+  },
+
   deleteSession(id) {
     written.delete(id);
-    return write(['sessions', 'segments', 'audio'], (tx) => {
+    return write(['sessions', 'segments', 'summaries', 'audio'], (tx) => {
       tx.objectStore('sessions').delete(id);
       tx.objectStore('segments').delete(rangeOf(id));
+      tx.objectStore('summaries').delete(rangeOf(id));
       const audio = tx.objectStore('audio');
       audio.index('session').openKeyCursor(IDBKeyRange.only(id)).onsuccess = (e) => {
         const cursor = e.target.result;

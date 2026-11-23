@@ -3,6 +3,7 @@ import { addFileSourceOption, FILE_TAIL_MS, pickAudioFile, traceDownloadButton }
 import { buildTranscript, formatDateTime, formatElapsed, safeFileName } from './exporter.js';
 import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './i18n.js';
 import { octicon } from './icons.js';
+import { markdownToHtml } from './markdown.js';
 import { MessageError } from './message-error.js';
 import { MockSummarizer, MockTranscriber, MockTranslator } from './mock.js';
 import { createPacer, DEFAULT_STRATEGY, strategyNamed } from './pacer.js';
@@ -12,7 +13,21 @@ import { languageByScript, scriptsDiffer, sourceByScript, targetByScript, target
 import { loadApiKey, saveApiKey } from './secrets.js';
 import { UtteranceTracker } from './segmenter.js';
 import { store } from './store.js';
-import { GeminiSummarizer } from './summarizer.js';
+import { GeminiSummarizer, legacySummaryToMarkdown } from './summarizer.js';
+import {
+  DEFAULT_TEMPLATE,
+  exportTemplates,
+  LENGTHS,
+  MAX_FILE_BYTES,
+  MAX_TEMPLATES,
+  mergeTemplates,
+  PRESETS,
+  parseTemplateFile,
+  presetById,
+  readStoredTemplates,
+  storedTemplatesJson,
+  validateTemplate,
+} from './summary-templates.js';
 import { createTrace } from './trace.js';
 import { GeminiLiveTranscriber } from './transcriber.js';
 import { GeminiTranslator, RateLimitError } from './translator.js';
@@ -64,6 +79,9 @@ const DEFAULTS = {
   clickThrough: false, // desktop caption overlay: mouse events go to the app underneath
   globalShortcuts: true, // desktop app: start / stop and the caption window from any app
   interimInterval: 1.5, // seconds between re-translations of the sentence being spoken
+  summaryTemplate: DEFAULT_TEMPLATE, // the template, length and language last used for a summary
+  summaryLength: 'standard',
+  summaryLanguage: '', // a language code, or '' for the display language
 };
 const HISTORY_LINES = 3;
 const SILENT_SYSTEM_AUDIO_MS = 8000; // how long PC audio may deliver nothing before the user is told
@@ -148,10 +166,32 @@ const els = Object.fromEntries(
     'summaryMeta',
     'summaryStatus',
     'summarize',
-    'summarizeLabel',
+    'summaryTemplate',
+    'summaryLength',
+    'summaryLanguage',
     'summaryBody',
+    'summaryHistoryBar',
+    'summaryHistory',
+    'summaryCopy',
+    'summaryDownload',
+    'summaryDelete',
+    'summaryDetails',
     'summaryTruncated',
     'summaryContent',
+    'templateList',
+    'templateNew',
+    'templateImport',
+    'templateImportFile',
+    'templateExport',
+    'templateStatus',
+    'templateEditor',
+    'templateEditorTitle',
+    'templateName',
+    'templateDescription',
+    'templatePrompt',
+    'templateError',
+    'templateSave',
+    'templateCancel',
   ].map((id) => [id, $(id)]),
 );
 
@@ -218,6 +258,8 @@ function relocalize() {
   setStatus(statusState);
   els.toggle.textContent = t(run ? 'toggle.stop' : 'toggle.start');
   renderSidebar();
+  fillSummaryTemplates();
+  renderTemplateList();
   renderSummary();
   renderShortcuts();
   if (captionWindow) {
@@ -359,6 +401,9 @@ function openSettings() {
   showCaptionControls();
   showTuning();
   showShortcuts();
+  closeTemplateEditor();
+  els.templateStatus.hidden = true;
+  renderTemplateList();
   els.settingsRunning.hidden = !run;
   els.settings.showModal();
 }
@@ -474,14 +519,17 @@ els.settings.addEventListener('close', () => {
 // ---------- sessions (saved conversations) ----------
 // { id, title, customTitle, createdAt, updatedAt, langA, langB, langC?, activeMs, segmentCount?,
 //   segments: [{ id, at, elapsed, src, tgt, lang?, tgts? }], recordings: [{ id, startedAt, elapsedStart, durationMs, mime }],
+//   summaries: [{ id, templateId, templateName, length, language, createdAt, markdown, model, truncated,
+//                 segmentCount }] (oldest first),
 //   summary?: { overview, keyPoints, decisions, actionItems: [{ task, owner, due }], truncated,
-//               generatedAt, model, segmentCount } }
+//               generatedAt, model, segmentCount } (the one summary an earlier version kept) }
 // With a third language (langC), a segment also has `lang`, the code of the language it was
 // spoken in ('other' for none of the three), and `tgts: [{ lang, text }]`, one translation per
 // target language; `tgt` then holds those translations joined by line breaks, so everything that
 // reads `tgt` works as with two languages.
 // Saved sessions are listed without their segments (`segments` is absent and `segmentCount` says
-// how many there are); they are loaded the first time the session is shown.
+// how many there are) and without their summaries; both are loaded the first time the session is
+// shown.
 let sessions = []; // saved sessions, newest first
 let current = null; // the session on screen
 let run = null; // the live capture/translation in progress, if any
@@ -522,6 +570,7 @@ function blankSession() {
     ...(settings.langC && { langC: settings.langC }),
     activeMs: 0,
     segments: [],
+    summaries: [],
     recordings: [],
   };
 }
@@ -569,11 +618,14 @@ window.addEventListener('pagehide', flushSaves);
 
 let opening = null; // the session whose segments are being loaded to show it
 async function showSession(sess) {
-  if (!sess.segments) {
+  if (!sess.segments || !sess.summaries) {
     opening = sess;
-    let segments;
+    let segments, summaries;
     try {
-      segments = await store.loadSegments(sess.id);
+      [segments, summaries] = await Promise.all([
+        sess.segments ?? store.loadSegments(sess.id),
+        sess.summaries ?? store.loadSummaries(sess.id),
+      ]);
     } catch (err) {
       if (opening === sess) opening = null;
       toast(t('toast.openFailed', { message: err.message }), 6000, 'critical');
@@ -583,6 +635,7 @@ async function showSession(sess) {
     if (opening !== sess) return; // another session was chosen meanwhile
     opening = null;
     sess.segments ??= segments;
+    sess.summaries ??= summaries;
     if (run && current) return; // capture started while loading
   }
   opening = null;
@@ -1031,19 +1084,18 @@ els.export.onclick = () => {
 
 els.exportTranscript.onclick = () => {
   if (!current.segments.length) return toast(t('toast.noTranscript'));
+  const latest = summariesOf(current).at(-1);
   const { text, ext, mime } = buildTranscript(serialize(current), {
     format: els.exportFormat.value,
     content: els.exportContent.value,
     langLabel,
-    summary: current.summary,
+    // The latest summary; the panel downloads any other one on its own.
+    summary: latest && { markdown: latest.markdown, title: latest.templateName, truncated: latest.truncated },
     labels: {
       ...Object.fromEntries(
         ['title', 'date', 'languages', 'duration', 'time', 'source', 'translation', 'separator', 'transcript'].map(
           (k) => [k, t(`file.${k}`)],
         ),
-      ),
-      ...Object.fromEntries(
-        ['overview', 'keyPoints', 'decisions', 'actionItems', 'owner', 'due'].map((k) => [k, t(`summary.${k}`)]),
       ),
       summary: t('summary.title'),
       summaryTruncated: t('summary.truncated'),
@@ -1053,94 +1105,157 @@ els.exportTranscript.onclick = () => {
 };
 
 // ---------- summary ----------
-// One summary request at a time. The panel is hidden while capturing, so it never moves the
-// caption zone; whether it is expanded is remembered for the user, not per session.
-let summarizing = null; // { session } while a request is in flight
+// One summary request at a time; every summary made is kept with its session, newest last. The
+// panel is hidden while capturing, so it never moves the caption zone; whether it is expanded is
+// remembered for the user, not per session.
+let summarizing = null; // { session, text } while a request is in flight; text: the answer so far
 let summaryOpen = true;
 try {
   summaryOpen = localStorage.getItem('rt-summary-open') !== 'false';
 } catch {
   /* private mode */
 }
+const shownSummaryId = new WeakMap(); // session -> id of the summary on screen (default: the latest)
 const hasFinished = (sess) => sess.segments.some((seg) => seg.src);
-const isStale = (sess) => sess.segments.length > (sess.summary?.segmentCount ?? 0);
-// The summary is written in the display language; the model is told its English name.
-const uiLanguageName = () => LANGS.find((l) => l.display === getLocale())?.name ?? 'English';
 const langName = (code) => LANGS.find((l) => l.code === code)?.name;
+const displayLangCode = () => LANGS.find((l) => l.display === getLocale())?.code;
+
+// Custom templates are kept in localStorage under their own key, apart from the settings (which
+// are rewritten on every change); at most MAX_TEMPLATES of at most ~8 KB each stay well inside
+// the browser's quota for this origin.
+const TEMPLATES_KEY = 'rt-summary-templates';
+let customTemplates = [];
+try {
+  customTemplates = readStoredTemplates(localStorage.getItem(TEMPLATES_KEY));
+} catch {
+  /* private mode */
+}
+// Throws when the browser refuses to store them (quota, private mode).
+function saveTemplates(list) {
+  localStorage.setItem(TEMPLATES_KEY, storedTemplatesJson(list));
+  customTemplates = list;
+}
+const templateById = (id) => presetById(id) ?? customTemplates.find((tpl) => tpl.id === id) ?? null;
+const templateName = (tpl) => (tpl.preset ? t(tpl.nameKey) : tpl.name);
+const templateDescription = (tpl) => (tpl.preset ? t(tpl.descriptionKey) : tpl.description);
+
+// A summary made by an earlier version, shown as the session's oldest summary. It stays on disk
+// as it was until it is deleted; its Markdown is made here, in the display language.
+function legacySummary(sum) {
+  const labels = Object.fromEntries(
+    ['overview', 'keyPoints', 'decisions', 'actionItems', 'owner', 'due'].map((k) => [k, t(`summary.${k}`)]),
+  );
+  return {
+    id: 'legacy',
+    legacy: true,
+    templateId: DEFAULT_TEMPLATE,
+    templateName: templateName(presetById(DEFAULT_TEMPLATE)),
+    length: 'standard',
+    language: null,
+    createdAt: sum.generatedAt ?? 0,
+    markdown: legacySummaryToMarkdown(sum, labels),
+    model: sum.model ?? '',
+    truncated: !!sum.truncated,
+    segmentCount: sum.segmentCount ?? 0,
+  };
+}
+// The session's summaries, oldest first.
+function summariesOf(sess) {
+  const old = sess.summary && typeof sess.summary === 'object' ? [legacySummary(sess.summary)] : [];
+  return [...old, ...(sess.summaries ?? [])];
+}
+const shownSummary = (sess, list = summariesOf(sess)) =>
+  list.find((s) => s.id === shownSummaryId.get(sess)) ?? list.at(-1) ?? null;
+
+// The template select: the presets, then the user's own.
+function fillSummaryTemplates() {
+  const group = (label, templates) => {
+    const box = document.createElement('optgroup');
+    box.label = label;
+    for (const tpl of templates) box.append(new Option(templateName(tpl), tpl.id));
+    return box;
+  };
+  els.summaryTemplate.replaceChildren(
+    group(t('summary.presets'), PRESETS),
+    ...(customTemplates.length ? [group(t('summary.custom'), customTemplates)] : []),
+  );
+  if (!templateById(settings.summaryTemplate)) settings.summaryTemplate = DEFAULT_TEMPLATE;
+  els.summaryTemplate.value = settings.summaryTemplate;
+}
+
+// The languages a summary can be written in: the session's, then the display language.
+function summaryLanguages(sess) {
+  const codes = [sess.langA, sess.langB, sess.langC, displayLangCode()].filter((c) => LANGS.some((l) => l.code === c));
+  return [...new Set(codes)];
+}
+function fillSummaryLanguages(sess) {
+  const codes = summaryLanguages(sess);
+  const key = `${getLocale()}|${codes.join()}`;
+  if (els.summaryLanguage.dataset.key !== key) {
+    els.summaryLanguage.replaceChildren(...codes.map((c) => new Option(langLabel(c), c)));
+    els.summaryLanguage.dataset.key = key;
+  }
+  els.summaryLanguage.value = codes.includes(settings.summaryLanguage)
+    ? settings.summaryLanguage
+    : (displayLangCode() ?? codes[0]);
+}
+
+let shownMarkdown = null; // what #summaryContent was last rendered from
+function showMarkdown(markdown) {
+  if (markdown === shownMarkdown) return;
+  shownMarkdown = markdown;
+  // Every piece of the text is escaped by markdown.js; only its own tags are produced.
+  els.summaryContent.innerHTML = markdown ? markdownToHtml(markdown, { headingLevel: 3 }) : '';
+}
 
 function renderSummary() {
   const sess = current;
   if (!sess) return;
-  const sum = sess.summary && typeof sess.summary === 'object' ? sess.summary : null;
+  const list = summariesOf(sess);
   const busy = summarizing?.session === sess;
+  const shown = busy ? null : shownSummary(sess, list);
   els.summary.hidden = !!run || !hasFinished(sess);
+  fillSummaryLanguages(sess);
   els.summarize.setAttribute('aria-busy', String(busy));
   els.summarize.setAttribute('aria-disabled', String(!!summarizing));
-  els.summarizeLabel.textContent = t(sum ? 'summary.update' : 'summary.summarize');
   els.summaryStatus.textContent = busy ? t('summary.working') : '';
-  els.summaryMeta.textContent = busy
-    ? ''
-    : sum
-      ? t('summary.generated', { date: formatDateTime(sum.generatedAt) })
-      : t('summary.none');
-  els.summaryToggle.hidden = !sum;
+  els.summaryMeta.textContent = busy || list.length ? '' : t('summary.none');
+  els.summaryToggle.hidden = !busy && !list.length;
   els.summaryToggle.setAttribute('aria-expanded', String(summaryOpen));
-  els.summaryStale.hidden = !sum || !isStale(sess);
-  els.summaryBody.hidden = !sum || !summaryOpen;
-  els.summaryTruncated.hidden = !sum?.truncated;
-  els.summaryContent.replaceChildren(...(sum ? summaryNodes(sum) : []));
+  els.summaryStale.hidden = !shown || sess.segments.length <= shown.segmentCount;
+  els.summaryBody.hidden = (!busy && !shown) || !summaryOpen;
+  els.summaryHistoryBar.hidden = !shown;
+  if (shown) {
+    els.summaryHistory.replaceChildren(
+      ...list
+        .slice()
+        .reverse()
+        .map(
+          (s) => new Option(t('summary.entry', { date: formatDateTime(s.createdAt), template: s.templateName }), s.id),
+        ),
+    );
+    els.summaryHistory.value = shown.id;
+    els.summaryDetails.textContent = shown.legacy
+      ? t('summary.legacy', { template: shown.templateName })
+      : t('summary.details', {
+          template: shown.templateName,
+          length: t(`summary.length.${LENGTHS.includes(shown.length) ? shown.length : 'standard'}`),
+          language: langLabel(shown.language),
+        });
+  }
+  els.summaryDetails.hidden = !shown;
+  els.summaryTruncated.hidden = !shown?.truncated;
+  showMarkdown(busy ? summarizing.text : (shown?.markdown ?? ''));
 }
 
-function summaryNodes(sum) {
-  const section = (key, ...content) => {
-    const box = document.createElement('section');
-    const heading = document.createElement('h3');
-    heading.textContent = t(key);
-    box.append(heading, ...content);
-    return box;
-  };
-  const list = (items, fill) => {
-    const ul = document.createElement('ul');
-    for (const item of items) {
-      const li = document.createElement('li');
-      fill(li, item);
-      ul.append(li);
-    }
-    return ul;
-  };
-  const nodes = [];
-  if (sum.overview) {
-    const p = document.createElement('p');
-    p.textContent = sum.overview;
-    nodes.push(section('summary.overview', p));
-  }
-  for (const key of ['keyPoints', 'decisions']) {
-    if (sum[key]?.length)
-      nodes.push(
-        section(
-          `summary.${key}`,
-          list(sum[key], (li, text) => {
-            li.textContent = text;
-          }),
-        ),
-      );
-  }
-  if (sum.actionItems?.length) {
-    const items = list(sum.actionItems, (li, item) => {
-      li.textContent = item.task;
-      const details = [
-        item.owner && `${t('summary.owner')}: ${item.owner}`,
-        item.due && `${t('summary.due')}: ${item.due}`,
-      ].filter(Boolean);
-      if (!details.length) return;
-      const detail = document.createElement('span');
-      detail.className = 'summary-detail';
-      detail.textContent = details.join(' ・ ');
-      li.append(detail);
-    });
-    nodes.push(section('summary.actionItems', items));
-  }
-  return nodes;
+// While the answer streams in, the panel follows it at most once a frame.
+let contentFrame = 0;
+function renderStreamingSummary() {
+  if (contentFrame) return;
+  contentFrame = requestAnimationFrame(() => {
+    contentFrame = 0;
+    if (summarizing?.session === current) showMarkdown(summarizing.text);
+  });
 }
 
 els.summaryToggle.onclick = () => {
@@ -1152,6 +1267,21 @@ els.summaryToggle.onclick = () => {
   }
   renderSummary();
 };
+els.summaryTemplate.onchange = () => {
+  settings.summaryTemplate = els.summaryTemplate.value;
+  saveSettings();
+};
+els.summaryLength.onchange = () => {
+  settings.summaryLength = els.summaryLength.value;
+  saveSettings();
+};
+els.summaryLanguage.onchange = () => {
+  settings.summaryLanguage = els.summaryLanguage.value;
+  saveSettings();
+};
+if (!LENGTHS.includes(settings.summaryLength)) settings.summaryLength = 'standard';
+els.summaryLength.value = settings.summaryLength;
+fillSummaryTemplates();
 
 els.summarize.onclick = async () => {
   const sess = current;
@@ -1160,26 +1290,265 @@ els.summarize.onclick = async () => {
     toast(t('toast.apiKeyFirst'), 6000, 'warning');
     return openSettings();
   }
+  const template = templateById(els.summaryTemplate.value) ?? presetById(DEFAULT_TEMPLATE);
+  const length = LENGTHS.includes(els.summaryLength.value) ? els.summaryLength.value : 'standard';
+  const language = els.summaryLanguage.value || displayLangCode() || 'en-US';
   const segments = sess.segments.map(({ elapsed, src, tgt }) => ({ elapsed, src, tgt }));
   const model = MOCK ? 'demo' : settings.translateModel;
   const summarizer = MOCK ? new MockSummarizer() : new GeminiSummarizer({ apiKey, model });
-  summarizing = { session: sess };
+  summarizing = { session: sess, text: '' };
+  summaryOpen = true; // the answer is shown as it arrives
   renderSummary();
   try {
-    const { summary, truncated } = await summarizer.summarize(segments, {
-      language: uiLanguageName(),
-      langA: langName(sess.langA),
-      langB: langName(sess.langB),
+    const { markdown, truncated } = await summarizer.summarize(segments, {
+      template,
+      length,
+      language: langName(language) ?? 'English',
+      langs: [sess.langA, sess.langB, sess.langC].map(langName).filter(Boolean),
+      onDelta: (text) => {
+        summarizing.text = text;
+        renderStreamingSummary();
+      },
     });
-    sess.summary = { ...summary, truncated, generatedAt: Date.now(), model, segmentCount: segments.length };
-    markDirty(sess);
+    const summary = {
+      id: uid(),
+      templateId: template.id,
+      templateName: templateName(template), // as it was, even if the template is renamed later
+      length,
+      language,
+      createdAt: Date.now(),
+      markdown,
+      model,
+      truncated,
+      segmentCount: segments.length,
+    };
+    sess.summaries = [...(sess.summaries ?? []), summary];
+    shownSummaryId.set(sess, summary.id);
+    markDirty(sess); // the session record comes first in the list and is surely on disk
+    store
+      .putSummary(sess.id, summary)
+      .catch((err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'));
   } catch (err) {
-    // The previous summary, if any, stays as it was.
+    // The summaries made before stay as they were.
     if (err instanceof RateLimitError) toast(errorText(err), 10000, 'warning');
     else toast(t('toast.summaryFailed', { message: errorText(err) }), 10000, 'critical');
   } finally {
     summarizing = null;
     renderSummary();
+  }
+};
+
+els.summaryHistory.onchange = () => {
+  shownSummaryId.set(current, els.summaryHistory.value);
+  renderSummary();
+};
+
+els.summaryCopy.onclick = async () => {
+  const shown = shownSummary(current);
+  if (!shown) return;
+  try {
+    await navigator.clipboard.writeText(shown.markdown);
+    toast(t('summary.copied'));
+  } catch (err) {
+    toast(t('summary.copyFailed', { message: err?.message ?? String(err) }), 6000, 'critical');
+  }
+};
+
+els.summaryDownload.onclick = () => {
+  const shown = shownSummary(current);
+  if (!shown) return;
+  download(
+    new Blob([`${shown.markdown}\n`], { type: 'text/markdown;charset=utf-8' }),
+    `${safeFileName(current.title)} - ${safeFileName(shown.templateName)}.md`,
+  );
+};
+
+els.summaryDelete.onclick = () => {
+  const sess = current;
+  const shown = shownSummary(sess);
+  if (!shown) return;
+  const date = formatDateTime(shown.createdAt);
+  if (!confirm(t('summary.deleteConfirm', { template: shown.templateName, date }))) return;
+  if (shown.legacy) {
+    delete sess.summary; // the session record is rewritten without it
+  } else {
+    sess.summaries = sess.summaries.filter((s) => s !== shown);
+    store
+      .deleteSummary(sess.id, shown.id)
+      .catch((err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'));
+  }
+  shownSummaryId.delete(sess);
+  markDirty(sess);
+  renderSummary();
+  (els.summaryHistoryBar.hidden || els.summaryBody.hidden ? els.summarize : els.summaryHistory).focus();
+};
+
+// ---------- summary templates (settings dialog) ----------
+let editingTemplate = null; // { id } of the template in the editor; id null for a new one
+
+function showTemplateStatus(message, variant = 'info') {
+  els.templateStatus.textContent = message;
+  els.templateStatus.dataset.variant = variant;
+  els.templateStatus.hidden = false;
+}
+
+function renderTemplateList() {
+  const action = (icon, label, fn) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'icon-btn';
+    button.title = label.short;
+    button.setAttribute('aria-label', label.full);
+    button.append(octicon(icon));
+    button.onclick = fn;
+    return button;
+  };
+  els.templateList.replaceChildren(
+    ...[...PRESETS, ...customTemplates].map((tpl) => {
+      const name = templateName(tpl);
+      const row = document.createElement('li');
+      row.className = 'template-row';
+      const text = document.createElement('div');
+      text.className = 'template-text';
+      const title = document.createElement('span');
+      title.className = 'template-name';
+      title.textContent = name;
+      text.append(title);
+      if (tpl.preset) {
+        const badge = document.createElement('span');
+        badge.className = 'label';
+        badge.textContent = t('templates.builtIn');
+        text.append(' ', badge);
+      }
+      const description = templateDescription(tpl);
+      if (description) {
+        const line = document.createElement('span');
+        line.className = 'template-description';
+        line.textContent = description;
+        text.append(line);
+      }
+      const acts = document.createElement('div');
+      acts.className = 'template-acts';
+      const label = (key, full) => ({ short: t(key), full: t(full, { name }) });
+      acts.append(
+        action('copy', label('templates.duplicate', 'templates.duplicateOf'), () => openTemplateEditor(tpl, true)),
+      );
+      if (!tpl.preset)
+        acts.append(
+          action('pencil', label('templates.edit', 'templates.editOf'), () => openTemplateEditor(tpl)),
+          action('trash', label('templates.delete', 'templates.deleteOf'), () => deleteTemplate(tpl)),
+        );
+      row.append(text, acts);
+      return row;
+    }),
+  );
+  els.templateExport.disabled = !customTemplates.length;
+  els.templateNew.disabled = customTemplates.length >= MAX_TEMPLATES;
+}
+
+// tpl: the template to edit, or to start from when `copy` (a duplicate); none for a new one.
+function openTemplateEditor(tpl, copy = false) {
+  editingTemplate = { id: tpl && !copy ? tpl.id : null };
+  els.templateEditorTitle.textContent = t(editingTemplate.id ? 'templates.editTitle' : 'templates.newTitle');
+  els.templateName.value = tpl
+    ? (copy ? t('templates.copyName', { name: templateName(tpl) }) : tpl.name).slice(0, els.templateName.maxLength)
+    : '';
+  els.templateDescription.value = tpl ? templateDescription(tpl) : '';
+  els.templatePrompt.value = tpl?.prompt ?? '';
+  els.templateError.hidden = true;
+  els.templateStatus.hidden = true;
+  els.templateEditor.hidden = false;
+  els.templateEditor.scrollIntoView({ block: 'nearest' });
+  els.templateName.focus();
+}
+function closeTemplateEditor() {
+  editingTemplate = null;
+  els.templateEditor.hidden = true;
+}
+function templatesChanged() {
+  fillSummaryTemplates();
+  renderTemplateList();
+}
+
+els.templateNew.onclick = () => openTemplateEditor(null);
+els.templateCancel.onclick = () => {
+  closeTemplateEditor();
+  els.templateNew.focus();
+};
+// Enter in a one-line field would submit the settings form and close the dialog.
+for (const input of [els.templateName, els.templateDescription]) {
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') e.preventDefault();
+  });
+}
+els.templateSave.onclick = () => {
+  const error = (message) => {
+    els.templateError.textContent = message;
+    els.templateError.hidden = false;
+  };
+  if (!els.templateName.value.trim()) return error(t('templates.nameRequired'));
+  if (!els.templatePrompt.value.trim()) return error(t('templates.promptRequired'));
+  let template;
+  try {
+    template = validateTemplate({
+      id: editingTemplate?.id ?? uid(),
+      name: els.templateName.value,
+      description: els.templateDescription.value,
+      prompt: els.templatePrompt.value,
+    });
+  } catch (err) {
+    return error(errorText(err));
+  }
+  const list = customTemplates.some((tpl) => tpl.id === template.id)
+    ? customTemplates.map((tpl) => (tpl.id === template.id ? template : tpl))
+    : [...customTemplates, template];
+  try {
+    if (list.length > MAX_TEMPLATES) throw new MessageError('templates.error.tooMany', { max: MAX_TEMPLATES });
+    saveTemplates(list);
+  } catch (err) {
+    return error(t('templates.saveFailed', { message: errorText(err) }));
+  }
+  closeTemplateEditor();
+  templatesChanged();
+  showTemplateStatus(t('templates.saved', { name: template.name }));
+  els.templateNew.focus();
+};
+
+function deleteTemplate(tpl) {
+  if (!confirm(t('templates.deleteConfirm', { name: tpl.name }))) return;
+  try {
+    saveTemplates(customTemplates.filter((x) => x.id !== tpl.id));
+  } catch (err) {
+    return showTemplateStatus(t('templates.saveFailed', { message: errorText(err) }), 'critical');
+  }
+  if (editingTemplate?.id === tpl.id) closeTemplateEditor();
+  templatesChanged();
+  showTemplateStatus(t('templates.deleted', { name: tpl.name }));
+  els.templateNew.focus();
+}
+
+els.templateExport.onclick = () => {
+  if (!customTemplates.length) return;
+  download(
+    new Blob([exportTemplates(customTemplates)], { type: 'application/json' }),
+    'twinscript-summary-templates.json',
+  );
+};
+els.templateImport.onclick = () => els.templateImportFile.click();
+els.templateImportFile.onchange = async () => {
+  const file = els.templateImportFile.files[0];
+  els.templateImportFile.value = '';
+  if (!file) return;
+  try {
+    if (file.size > MAX_FILE_BYTES)
+      throw new MessageError('templates.error.tooLarge', { max: Math.round(MAX_FILE_BYTES / 1000) });
+    const imported = parseTemplateFile(await file.text(), { newId: uid });
+    const { templates, added, replaced } = mergeTemplates(customTemplates, imported);
+    saveTemplates(templates);
+    templatesChanged();
+    showTemplateStatus(t('templates.imported', { added, replaced }));
+  } catch (err) {
+    showTemplateStatus(t('templates.importFailed', { message: errorText(err) }), 'critical');
   }
 };
 
