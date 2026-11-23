@@ -117,10 +117,12 @@ export function formatTable(runs) {
   return [row(head), ...lines.map(row)].join('\n');
 }
 
-// sentences: [{ finishedAt, displays: [{ t }] }]; counts: { failed, lastError, answerMs: [] }.
+// sentences: [{ finishedAt, displays: [{ t }], settled? }]; counts: { failed, lastError, answerMs: [] }.
+// settled: the sentence's final translation was an in-progress one, with no final request.
 export function health(sentences, counts = {}) {
   const live = sentences.filter((s) => s.displays.some((d) => d.t < s.finishedAt)).length;
   return {
+    settledSentences: sentences.filter((s) => s.settled).length,
     failed: counts.failed ?? 0,
     lastError: counts.lastError ?? null,
     answerMs: stats(counts.answerMs ?? []),
@@ -130,12 +132,13 @@ export function health(sentences, counts = {}) {
 }
 
 export function formatHealth(runs) {
-  const head = ['strategy', 'failed', 'answer ms mean/med/p90', 'live', 'last error'];
+  const head = ['strategy', 'failed', 'answer ms mean/med/p90', 'live', 'settled', 'last error'];
   const lines = runs.map(({ label, health: h }) => [
     label,
     String(h.failed),
     [h.answerMs.mean, h.answerMs.median, h.answerMs.p90].map(ms).join('/'),
     `${h.liveSentences}/${h.sentences}`,
+    `${h.settledSentences ?? 0}/${h.sentences}`,
     h.lastError ? String(h.lastError).replace(/\s+/g, ' ').slice(0, 80) : '',
   ]);
   const widths = head.map((h, i) => Math.max(h.length, ...lines.map((l) => l[i].length)));

@@ -24,7 +24,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/secrets.js` | Where the API key is kept (desktop: `window.secretStore`; browser: memory only). DOM-free |
 | `src/exporter.js` | Transcript export (txt / md / csv / srt). Pure functions |
 | `src/mock.js` | Stand-in engines for the `?mock=1` demo |
-| `src/pacer.js` | When the sentence being spoken is translated: pacing strategies `interval`, `steady`, `carry` (the app's default: each request continues the translation on screen) and `chunk`; `?debug=1&pacer=<name>` selects one. DOM-free, clock and timers injected |
+| `src/pacer.js` | When the sentence being spoken is translated: pacing strategies `interval`, `steady`, `carry` (each request continues the translation on screen), `chunk` and `settle` (the app's default: `carry`, and a finished sentence keeps a shown translation that already covers it); `?debug=1&pacer=<name>` selects one. DOM-free, clock and timers injected |
 | `src/trace.js` | Debug-only (`?debug=1`) trace of raw recognizer results with times; JSON format v1 and the download file name. DOM-free |
 | `src/debug-tools.js` | Debug-only tools wired into `app.js`: the "Audio file (debug)" input and file picker, the trace download entry |
 | `src/i18n.js` | Display-language resolution (`resolveLocale`), `t(key, params)`, applying `data-i18n*` to static HTML. Languages are registered only in its `LOCALES` array |

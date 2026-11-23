@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mockGemini, rows, setup, translated } from './helpers.js';
+import { mockGemini, reload, rows, saved, setup, translated } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -189,6 +189,98 @@ test('without debug mode ?pacer= is ignored and the shown translation is continu
   assert.ok(
     seen.some((s) => s.includes('already on screen')),
     'the default strategy passes the translation on screen to the next request',
+  );
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+// Keeps what the page asks the system's speech synthesis to read in window.spoken; each reading
+// ends at once.
+function fakeSpeech() {
+  if (window !== top) return;
+  window.spoken = [];
+  const synth = {
+    getVoices: () => [],
+    speak: (u) => {
+      window.spoken.push({ text: u.text, lang: u.lang });
+      setTimeout(() => u.onend?.(), 0);
+    },
+    cancel() {},
+  };
+  class Utterance {
+    constructor(text) {
+      this.text = text;
+    }
+  }
+  Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
+  Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: Utterance, configurable: true });
+}
+
+test('in debug mode ?pacer=settle keeps the shown translation when it was made from the finished text', async () => {
+  const { page, errors, close } = await openApp(
+    '?debug=1&pacer=settle',
+    { apiKey: 'test-key', readAloud: 'A' },
+    { script: fakeSpeech },
+  );
+  await mockGemini(page, [
+    [2, 'interim', 'Welcome everyone'],
+    [20, 'interim', 'Welcome to the meeting'],
+    [30, 'final', 'Welcome to the meeting.'],
+    [35, 'interim', 'See you'],
+    [50, 'final', 'See you next week.'],
+  ]);
+  const TRANSLATIONS = {
+    'Welcome everyone': 'みなさんようこそ',
+    'Welcome to the meeting': '会議へようこそ',
+    'See you': 'またね',
+    'See you next week.': 'また来週。',
+  };
+  const asked = [];
+  await page.route(/streamGenerateContent/, (route) => {
+    const prompt = route.request().postDataJSON().contents[0].parts[0].text;
+    const text = prompt.match(/<text>\n([\s\S]*)\n<\/text>/)[1];
+    asked.push(text);
+    const out = TRANSLATIONS[text] ?? '…';
+    const body = `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: out }] } }] })}\n\n`;
+    route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+  });
+  await page.click('#toggle');
+  const finals = () =>
+    page
+      .locator('.seg:not(.live) .tgt')
+      .evaluateAll((nodes) => nodes.map((n) => ({ text: n.textContent, pending: n.classList.contains('pending') })));
+  await page.waitForFunction(() => {
+    const done = [...document.querySelectorAll('.seg:not(.live) .tgt')];
+    return done.length === 2 && done.every((n) => !n.classList.contains('pending') && n.textContent !== 'またね');
+  });
+
+  assert.ok(asked.includes('Welcome to the meeting'), asked.join(' | '));
+  assert.ok(!asked.includes('Welcome to the meeting.'), 'no final request: the shown translation is final');
+  assert.ok(asked.includes('See you next week.'), 'other words than were shown: the final one is asked for');
+  // (The settled translation lacks the closing full stop that the request's text did not have.)
+  assert.deepEqual(await finals(), [
+    { text: '会議へようこそ', pending: false },
+    { text: 'また来週。', pending: false },
+  ]);
+  assert.deepEqual(
+    await page.evaluate(() => window.spoken),
+    [
+      { text: '会議へようこそ', lang: 'ja-JP' },
+      { text: 'また来週。', lang: 'ja-JP' },
+    ],
+    'each is read aloud once',
+  );
+
+  await page.click('#toggle');
+  await saved(page);
+  await reload(page);
+  assert.deepEqual(
+    (await rows(page)).map(({ src, tgt }) => [src, tgt]),
+    [
+      ['Welcome to the meeting.', '会議へようこそ'],
+      ['See you next week.', 'また来週。'],
+    ],
+    'both are stored as final translations',
   );
   assert.deepEqual(errors, []);
   await close();

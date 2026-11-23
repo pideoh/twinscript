@@ -106,6 +106,7 @@ A second table says whether each run was sound:
 | `failed` | Requests that ended in an error other than the rate limit; `last error` shows the most recent one |
 | `answer ms` | How long the model took to answer a request (mean / median / p90) |
 | `live` | Sentences that had a translation on screen before they were finished, out of all sentences |
+| `settled` | Sentences whose final translation was the in-progress one, with no final request (only `settle` has any), out of all sentences |
 
 Read it before the scores. A strategy whose requests failed, were answered slowly, or that showed few sentences
 live did not flicker simply because little was shown; its low flicker is not a result.
@@ -118,7 +119,7 @@ everything else to standard error, so `... > result.txt` saves the table alone.
 | Option | |
 | --- | --- |
 | `--strategy a,b` | Pacing strategies to compare, one run after another on the same trace (default `interval`; the strategies are listed under [3](#3-try-another-pacing-strategy)) |
-| `--interval 1.5` | Seconds between in-progress translations for the `interval`, `steady` and `carry` strategies |
+| `--interval 1.5` | Seconds between in-progress translations for the `interval`, `steady`, `carry` and `settle` strategies |
 | `--limit 120` | Replay only the first N seconds of the trace: a quick check of the setup or of the model's speed |
 | `--together` | Run the strategies at the same time instead of one after another, so they meet the same model speed |
 | `--out file.json` | Also write every sentence's timeline: what was shown, and when. It contains what was said |
@@ -175,8 +176,9 @@ translates, which is where seconds go.
 | --- | --- |
 | `interval` | What the app used before `carry`; the baseline. A request at most every `interval` seconds while the text keeps changing, never two at once; the timing is shared across sentences, so a new sentence can wait for the previous one |
 | `steady` | `interval` with the timing per sentence: a new sentence's first request goes out at once, even while a request for the finished one is still on its way, and text that was already sent for the sentence is not sent again |
-| `carry` | What the app uses. `steady`, and each request passes the translation shown for the sentence (one per line with several targets), and the model is told to keep its wording and extend it. The final translation gets the last one shown |
+| `carry` | What the app used before `settle`. `steady`, and each request passes the translation shown for the sentence (one per line with several targets), and the model is told to keep its wording and extend it. The final translation gets the last one shown |
 | `chunk` | `carry`, but a request when the text gains a clause boundary (`、。，,.;:!?！？` and the like; a sentence end as the last character does not count, since the final result follows) or grows enough, instead of on a fixed interval |
+| `settle` | What the app uses. `carry`, but when a sentence is finished and the last in-progress request for it was made from the same text (ignoring case, spacing, commas and full stops: the final result often adds only a full stop; a question mark, a percent sign or the like counts as a difference), that request's answer becomes the final translation without another request; if it is still on its way, its answer is the final one when it arrives (and the final translation is asked for if it fails). With one line per target, only when every line has such an answer. The settled translation may lack the source's closing punctuation |
 
 `chunk` takes these options (in seconds and characters; `createPacer({ options })`):
 
@@ -194,7 +196,7 @@ ignored, and an unknown name falls back to `interval` with a warning in the cons
 Add a strategy, cover it in `test/pacer.test.js`, and compare:
 
 ```sh
-GEMINI_API_KEY=... node scripts/tuning/replay.mjs trace.json --strategy interval,steady,carry,chunk
+GEMINI_API_KEY=... node scripts/tuning/replay.mjs trace.json --strategy interval,steady,carry,chunk,settle
 ```
 
 Make it the app's default only when the numbers and a look at the captions agree.
@@ -204,3 +206,8 @@ Make it the app's default only when the numbers and a look at the captions agree
 against 0.93 on average, median 0.00 against 0.54), showed its first translation after 2.4 s against 3.0 s, had a
 translation on screen before the end of 94 sentences against 80, and sent 558 requests against 515. The model
 answered in about 1.9 s on average during that run.
+
+`settle` then replaced `carry` the same way. On a 58-sentence trace, replayed together with `carry` while the model
+answered in about 0.7 s, 27 sentences settled without a final request; the final translation came after 455 ms on
+average against 668 ms, with 207 requests against 239 and the same flicker (0.30 against 0.27). The slower the model
+answers, the more a settled sentence saves.
