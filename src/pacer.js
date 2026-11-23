@@ -313,7 +313,7 @@ export const STRATEGIES = {
   chunk: (deps) => pacedStrategy(deps, { carry: true, chunk: true }),
   settle: (deps) => pacedStrategy(deps, { carry: true, settle: true }),
 };
-export const DEFAULT_STRATEGY = 'carry';
+export const DEFAULT_STRATEGY = 'settle';
 
 // The strategy called `name`, or the default (with a warning when a name was given but is unknown).
 export function strategyNamed(name, warn = console.warn) {

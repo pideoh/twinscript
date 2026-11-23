@@ -220,16 +220,16 @@ test('an unknown strategy is refused', () => {
 
 const rel = (sent) => sent.map((x) => [x.at - 10_000, x.text]);
 
-test('the app continues the shown translation (carry) unless told otherwise', () => {
-  assert.equal(DEFAULT_STRATEGY, 'carry');
+test('the app continues the shown translation and settles finished sentences (settle) unless told otherwise', () => {
+  assert.equal(DEFAULT_STRATEGY, 'settle');
   const warnings = [];
   const warn = (m) => warnings.push(m);
-  assert.equal(strategyNamed(null, warn), 'carry');
-  assert.equal(strategyNamed('', warn), 'carry');
+  assert.equal(strategyNamed(null, warn), 'settle');
+  assert.equal(strategyNamed('', warn), 'settle');
   for (const name of ['interval', 'steady', 'carry', 'chunk']) assert.equal(strategyNamed(name, warn), name);
   assert.deepEqual(warnings, []);
-  assert.equal(strategyNamed('fastest', warn), 'carry');
-  assert.equal(strategyNamed('toString', warn), 'carry');
+  assert.equal(strategyNamed('fastest', warn), 'settle');
+  assert.equal(strategyNamed('toString', warn), 'settle');
   assert.equal(warnings.length, 2);
   assert.match(warnings[0], /fastest/);
 });
@@ -610,12 +610,11 @@ test('settle: what counts as the same text as the finished sentence', () => {
   for (const [a, b, same] of cases) assert.equal(sameText(a, b), same, `${a} / ${b}`);
 });
 
-test('settle is selectable, and the app default stays carry', () => {
+test('carry stays selectable for comparison', () => {
   assert.equal(
-    strategyNamed('settle', () => assert.fail('no warning')),
-    'settle',
+    strategyNamed('carry', () => assert.fail('no warning')),
+    'carry',
   );
-  assert.equal(DEFAULT_STRATEGY, 'carry');
 });
 
 test('settle: an answered request for the finished text is handed over as the final translation', async () => {

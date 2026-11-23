@@ -176,9 +176,9 @@ translates, which is where seconds go.
 | --- | --- |
 | `interval` | What the app used before `carry`; the baseline. A request at most every `interval` seconds while the text keeps changing, never two at once; the timing is shared across sentences, so a new sentence can wait for the previous one |
 | `steady` | `interval` with the timing per sentence: a new sentence's first request goes out at once, even while a request for the finished one is still on its way, and text that was already sent for the sentence is not sent again |
-| `carry` | What the app uses. `steady`, and each request passes the translation shown for the sentence (one per line with several targets), and the model is told to keep its wording and extend it. The final translation gets the last one shown |
+| `carry` | What the app used before `settle`. `steady`, and each request passes the translation shown for the sentence (one per line with several targets), and the model is told to keep its wording and extend it. The final translation gets the last one shown |
 | `chunk` | `carry`, but a request when the text gains a clause boundary (`、。，,.;:!?！？` and the like; a sentence end as the last character does not count, since the final result follows) or grows enough, instead of on a fixed interval |
-| `settle` | `carry`, but when a sentence is finished and the last in-progress request for it was made from the same text (ignoring case, spacing, commas and full stops: the final result often adds only a full stop; a question mark, a percent sign or the like counts as a difference), that request's answer becomes the final translation without another request; if it is still on its way, its answer is the final one when it arrives (and the final translation is asked for if it fails). With one line per target, only when every line has such an answer. The settled translation may lack the source's closing punctuation |
+| `settle` | What the app uses. `carry`, but when a sentence is finished and the last in-progress request for it was made from the same text (ignoring case, spacing, commas and full stops: the final result often adds only a full stop; a question mark, a percent sign or the like counts as a difference), that request's answer becomes the final translation without another request; if it is still on its way, its answer is the final one when it arrives (and the final translation is asked for if it fails). With one line per target, only when every line has such an answer. The settled translation may lack the source's closing punctuation |
 
 `chunk` takes these options (in seconds and characters; `createPacer({ options })`):
 
@@ -206,3 +206,8 @@ Make it the app's default only when the numbers and a look at the captions agree
 against 0.93 on average, median 0.00 against 0.54), showed its first translation after 2.4 s against 3.0 s, had a
 translation on screen before the end of 94 sentences against 80, and sent 558 requests against 515. The model
 answered in about 1.9 s on average during that run.
+
+`settle` then replaced `carry` the same way. On a 58-sentence trace, replayed together with `carry` while the model
+answered in about 0.7 s, 27 sentences settled without a final request; the final translation came after 455 ms on
+average against 668 ms, with 207 requests against 239 and the same flicker (0.30 against 0.27). The slower the model
+answers, the more a settled sentence saves.

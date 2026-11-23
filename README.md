@@ -115,7 +115,7 @@ flow of the conversation and on terms prepared beforehand. Twinscript's translat
 | What an interpreter does | What Twinscript does |
 | --- | --- |
 | Translates in units of meaning | Cuts speech into sentences and translates each one. However long someone talks, a translation is settled every time a sentence ends. |
-| Does not take back what was said | While a sentence is being spoken, the translation on screen is kept and continued. Only what the rest of the sentence shows to be wrong is changed. The final translation continues the one in progress. |
+| Does not take back what was said | While a sentence is being spoken, the translation on screen is kept and continued. Only what the rest of the sentence shows to be wrong is changed. When a sentence ends and the translation in progress already covers all of it, that translation is kept as it is instead of being requested again. |
 | Follows the conversation | The preceding remarks and their translations are passed along as context, so references and wording stay consistent. |
 | Prepares terms beforehand | The terms you register are used for recognition; your glossary and the background of the meeting are used for translation. |
 
