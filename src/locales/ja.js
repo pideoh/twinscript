@@ -181,6 +181,8 @@ export default {
   'toast.recordUnsupported': 'このブラウザでは録音できないため、文字起こしのみ行います',
   'toast.rateLimited': 'レート制限のため、途中経過の翻訳を1分間停止します（確定文の翻訳は継続）',
   'toast.storageUnavailable': 'ブラウザの保存領域が使えないため、このタブを閉じると内容は消えます',
+  'toast.upgradeBlocked':
+    'ほかの Twinscript のウィンドウを閉じてください。古い版が開いていて、閉じると保存済みのセッションが表示されます',
   'toast.demo': 'デモモード: 実際の音声認識・翻訳は行いません',
   'toast.summaryFailed': '要約できませんでした: {message}',
 

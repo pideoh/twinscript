@@ -188,6 +188,8 @@ export default {
   'toast.rateLimited':
     'Rate limit reached. Translation of sentences in progress is paused for 1 minute (finished sentences are still translated).',
   'toast.storageUnavailable': 'Browser storage is unavailable, so the content is lost when this tab is closed',
+  'toast.upgradeBlocked':
+    'Close the other Twinscript windows: an older version is open, and saved sessions appear once it is closed',
   'toast.demo': 'Demo mode: no real speech recognition or translation',
   'toast.summaryFailed': 'Could not summarize: {message}',
 

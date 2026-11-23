@@ -1659,6 +1659,8 @@ function readTranslation(r, text, target) {
 // ---------- startup ----------
 setStatus('idle');
 els.toggle.textContent = t('toggle.start');
+// Until that window is closed the list below stays empty, so say why.
+store.onUpgradeBlocked(() => toast(t('toast.upgradeBlocked'), 60_000, 'warning'));
 try {
   sessions = (await store.listSessions()).sort((a, b) => b.createdAt - a.createdAt);
 } catch {

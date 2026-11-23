@@ -20,7 +20,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/audio.js`, `src/pcm-worklet.js` | Microphone / tab audio capture, 16 kHz PCM in 100 ms chunks, mix for recording |
 | `src/auto-gain.js` | Raises quiet PC audio to a usable level (not applied to the microphone). Pure class |
 | `src/recorder.js` | Records with MediaRecorder, handing over a chunk every 5 seconds |
-| `src/store.js` | IndexedDB: `sessions` (with transcripts) and `audio` (recording chunks). Three-language sessions add `langC` and, per segment, `lang` and `tgts`; `tgt` stays the translations joined by line breaks |
+| `src/store.js` | IndexedDB, version 2: `sessions` (metadata and `segmentCount`, no segments), `segments` (one record per segment, key `[sessionId, pos]`, loaded when a session is opened; a save writes only changed segments) and `audio` (recording chunks). The upgrade from version 1 moves segments out of the session records. Three-language sessions add `langC` and, per segment, `lang` and `tgts`; `tgt` stays the translations joined by line breaks |
 | `src/secrets.js` | Where the API key is kept (desktop: `window.secretStore`; browser: memory only). DOM-free |
 | `src/exporter.js` | Transcript export (txt / md / csv / srt). Pure functions |
 | `src/mock.js` | Stand-in engines for the `?mock=1` demo |

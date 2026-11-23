@@ -177,6 +177,7 @@ export default {
   'toast.recordUnsupported': '此浏览器无法录音，将只进行转录',
   'toast.rateLimited': '已达到速率限制，未说完句子的翻译暂停 1 分钟（已确定的句子仍会翻译）',
   'toast.storageUnavailable': '浏览器存储不可用，关闭此标签页后内容将丢失',
+  'toast.upgradeBlocked': '请关闭其他 Twinscript 窗口：旧版本仍在运行，关闭后即可显示已保存的会话',
   'toast.demo': '演示模式：不进行实际的语音识别和翻译',
   'toast.summaryFailed': '无法生成摘要：{message}',
 

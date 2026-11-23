@@ -99,10 +99,15 @@ function upgrade(db, tx, oldVersion) {
   }
 }
 
+// Called when the upgrade has to wait because another window of an earlier version still has the
+// database open; it goes on by itself once that window is closed.
+let onBlocked = null;
+
 function open() {
   dbPromise ??= new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = (e) => upgrade(request.result, request.transaction, e.oldVersion);
+    request.onblocked = () => onBlocked?.();
     request.onsuccess = () => {
       const db = request.result;
       // Let a newer version in another tab upgrade instead of waiting for this one to close.
@@ -135,6 +140,10 @@ const rangeOf = (sessionId) => IDBKeyRange.bound(...segmentRange(sessionId));
 const written = new Map();
 
 export const store = {
+  // cb(): the saved sessions cannot be opened until another, older window of the app is closed.
+  onUpgradeBlocked(cb) {
+    onBlocked = cb;
+  },
   // Metadata only (no segments), newest first.
   async listSessions() {
     const all = await done((await open()).transaction('sessions').objectStore('sessions').getAll());
