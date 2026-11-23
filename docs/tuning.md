@@ -106,11 +106,12 @@ everything else to standard error, so `... > result.txt` saves the table alone.
 
 | Option | |
 | --- | --- |
-| `--strategy a,b` | Pacing strategies to compare, one run after another on the same trace (default `interval`) |
-| `--interval 1.5` | Seconds between in-progress translations for the `interval` strategy |
+| `--strategy a,b` | Pacing strategies to compare, one run after another on the same trace (default `interval`; the strategies are listed under [3](#3-try-another-pacing-strategy)) |
+| `--interval 1.5` | Seconds between in-progress translations for the `interval`, `steady` and `carry` strategies |
 | `--out file.json` | Also write every sentence's timeline: what was shown, and when. It contains what was said |
 | `--speed 4` | Play the speech faster. The model answers no faster, so delays are not comparable: for a dry run only |
-| `--mock` | A fake translator on a simulated clock. No key, instant, the same numbers every time; flicker is always 0 |
+| `--mock` | A fake translator on a simulated clock. No key, instant, the same numbers every time. It answers with the target and the text, so flicker is 0 |
+| `--mock=rephrase` | The same, but the fake translator reorders like a real model: it puts the newest word (or character) first, so its answer for a longer text is not an extension of its answer for a shorter one. Given the translation on screen, it keeps it and adds the rest. Shows the difference between strategies that carry the shown translation and those that do not |
 | `--quiet` | Print only the table |
 | `--help` | The usage text |
 
@@ -133,11 +134,32 @@ node scripts/tuning/replay.mjs test/fixtures/replay-trace.json --mock
 ## 3. Try another pacing strategy
 
 `src/pacer.js` decides when the sentence being spoken is translated. A strategy is a function registered in
-`STRATEGIES` there; `interval` (a request at most every N seconds while the text keeps changing) is what the app
-uses. Add a strategy, cover it in `test/pacer.test.js`, and compare:
+`STRATEGIES` there. Each one below builds on the one before:
+
+| Strategy | |
+| --- | --- |
+| `interval` | What the app uses. A request at most every `interval` seconds while the text keeps changing, never two at once; the timing is shared across sentences, so a new sentence can wait for the previous one |
+| `steady` | `interval` with the timing per sentence: a new sentence's first request goes out at once, even while a request for the finished one is still on its way, and text that was already sent for the sentence is not sent again |
+| `carry` | `steady`, and each request passes the translation shown for the sentence (one per line with several targets), and the model is told to keep its wording and extend it. The final translation gets the last one shown |
+| `chunk` | `carry`, but a request when the text gains a clause boundary (`、。，,.;:!?！？` and the like; a sentence end as the last character does not count, since the final result follows) or grows enough, instead of on a fixed interval |
+
+`chunk` takes these options (in seconds and characters; `createPacer({ options })`):
+
+| Option | Default | |
+| --- | --- | --- |
+| `growthDense` | 12 | Characters of growth that make a request, for kana, Han, Hangul and Thai |
+| `growthSpaced` | 28 | The same for Latin, Devanagari and other scripts |
+| `minGap` | 0.8 | Seconds at least between two requests for the same sentence |
+| `maxWait` | 2.5 | Seconds the text may stand still without being sent before it is sent anyway |
+
+To try one in the app, open it with `?debug=1&pacer=<name>`, for example
+http://localhost:5173/?debug=1&pacer=chunk. It applies to that page load only; without `?debug=1` the parameter is
+ignored, and an unknown name falls back to `interval` with a warning in the console.
+
+Add a strategy, cover it in `test/pacer.test.js`, and compare:
 
 ```sh
-GEMINI_API_KEY=... node scripts/tuning/replay.mjs trace.json --strategy interval,yours
+GEMINI_API_KEY=... node scripts/tuning/replay.mjs trace.json --strategy interval,steady,carry,chunk
 ```
 
 Make it the app's default only when the numbers and a look at the captions agree.

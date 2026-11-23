@@ -144,3 +144,49 @@ test('an audio file that cannot be decoded is reported', async () => {
   assert.deepEqual(errors, []);
   await close();
 });
+
+// The system instructions of the translation requests the page sends.
+async function recordInstructions(page) {
+  const seen = [];
+  await page.route(/streamGenerateContent/, (route) => {
+    seen.push(route.request().postDataJSON().systemInstruction.parts[0].text);
+    return route.fallback();
+  });
+  return seen;
+}
+const PACER_SCRIPT = [
+  [2, 'interim', 'Hello'],
+  [6, 'interim', 'Hello every'],
+  [10, 'interim', 'Hello everyone and'],
+  [25, 'interim', 'Hello everyone and welcome to'],
+  [30, 'final', 'Hello everyone and welcome to the meeting.'],
+];
+
+test('in debug mode ?pacer= picks how the sentence being spoken is translated', async () => {
+  const { page, errors, close } = await openApp('?debug=1&pacer=carry', { apiKey: 'test-key' });
+  await mockGemini(page, PACER_SCRIPT);
+  const seen = await recordInstructions(page);
+  await page.click('#toggle');
+  await translated(page, 1);
+  await page.click('#toggle');
+  // carry passes the translation on screen to the next request, and to the final one.
+  const carried = seen.filter((s) => s.includes('already on screen'));
+  assert.ok(carried.length >= 2, `requests continuing the shown translation: ${carried.length} of ${seen.length}`);
+  for (const s of carried) assert.match(s, /already on screen: "訳:Hello/);
+  assert.equal((await rows(page))[0].tgt, '訳:Hello everyone and welcome to the meeting.');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('without debug mode ?pacer= is ignored', async () => {
+  const { page, errors, close } = await openApp('?pacer=carry', { apiKey: 'test-key' });
+  await mockGemini(page, PACER_SCRIPT);
+  const seen = await recordInstructions(page);
+  await page.click('#toggle');
+  await translated(page, 1);
+  await page.click('#toggle');
+  assert.ok(seen.length >= 2);
+  assert.ok(seen.every((s) => !s.includes('already on screen')));
+  assert.deepEqual(errors, []);
+  await close();
+});
