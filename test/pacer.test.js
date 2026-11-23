@@ -6,7 +6,8 @@ import { RateLimitError } from '../src/translator.js';
 
 // A pacer on a simulated clock whose translator answers after `latency` ms (or with `reply`).
 // Each request keeps its context and what context.previous() said when it was sent.
-function setup({ strategy, latency = 300, reply, options = { interval: 1.5 } } = {}) {
+// The strategy defaults to 'interval', the plain rule the other strategies are compared with.
+function setup({ strategy = 'interval', latency = 300, reply, options = { interval: 1.5 } } = {}) {
   const clock = createVirtualClock(10_000);
   const sent = [];
   const shown = [];
@@ -219,16 +220,16 @@ test('an unknown strategy is refused', () => {
 
 const rel = (sent) => sent.map((x) => [x.at - 10_000, x.text]);
 
-test('the app keeps the interval strategy unless told otherwise', () => {
-  assert.equal(DEFAULT_STRATEGY, 'interval');
+test('the app continues the shown translation (carry) unless told otherwise', () => {
+  assert.equal(DEFAULT_STRATEGY, 'carry');
   const warnings = [];
   const warn = (m) => warnings.push(m);
-  assert.equal(strategyNamed(null, warn), 'interval');
-  assert.equal(strategyNamed('', warn), 'interval');
+  assert.equal(strategyNamed(null, warn), 'carry');
+  assert.equal(strategyNamed('', warn), 'carry');
   for (const name of ['interval', 'steady', 'carry', 'chunk']) assert.equal(strategyNamed(name, warn), name);
   assert.deepEqual(warnings, []);
-  assert.equal(strategyNamed('fastest', warn), 'interval');
-  assert.equal(strategyNamed('toString', warn), 'interval');
+  assert.equal(strategyNamed('fastest', warn), 'carry');
+  assert.equal(strategyNamed('toString', warn), 'carry');
   assert.equal(warnings.length, 2);
   assert.match(warnings[0], /fastest/);
 });

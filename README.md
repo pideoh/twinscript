@@ -155,6 +155,9 @@ These are the prices at the time of writing; Google's [pricing page](https://ai.
 | Transcription (streaming, with interim results) | Gemini Live API `gemini-3.5-transcribe-live` |
 | Translation (streaming) | `gemini-3.5-flash-lite` (can be changed in settings) |
 
+While a sentence is still being spoken, its translation is extended rather than rewritten: each request to the model
+continues the translation that is already on screen, and changes it only where the rest of the sentence shows it was wrong.
+
 The app is built with web technology and packaged with Electron.
 
 ## Development

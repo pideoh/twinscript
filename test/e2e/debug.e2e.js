@@ -178,8 +178,24 @@ test('in debug mode ?pacer= picks how the sentence being spoken is translated', 
   await close();
 });
 
-test('without debug mode ?pacer= is ignored', async () => {
-  const { page, errors, close } = await openApp('?pacer=carry', { apiKey: 'test-key' });
+test('without debug mode ?pacer= is ignored and the shown translation is continued', async () => {
+  const { page, errors, close } = await openApp('?pacer=interval', { apiKey: 'test-key' });
+  await mockGemini(page, PACER_SCRIPT);
+  const seen = await recordInstructions(page);
+  await page.click('#toggle');
+  await translated(page, 1);
+  await page.click('#toggle');
+  assert.ok(seen.length >= 2);
+  assert.ok(
+    seen.some((s) => s.includes('already on screen')),
+    'the default strategy passes the translation on screen to the next request',
+  );
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('in debug mode ?pacer=interval translates each time from scratch, as before', async () => {
+  const { page, errors, close } = await openApp('?debug=1&pacer=interval', { apiKey: 'test-key' });
   await mockGemini(page, PACER_SCRIPT);
   const seen = await recordInstructions(page);
   await page.click('#toggle');
