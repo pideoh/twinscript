@@ -529,6 +529,12 @@ input[type="range"] {
 .bar .select-wrap {
   flex: 0 1 auto;
 }
+/* Beside the sidebar the header stays on one row: the selects shorten before anything wraps. */
+@media (min-width: 820px) {
+  .bar {
+    flex-wrap: nowrap;
+  }
+}
 
 /* ---------- Sidebar: NavList of saved sessions ---------- */
 #sidebar {
@@ -860,6 +866,10 @@ input[type="range"] {
   border-bottom: var(--borderWidth-default) solid var(--borderColor-muted);
 }
 .seg .src {
+  /* A flex row: the code of the language (::before, further down) and the text. */
+  display: flex;
+  align-items: baseline;
+  gap: var(--base-size-8);
   color: var(--fgColor-default);
   font-size: 0.875em;
   white-space: pre-wrap;
@@ -903,8 +913,32 @@ input[type="range"] {
   align-items: baseline;
   gap: var(--base-size-8);
 }
-.tgt-line .lang-tag {
+/* A quiet, fixed-width code instead of a pill, so every translation starts at the same place. */
+.tgt-line .lang-tag,
+.seg .src::before,
+.seg .tgt:not(.multi)::before {
+  flex: none;
+  min-width: var(--base-size-24);
+  color: var(--fgColor-muted);
+  font-family: var(--fontStack-monospace);
+  font-size: var(--text-body-size-small);
   font-weight: var(--base-text-weight-normal);
+  letter-spacing: 0;
+}
+/* The source and a single translation carry their code the same way, so every line starts with
+   the code of its language and rows look alike with two or three languages. */
+.seg .tgt:not(.multi) {
+  display: flex;
+  align-items: baseline;
+  gap: var(--base-size-8);
+}
+.seg .src::before,
+.seg .tgt:not(.multi)::before {
+  content: attr(data-lang);
+}
+.seg .src:empty::before,
+.seg .tgt:not(.multi):empty::before {
+  content: none;
 }
 .tgt-text {
   min-width: 0;
@@ -984,9 +1018,8 @@ input[type="range"] {
   padding: 0;
   border: 0;
 }
-/* Several translations per sentence: a rule between sentences shows which lines belong together. */
-.now-list .seg:has(.tgt.multi) + .seg,
-.now-list .seg + .seg:has(.tgt.multi) {
+/* A rule between sentences shows which lines belong together. */
+.now-list .seg + .seg {
   padding-top: var(--base-size-12);
   border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
 }

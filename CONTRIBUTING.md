@@ -30,6 +30,7 @@ npm run test:app   # desktop smoke tests (opens windows)
 
 ## Commit messages and releases
 
+Pull requests are squash-merged, so the pull request title becomes the commit on `main` and its line in the changelog.
 Commit subjects and pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/):
 `type(scope): description`, where the scope is optional. A check on every pull request rejects other forms
 (`scripts/check-commits.js`). The type decides whether a change is released and how the version moves:

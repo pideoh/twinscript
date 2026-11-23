@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { languageByScript, scriptClass, scriptsDiffer, sourceByScript, targetByScript } from '../src/script-hint.js';
+import {
+  languageByScript,
+  scriptClass,
+  scriptsDiffer,
+  sourceByScript,
+  targetByScript,
+  targetLanguages,
+} from '../src/script-hint.js';
 
 const jaEn = { langA: 'Japanese', langB: 'English', otherInto: 'Japanese' };
 
@@ -105,4 +112,28 @@ test('a short Japanese interjection is still Japanese', () => {
   assert.equal(targetByScript('おー。', jaEn), 'English');
   assert.equal(targetByScript('ね', jaEn), null, 'one letter is too little');
   assert.equal(targetByScript('OK', jaEn), null, 'short Latin text may be any language');
+});
+
+test('speech is translated into every selected language but its own; another language goes where the setting says', () => {
+  const two = ['Japanese', 'English'];
+  const three = ['Japanese', 'English', 'Korean'];
+  const cases = [
+    // [languages, source, otherInto, expected]
+    [two, 'Japanese', 'all', ['English']],
+    [two, 'English', 'all', ['Japanese']],
+    [two, 'Japanese', 'B', ['English'], 'a selected language is not affected by the setting'],
+    [two, 'other', 'all', ['Japanese', 'English']],
+    [two, 'other', 'A', ['Japanese']],
+    [two, 'other', 'B', ['English']],
+    [two, 'other', 'C', ['Japanese', 'English'], 'a place with no language means all'],
+    [two, 'other', undefined, ['Japanese', 'English'], 'all by default'],
+    [three, 'Korean', 'all', ['Japanese', 'English']],
+    [three, 'English', 'C', ['Japanese', 'Korean']],
+    [three, 'other', 'all', ['Japanese', 'English', 'Korean']],
+    [three, 'other', 'A', ['Japanese']],
+    [three, 'other', 'B', ['English']],
+    [three, 'other', 'C', ['Korean']],
+  ];
+  for (const [languages, source, otherInto, expected, why] of cases)
+    assert.deepEqual(targetLanguages(languages, source, otherInto), expected, why ?? `${source} / ${otherInto}`);
 });

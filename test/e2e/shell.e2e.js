@@ -113,6 +113,16 @@ test('demo mode shows one long utterance as separate translated sentences', asyn
   await page.waitForFunction(
     () => document.querySelector('.seg .tgt').textContent === "Let's begin today's regular meeting.",
   );
+  // Each translation is led by the code of its language, as with three languages.
+  await page.waitForFunction(() => document.querySelectorAll('#log .seg:not(.live) .tgt[data-lang="JA"]').length > 0);
+  const codes = await page
+    .locator('#log .seg:not(.live) .tgt')
+    .evaluateAll((ts) => ts.slice(0, 3).map((t) => t.dataset.lang));
+  assert.deepEqual(codes, ['EN', 'EN', 'JA']);
+  const spoken = await page
+    .locator('#log .seg:not(.live) .src')
+    .evaluateAll((ss) => ss.slice(0, 3).map((x) => x.dataset.lang));
+  assert.deepEqual(spoken, ['JA', 'JA', 'EN'], 'and each source by the code of the language spoken');
   await page.click('#toggle');
   assert.equal(await page.textContent('#statusText'), '停止中');
   assert.deepEqual(errors, []);
@@ -221,7 +231,7 @@ test('changing the display language in settings updates the screen at once and i
   assert.equal(await page.getAttribute('html', 'lang'), 'en');
   assert.equal(await page.textContent('#settings h2'), 'Settings');
   assert.equal(await page.textContent('#captionItemsOut'), '1 sentence');
-  assert.equal(await optionText(page, '#otherInto', 'A'), 'Japanese (left language)');
+  assert.equal(await optionText(page, '#otherInto', 'A'), 'Japanese only');
   assert.equal(await optionText(page, '#uiLang', 'auto'), 'Auto');
   assert.equal(await page.textContent('#toggle'), 'Stop', 'the button keeps its running state');
   assert.equal(await page.textContent('#statusText'), 'Listening');
@@ -251,7 +261,7 @@ test('changing the display language in settings updates the screen at once and i
 });
 
 test('a third language keeps going to the same language after the two are swapped', async () => {
-  const { page, errors, close } = await openApp();
+  const { page, errors, close } = await openApp('', { otherInto: 'A' });
   await page.click('#swap');
   assert.equal(await page.inputValue('#langA'), 'en-US');
   await page.click('#openSettings');

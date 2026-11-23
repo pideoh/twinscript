@@ -43,9 +43,17 @@ Each release also has a `SHA256SUMS.txt` to check the download against. See the 
 2. Open Twinscript, open the settings (gear button, top right), enter the key and save.
 3. Choose the two languages and the audio input, then press "Start translating".
 
+Each line starts with a short code for its language (JA, EN, ZH), for what was said and for its translations.
+
 For a meeting in three languages, pick one more in the third language menu ("+ Add a language"). Every sentence is then
-translated into the other two, each translation on its own line with a tag for its language, and speech in a language
-that is none of the three is translated into all three. Choose "+ Add a language" again to go back to two languages.
+translated into the other two, each translation on its own line with a tag for its language. Choose "+ Add a language"
+again to go back to two languages.
+
+Speech in a language that is none of the selected ones is translated into all of them. To have it translated into one
+of them only, choose that language under "When a language other than the selected ones is spoken, translate into" in
+settings. With two languages, the app recognizes such speech by its writing system (Hindi in a Japanese and English
+meeting) and shows both translations, each on its own tagged line; speech in a language written like one of the two
+(French when English is selected) is translated into the first language, or into the one chosen in settings.
 
 ### Audio input
 
@@ -124,8 +132,8 @@ Twinscript may use it, choose "Always Allow"; the app uses it only to read and s
 - **Free tier**: both models work on it. It is rate-limited.
 - **Paid tier** (a key linked to Google Cloud billing): transcription costs about $0.009 per minute (about $0.54 per hour)
   plus a small token fee for translation. What you send is not used for training.
-- With a third language, every sentence is translated into two languages, so translation requests (and their token fee)
-  double.
+- A sentence that is translated into several languages takes one translation request (and its token fee) per language:
+  every sentence with a third language, and speech in a language you did not select when it goes into all of them.
 
 These are the prices at the time of writing; Google's [pricing page](https://ai.google.dev/gemini-api/docs/pricing) has the current ones.
 
