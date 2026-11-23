@@ -712,7 +712,11 @@ function setText(seg, part, text, cls) {
   const wasNear = nearBottom();
   const node = part === 'src' ? seg.srcEl : seg.tgtEl;
   node.textContent = text;
-  if (part === 'tgt') node.className = `tgt${cls ? ` ${cls}` : ''}`;
+  if (part === 'tgt') {
+    node.className = `tgt${cls ? ` ${cls}` : ''}`;
+    node.dataset.lang = cls === 'error' ? '' : singleTag(seg, text);
+  }
+  tagSource(seg);
   keepBottom(wasNear);
   updateJump();
 }
@@ -730,6 +734,42 @@ function setTargets(seg, codes) {
   seg.tgts = codes.map((lang) => ({ lang, text: '' }));
   showTargets(seg);
   return true;
+}
+// The code for a segment's single translation, told from the writing system of the translation or,
+// failing that, of the source (the translation is then in the other language). Empty when the two
+// languages share a writing system; the space for the code is kept, so the text stays aligned.
+function singleTag(seg, text) {
+  const a = LANGS.find((l) => l.code === (current?.langA ?? settings.langA));
+  const b = LANGS.find((l) => l.code === (current?.langB ?? settings.langB));
+  if (!a || !b || !text) return '';
+  const other = (name) => (name === a.name ? b.name : name === b.name ? a.name : null);
+  const name = languageByScript(text, a.name, b.name) ?? other(languageByScript(seg.srcEl.textContent, a.name, b.name));
+  const lang = name === a.name ? a : name === b.name ? b : null;
+  return lang ? langTag(lang.code) : '';
+}
+// The code of the language a segment was spoken in, shown before its source text: the language
+// found when it was translated, else what the writing system of the source tells, else the other
+// one than a single translation's. Empty for a language that is none of the selected ones.
+function tagSource(seg) {
+  const langs = [current?.langA ?? settings.langA, current?.langB ?? settings.langB, current?.langC ?? '']
+    .map((code) => LANGS.find((l) => l.code === code))
+    .filter(Boolean);
+  const byName = (name) => langs.find((l) => l.name === name);
+  const text = seg.srcEl.textContent;
+  let lang = seg.lang ? langs.find((l) => l.code === seg.lang) : null;
+  if (!lang && !seg.lang && text) {
+    lang = byName(
+      sourceByScript(
+        text,
+        langs.map((l) => l.name),
+      ),
+    );
+    if (!lang && langs.length === 2 && !seg.lines) {
+      const tgt = languageByScript(seg.tgtEl.textContent, langs[0].name, langs[1].name);
+      if (tgt) lang = langs.find((l) => l.name !== tgt);
+    }
+  }
+  seg.srcEl.dataset.lang = lang ? langTag(lang.code) : '';
 }
 // The short code that leads a translation line: "EN", "JA", "ZH". All tags have the same width,
 // so the translations start at the same place. Two selected languages that share the code
@@ -1509,6 +1549,7 @@ async function translateFinalLines(r, seg) {
   const source = sourceByScript(seg.src, names) ?? (await r.translator.identify(seg.src, names).catch(() => 'other'));
   if (seg.rev !== rev) return;
   seg.lang = r.langs.find((l) => l.name === source)?.code ?? 'other';
+  tagSource(seg);
   const targets = targetsFor(r, source);
   // Lines already showing a translation of the text in progress are swapped once, when complete.
   const kept = !setTargets(seg, targets);
