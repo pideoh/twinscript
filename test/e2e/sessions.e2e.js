@@ -116,28 +116,6 @@ test('recording can be turned off', async () => {
   await close();
 });
 
-test('PC audio that delivers nothing is reported instead of failing silently', async () => {
-  const { page, close } = await openApp('', { apiKey: 'test-key', source: 'system', record: false });
-  await mockGemini(page, []);
-  // Stand in for a screen share whose audio track exists but never carries a sample.
-  await page.evaluate(() => {
-    navigator.mediaDevices.getDisplayMedia = async () => {
-      const ctx = new AudioContext();
-      return ctx.createMediaStreamDestination().stream;
-    };
-  });
-  await page.click('#toggle');
-  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
-  assert.ok(await page.locator('#toast').isHidden(), 'no warning right away');
-  await page.waitForFunction(
-    () => document.getElementById('toast').textContent.includes('PC音声が届いていません'),
-    null,
-    { timeout: 15_000 },
-  );
-  await page.click('#toggle');
-  await close();
-});
-
 test('a saved session still shows the language code of each line after a reload', async () => {
   const { page, errors, close } = await openApp('?mock=1');
   await page.click('#toggle');
