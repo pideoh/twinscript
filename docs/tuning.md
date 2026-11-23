@@ -157,7 +157,9 @@ GEMINI_API_KEY=... node scripts/tuning/latency.mjs
 ```
 
 It sends one fixed sentence a few times with the request options the app uses and with alternatives, and reports
-for each how long the first text and the whole answer took, and how many tokens the model spent thinking. The first
+for each how long the first text and the whole answer took, and how many tokens the model spent thinking. A second
+table times the app's own requests one feature at a time (plain, with earlier lines as context, continuing a shown
+translation, the model picking the direction, identifying the language), which shows what part of a request is slow. The first
 row is what the app sends; if that row fails, the app falls back to the second ("no thinking option"). An answer to
 one sentence normally takes well under a second; thinking tokens above 0 mean the model is reasoning before it
 translates, which is where seconds go.

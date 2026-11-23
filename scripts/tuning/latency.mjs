@@ -8,6 +8,7 @@
 // It sends a fixed, harmless sentence; nothing from a trace. The key is read from the environment
 // and never printed.
 import { pathToFileURL } from 'node:url';
+import { GeminiTranslator } from '../../src/translator.js';
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 const TEXT = 'それでは本日の定例会議を始めます。まず先週の進捗について共有をお願いします。';
@@ -74,6 +75,74 @@ async function once({ apiKey, model, config, fetchImpl = fetch, now = () => perf
     }
   }
   return { status: 200, firstMs, totalMs: now() - start, thoughts, chars };
+}
+
+// The same model asked the way the app asks it (src/translator.js), one feature at a time, to see
+// which part of a real request costs time. The sentences are fixed and harmless.
+const HISTORY = [
+  { src: 'おはようございます。', tgt: 'Good morning.' },
+  { src: 'Thanks for joining today.', tgt: '本日はご参加ありがとうございます。' },
+  { src: '資料は共有フォルダにあります。', tgt: 'The materials are in the shared folder.' },
+];
+export const APP_REQUESTS = [
+  { name: 'translate', run: (tr, o) => tr.translate(TEXT, o) },
+  { name: 'translate, earlier lines as context', run: (tr, o) => tr.translate(TEXT, { ...o, history: HISTORY }) },
+  {
+    name: 'translate, continuing a shown translation',
+    run: (tr, o) => tr.translate(TEXT, { ...o, previous: "Let's begin today's regular meeting." }),
+  },
+  {
+    name: 'translate, context and shown translation',
+    run: (tr, o) => tr.translate(TEXT, { ...o, history: HISTORY, previous: "Let's begin today's regular meeting." }),
+  },
+  { name: 'translate, model picks the direction', run: (tr, o) => tr.translate('OK then', o) },
+  { name: 'identify the language', run: (tr) => tr.identify('了解', ['Japanese', 'English']) },
+];
+
+export async function measureApp({
+  apiKey,
+  model,
+  count,
+  requests = APP_REQUESTS,
+  now = () => performance.now(),
+  say = () => {},
+}) {
+  const rows = [];
+  for (const request of requests) {
+    const firsts = [];
+    const totals = [];
+    let error = null;
+    for (let i = 0; i < count; i++) {
+      // A new translator each time, as a session starts with one.
+      const tr = new GeminiTranslator({ apiKey, model, langA: 'Japanese', langB: 'English' });
+      const start = now();
+      let first = null;
+      try {
+        await request.run(tr, {
+          onDelta: () => {
+            first ??= now() - start;
+          },
+        });
+        totals.push(now() - start);
+        if (first !== null) firsts.push(first);
+      } catch (err) {
+        error = String(err?.message ?? err)
+          .replace(/\s+/g, ' ')
+          .slice(0, 100);
+      }
+    }
+    rows.push({
+      name: request.name,
+      count,
+      ok: totals.length,
+      firstMs: median(firsts),
+      totalMs: median(totals),
+      thoughts: null,
+      error,
+    });
+    say(`  ${request.name}: done`);
+  }
+  return rows;
 }
 
 const median = (xs) => {
@@ -145,15 +214,22 @@ export async function main(argv, { log = console.log, warn = console.error, env 
   if (!(count > 0)) throw new Error('--count must be a positive number');
   const apiKey = env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('Set GEMINI_API_KEY in the environment.');
-  warn(`Model: ${model}. ${count} requests per row, one after another; about half a minute.`);
+  warn(`Model: ${model}. ${count} requests per row, one after another; about a minute.`);
+  const probe = new GeminiTranslator({ apiKey, model, langA: 'Japanese', langB: 'English' });
+  warn(`The app sends the thinking option to this model: ${probe.useThinkingConfig ? 'yes' : 'no'}.`);
+  warn('Request options, with a bare request:');
   const rows = await measure({ apiKey, model, count, say: warn });
   log(formatLatency(rows));
+  warn('\nRequests as the app builds them:');
+  const appRows = await measureApp({ apiKey, model, count, say: warn });
+  log(`\n${formatLatency(appRows)}`);
   warn(`
 first text ms     until the first piece of the translation arrives
 whole answer ms   until the answer is complete
 thinking tokens   tokens the model spent thinking before answering; 0 is what a live translation wants
-The first row is what the app sends. If it fails here, the app falls back to the second row.`);
-  return rows;
+In the first table, the first row is the option the app used to send to every model.
+The second table uses the app's own requests: a row much slower than "translate" shows which part of a request costs time.`);
+  return [...rows, ...appRows];
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

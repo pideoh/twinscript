@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formatLatency, measure, VARIANTS } from '../scripts/tuning/latency.mjs';
+import { APP_REQUESTS, formatLatency, measure, measureApp, VARIANTS } from '../scripts/tuning/latency.mjs';
 
 const sse = (chunks) => chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('');
 
@@ -44,4 +44,32 @@ test('each set of request options is timed and its thinking tokens are reported'
   const table = formatLatency(rows);
   assert.ok(!table.includes('KEY'));
   assert.match(table.split('\n')[0], /^request options +ok +first text ms/);
+});
+
+test("the app's own requests are timed one feature at a time", async () => {
+  const realFetch = globalThis.fetch;
+  let t = 0;
+  const systems = [];
+  globalThis.fetch = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    const system = body.systemInstruction.parts[0].text;
+    systems.push(system);
+    t += /already on screen/.test(system) ? 3000 : 600; // continuing a shown translation is the slow part here
+    const text = body.generationConfig.responseMimeType ? '{"language":"Japanese"}' : 'ok';
+    return new Response(sse([{ candidates: [{ content: { parts: [{ text }] } }] }]), { status: 200 });
+  };
+  try {
+    const rows = await measureApp({ apiKey: 'KEY', model: 'gemini-3.5-flash-lite', count: 1, now: () => t });
+    assert.deepEqual(
+      rows.map((r) => r.name),
+      APP_REQUESTS.map((r) => r.name),
+    );
+    assert.ok(rows.every((r) => r.ok === 1 && !r.error));
+    const byName = Object.fromEntries(rows.map((r) => [r.name, r.totalMs]));
+    assert.equal(byName.translate, 600);
+    assert.equal(byName['translate, continuing a shown translation'], 3000);
+    assert.equal(systems.filter((x) => /already on screen/.test(x)).length, 2);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
