@@ -173,9 +173,9 @@ translates, which is where seconds go.
 
 | Strategy | |
 | --- | --- |
-| `interval` | What the app uses. A request at most every `interval` seconds while the text keeps changing, never two at once; the timing is shared across sentences, so a new sentence can wait for the previous one |
+| `interval` | What the app used before `carry`; the baseline. A request at most every `interval` seconds while the text keeps changing, never two at once; the timing is shared across sentences, so a new sentence can wait for the previous one |
 | `steady` | `interval` with the timing per sentence: a new sentence's first request goes out at once, even while a request for the finished one is still on its way, and text that was already sent for the sentence is not sent again |
-| `carry` | `steady`, and each request passes the translation shown for the sentence (one per line with several targets), and the model is told to keep its wording and extend it. The final translation gets the last one shown |
+| `carry` | What the app uses. `steady`, and each request passes the translation shown for the sentence (one per line with several targets), and the model is told to keep its wording and extend it. The final translation gets the last one shown |
 | `chunk` | `carry`, but a request when the text gains a clause boundary (`、。，,.;:!?！？` and the like; a sentence end as the last character does not count, since the final result follows) or grows enough, instead of on a fixed interval |
 
 `chunk` takes these options (in seconds and characters; `createPacer({ options })`):
@@ -198,3 +198,9 @@ GEMINI_API_KEY=... node scripts/tuning/replay.mjs trace.json --strategy interval
 ```
 
 Make it the app's default only when the numbers and a look at the captions agree.
+
+`carry` became the default on such a comparison. On a 132-sentence meeting trace, replayed together with `interval`
+(so both met the same model speed), it erased 4,081 characters of shown translation against 17,770 (flicker 0.20
+against 0.93 on average, median 0.00 against 0.54), showed its first translation after 2.4 s against 3.0 s, had a
+translation on screen before the end of 94 sentences against 80, and sent 558 requests against 515. The model
+answered in about 1.9 s on average during that run.

@@ -29,7 +29,16 @@ test('the replay of the sample trace with the fake translator scores the same on
   const dir = mkdtempSync(join(tmpdir(), 'replay-'));
   try {
     const out = join(dir, 'result.json');
-    const { stdout } = await run('test/fixtures/replay-trace.json', '--mock', '--speed', '20', '--out', out);
+    const { stdout } = await run(
+      'test/fixtures/replay-trace.json',
+      '--mock',
+      '--strategy',
+      'interval',
+      '--speed',
+      '20',
+      '--out',
+      out,
+    );
     // --speed shortens the speech 20 times; the fake translator still takes 400 ms.
     assert.equal(stdout.split('\n')[0], EXPECTED[0]);
     assert.equal(
@@ -38,7 +47,7 @@ test('the replay of the sample trace with the fake translator scores the same on
       'the speech goes by too fast for most in-progress translations to be shown',
     );
 
-    const { stdout: normal } = await run('test/fixtures/replay-trace.json', '--mock');
+    const { stdout: normal } = await run('test/fixtures/replay-trace.json', '--mock', '--strategy', 'interval');
     assert.deepEqual(scores(normal), EXPECTED);
     assert.deepEqual(healthRows(normal), [
       'strategy       failed  answer ms mean/med/p90  live  last error',
@@ -234,13 +243,13 @@ test('the replay knows the same languages as the app', () => {
 });
 
 test('progress is printed apart from the table, and --quiet leaves only the table', async () => {
-  const loud = await run('test/fixtures/replay-trace.json', '--mock');
+  const loud = await run('test/fixtures/replay-trace.json', '--mock', '--strategy', 'interval');
   assert.equal(scores(loud.stdout).length, 2, 'stdout holds the two tables only');
   assert.equal(healthRows(loud.stdout).length, 2);
   assert.match(loud.stderr, /Trace: 0:21 of speech, 43 recognizer results \(4 final\), Japanese \/ English\./);
   assert.match(loud.stderr, /interval: 0:\d\d \/ 0:21, 6 sentences, 16 requests/);
   assert.match(loud.stderr, /flicker +share of shown translation/);
-  const quiet = await run('test/fixtures/replay-trace.json', '--mock', '--quiet');
+  const quiet = await run('test/fixtures/replay-trace.json', '--mock', '--strategy', 'interval', '--quiet');
   assert.equal(quiet.stderr, '');
   assert.equal(quiet.stdout, loud.stdout);
 });
@@ -272,7 +281,14 @@ test('failed translation requests are counted and reported with their error', as
 });
 
 test('--limit replays only the beginning of the trace', async () => {
-  const { stdout, stderr } = await run('test/fixtures/replay-trace.json', '--mock', '--limit', '8');
+  const { stdout, stderr } = await run(
+    'test/fixtures/replay-trace.json',
+    '--mock',
+    '--strategy',
+    'interval',
+    '--limit',
+    '8',
+  );
   assert.match(stderr, /Trace: 0:08 of speech/);
   const sentences = Number(scores(stdout)[1].split(/\s{2,}/)[1]);
   assert.ok(sentences > 0 && sentences < 6, `fewer sentences than the whole trace has: ${sentences}`);

@@ -9,6 +9,7 @@ Choose two languages and press "Start translating": Twinscript detects which one
 
 - **Two-way**: speak in either language; no switching.
 - **Hears the meeting**: transcribes the microphone, the audio playing on the computer (the other participants in Zoom, Teams, Meet), or both.
+- **Translates the way an interpreter does**: what has been shown is not rewritten but continued. It works sentence by sentence, with the flow of the conversation and your own terms in mind.
 - **Captions on top**: a caption window that stays above slides and meeting apps, including full screen.
 - **Reads translations aloud**: finished translations can be spoken with your system's voices.
 - **Keeps a record**: sessions are saved with their audio, and transcripts export with a timeline as text, Markdown, CSV or SRT.
@@ -106,6 +107,22 @@ These work from any app while Twinscript is running, and can be turned off in se
 
 If another app already uses one of them, the settings show it as unavailable. The keys cannot be changed yet.
 
+## How it translates (modeled on simultaneous interpreting)
+
+A simultaneous interpreter does not translate word by word, does not take back what has been said, and relies on the
+flow of the conversation and on terms prepared beforehand. Twinscript's translation follows these four habits.
+
+| What an interpreter does | What Twinscript does |
+| --- | --- |
+| Translates in units of meaning | Cuts speech into sentences and translates each one. However long someone talks, a translation is settled every time a sentence ends. |
+| Does not take back what was said | While a sentence is being spoken, the translation on screen is kept and continued. Only what the rest of the sentence shows to be wrong is changed. The final translation continues the one in progress. |
+| Follows the conversation | The preceding remarks and their translations are passed along as context, so references and wording stay consistent. |
+| Prepares terms beforehand | The terms you register are used for recognition; your glossary and the background of the meeting are used for translation. |
+
+This way of translating was chosen by measuring it on a recording of a real meeting. Compared with redoing the
+translation of a sentence at every update, as earlier versions did, about a quarter as much shown text is rewritten
+afterwards. [docs/tuning.md](docs/tuning.md) describes how it is measured.
+
 ## Sessions and storage
 
 - The list on the left holds your sessions: create, switch, rename, delete.
@@ -154,6 +171,8 @@ These are the prices at the time of writing; Google's [pricing page](https://ai.
 | --- | --- |
 | Transcription (streaming, with interim results) | Gemini Live API `gemini-3.5-transcribe-live` |
 | Translation (streaming) | `gemini-3.5-flash-lite` (can be changed in settings) |
+
+How it translates is described under [How it translates](#how-it-translates-modeled-on-simultaneous-interpreting).
 
 The app is built with web technology and packaged with Electron.
 
