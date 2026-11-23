@@ -21,10 +21,6 @@ export const VARIANTS = [
   { name: 'no thinking option', config: {} },
   { name: 'thinkingBudget 0', config: { thinkingConfig: { thinkingBudget: 0 } } },
   { name: 'thinkingLevel low', config: { thinkingConfig: { thinkingLevel: 'low' } } },
-  // The Priority tier (a paid, faster tier in preview). Documented for another endpoint as
-  // "service_tier"; both spellings are tried here, and the response says which tier served it.
-  { name: 'priority tier (serviceTier)', config: {}, top: { serviceTier: 'priority' } },
-  { name: 'priority tier (service_tier)', config: {}, top: { service_tier: 'priority' } },
 ];
 
 async function once({ apiKey, model, config, top = {}, fetchImpl = fetch, now = () => performance.now() }) {
