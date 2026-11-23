@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createVirtualClock } from '../scripts/tuning/clock.mjs';
-import { chunkTrigger, createPacer, DEFAULT_STRATEGY, growthFor, strategyNamed } from '../src/pacer.js';
+import { chunkTrigger, createPacer, DEFAULT_STRATEGY, growthFor, sameText, strategyNamed } from '../src/pacer.js';
 import { RateLimitError } from '../src/translator.js';
 
 // A pacer on a simulated clock whose translator answers after `latency` ms (or with `reply`).
@@ -575,4 +575,187 @@ test('chunk: the thresholds are options', async () => {
     [200, 'Hello there you all'],
     [2100, 'Hello there you all ok'],
   ]);
+});
+
+// ---------- settle ----------
+
+test('settle: what counts as the same text as the finished sentence', () => {
+  const cases = [
+    // [text of the last in-progress request, finished text, same]
+    ['おはようございます', 'おはようございます。', true],
+    ['今日は新しい検索画面について', '今日は、新しい検索画面について。', true],
+    ['  今日は　新しい ', '今日は 新しい', true],
+    ['今日は新しい検索画面', '今日は新しい検索画面の進め方', false],
+    ['今日は新しい検索画面', '今日は古い検索画面', false],
+    ['Thanks I looked at the draft', 'Thanks. I looked at the draft.', true],
+    ['great  lets review it on friday', 'Great, let’s review it on Friday!', true],
+    ['Hello everyone and welcome', 'Hello everyone and welcome to the meeting.', false],
+    ['I can see it', 'I can’t see it.', false],
+    ['It costs 3 dollars', 'It costs $3.', false],
+    ['我们今天讨论一下', '我们今天讨论一下。', true],
+    ['我们今天讨论一下新的设计', '我们今天讨论一下，新的设计？', true],
+    ['我们今天讨论一下', '我们明天讨论一下。', false],
+    ['', '', false],
+    ['。', '.', false],
+  ];
+  for (const [a, b, same] of cases) assert.equal(sameText(a, b), same, `${a} / ${b}`);
+});
+
+test('settle is selectable, and the app default stays carry', () => {
+  assert.equal(
+    strategyNamed('settle', () => assert.fail('no warning')),
+    'settle',
+  );
+  assert.equal(DEFAULT_STRATEGY, 'carry');
+});
+
+test('settle: an answered request for the finished text is handed over as the final translation', async () => {
+  const { clock, pacer, sent } = setup({ strategy: 'settle', latency: 100 });
+  pacer.update('Good morning,');
+  await clock.advance(2000);
+  pacer.update('Good morning, everyone');
+  await clock.runAll();
+  assert.equal(sent.length, 2);
+  const { previous, settled, pending } = pacer.finish('Good morning, everyone.');
+  assert.equal(settled(), '[t] Good morning, everyone', 'no final request is needed');
+  assert.equal(pending, null);
+  assert.equal(previous(), '[t] Good morning, everyone', 'what carry would hand over is there too');
+});
+
+test('settle: a request for the finished text still on its way becomes the final translation when it arrives', async () => {
+  const { clock, pacer, shown } = setup({ strategy: 'settle', latency: 1000 });
+  pacer.update('おはようございます');
+  await clock.advance(500);
+  const { previous, settled, pending } = pacer.finish('おはようございます。');
+  assert.equal(settled, null);
+  assert.equal(previous(), undefined, 'nothing was shown yet');
+  let answer = null;
+  pending.then((a) => {
+    answer = a;
+  });
+  await clock.advance(400);
+  assert.equal(answer, null, 'not before it arrives');
+  await clock.runAll();
+  assert.equal(answer(), '[t] おはようございます');
+  assert.deepEqual(shown, [], 'it is not shown as in progress: the sentence is finished');
+});
+
+test('settle: when the request on its way fails, the caller is told to ask for the final translation', async () => {
+  for (const err of [new Error('network'), new RateLimitError('error.rateLimit')]) {
+    const { clock, pacer, limits } = setup({ strategy: 'settle', latency: 1000, reply: () => err });
+    pacer.update('Good morning everyone');
+    await clock.advance(500);
+    const { settled, pending } = pacer.finish('Good morning everyone.');
+    assert.equal(settled, null);
+    const result = pending.then((a) => a);
+    await clock.runAll();
+    assert.equal(await result, null, err.message);
+    assert.equal(limits.length, err instanceof RateLimitError ? 1 : 0, 'the rate limit is reported as before');
+  }
+});
+
+test('settle: in every other case the final translation is asked for, continuing what is shown', async () => {
+  // The finished text has more words than the last request.
+  let s = setup({ strategy: 'settle', latency: 100 });
+  s.pacer.update('Hello everyone and');
+  await s.clock.runAll();
+  let handed = s.pacer.finish('Hello everyone and welcome.');
+  assert.deepEqual([handed.settled, handed.pending], [null, null]);
+  assert.equal(handed.previous(), '[t] Hello everyone and');
+
+  // The text grew after the last request, and that request is still on its way.
+  s = setup({ strategy: 'settle', latency: 1000 });
+  s.pacer.update('Hello everyone and');
+  await s.clock.advance(200);
+  s.pacer.update('Hello everyone and welcome');
+  handed = s.pacer.finish('Hello everyone and welcome.');
+  assert.deepEqual([handed.settled, handed.pending], [null, null]);
+
+  // The last request for the same text failed.
+  s = setup({ strategy: 'settle', latency: 100, reply: () => new Error('network') });
+  s.pacer.update('Hello everyone');
+  await s.clock.runAll();
+  handed = s.pacer.finish('Hello everyone.');
+  assert.deepEqual([handed.settled, handed.pending], [null, null]);
+
+  // Nothing was sent for the sentence, or the finished text is not given.
+  s = setup({ strategy: 'settle' });
+  s.pacer.update('Hi');
+  handed = s.pacer.finish('Hi.');
+  assert.deepEqual([handed.settled, handed.pending, handed.previous()], [null, null, undefined]);
+  s.pacer.update('Hello everyone');
+  await s.clock.runAll();
+  handed = s.pacer.finish();
+  assert.deepEqual([handed.settled, handed.pending], [null, null]);
+});
+
+test('settle: what is handed over belongs to the finished sentence, not to the next one', async () => {
+  const { clock, pacer } = setup({ strategy: 'settle', latency: 100 });
+  pacer.update('First sentence here');
+  await clock.runAll();
+  const first = pacer.finish('First sentence here.');
+  pacer.update('Second sentence');
+  await clock.runAll();
+  assert.equal(first.settled(), '[t] First sentence here');
+  const second = pacer.finish('Second sentence here.');
+  assert.equal(second.settled, null, 'a sentence finished with other text than was sent');
+});
+
+test('settle: with one line per target, the answers of the last request are handed over per line', async () => {
+  const clock = createVirtualClock(10_000);
+  let lines = ['en', 'fr'];
+  const pacer = createPacer({
+    strategy: 'settle',
+    now: clock.now,
+    setTimer: clock.setTimer,
+    clearTimer: clock.clearTimer,
+    // As the app does for several targets: one request per line; each answer is reported, and kept
+    // only for the sentence still being spoken.
+    translate: async (text, context) => {
+      await new Promise((resolve) => clock.setTimer(resolve, 100));
+      for (const code of lines) {
+        context.answer(code, `[${code}] ${text}`);
+        if (context.isCurrent()) context.keep(code, `[${code}] ${text}`);
+      }
+    },
+    show: () => assert.fail('nothing for the pacer to show'),
+  });
+  pacer.update('Hola a todos');
+  await clock.runAll();
+  let { settled } = pacer.finish('Hola a todos.');
+  assert.equal(settled('en'), '[en] Hola a todos');
+  assert.equal(settled('fr'), '[fr] Hola a todos');
+  assert.equal(settled(), undefined, 'no single translation');
+
+  // One line got no answer from the last request: the caller sees it missing.
+  pacer.update('Buenos días a todos');
+  await clock.advance(2000);
+  lines = ['en'];
+  pacer.update('Buenos días a todos, gracias');
+  await clock.runAll();
+  ({ settled } = pacer.finish('Buenos días a todos, gracias.'));
+  assert.equal(settled('en'), '[en] Buenos días a todos, gracias');
+  assert.equal(settled('fr'), undefined, 'not the answer of an earlier request');
+
+  // The answers of a request still on its way are handed over when they arrive, per line.
+  lines = ['en', 'fr'];
+  pacer.update('Hasta mañana');
+  await clock.advance(50);
+  const { pending } = pacer.finish('¡Hasta mañana!');
+  const result = pending.then((a) => a);
+  await clock.runAll();
+  const answers = await result;
+  assert.equal(answers('en'), '[en] Hasta mañana');
+  assert.equal(answers('fr'), '[fr] Hasta mañana');
+});
+
+test('the other strategies hand over what they did before, given the finished text', async () => {
+  for (const strategy of ['interval', 'steady', 'carry', 'chunk']) {
+    const { clock, pacer } = setup({ strategy, latency: 100 });
+    pacer.update('Good morning everyone');
+    await clock.runAll();
+    const handed = pacer.finish('Good morning everyone.');
+    if (strategy === 'carry' || strategy === 'chunk') assert.equal(handed(), '[t] Good morning everyone', strategy);
+    else assert.equal(handed, undefined, strategy);
+  }
 });

@@ -161,6 +161,7 @@ export async function replay({
     lines: null, // Map code -> shown text
     tgt: '',
     rev: 0,
+    settled: false, // its final translation was an in-progress one (settle), without a request
   });
   const shownText = (rec) =>
     rec.lines
@@ -206,7 +207,7 @@ export async function replay({
       .map(({ src, tgt, tgts }) => ({ src, tgt: (lang && tgts?.find((x) => x.lang === lang)?.text) || tgt }));
   const wait = (ms) => new Promise((resolve) => clock.setTimer(resolve, ms));
 
-  async function interimLines(rec, text, { isCurrent, previous, keep }) {
+  async function interimLines(rec, text, { isCurrent, previous, keep, answer }) {
     const source = sourceByScript(text, names);
     if (!source) return;
     const targets = targetsFor(source);
@@ -218,6 +219,7 @@ export async function replay({
           into: langName(code),
           previous: previous?.(code),
         });
+        if (out) answer?.(code, out);
         if (isCurrent() && out && rec.tgts?.some((x) => x.lang === code)) {
           setLine(rec, code, out);
           keep?.(code, out);
@@ -228,21 +230,41 @@ export async function replay({
     if (limited) throw limited.reason;
   }
 
-  // What the pacer handed over when the sentence was finished, only for its first final translation.
-  const takePrevious = (rec) => {
-    const previous = rec.previous;
-    delete rec.previous;
-    return previous;
+  // What the pacer handed over when the sentence was finished, only for its first final translation:
+  // { previous, settled, pending } (takeHandover and settledAnswers in src/app.js).
+  const takeHandover = (rec) => {
+    const handed = rec.handover;
+    delete rec.handover;
+    if (typeof handed === 'function') return { previous: handed };
+    return handed ?? {};
+  };
+  const settledAnswers = ({ settled, pending }) => settled ?? pending ?? null;
+  const finalShown = (rec, text) => {
+    rec.finalText = text;
+    rec.finalShownAt = clock.now();
   };
 
   async function translateFinal(rec) {
     if (intoSeveral(rec.src)) return translateFinalLines(rec);
-    const previous = takePrevious(rec)?.();
+    const handover = takeHandover(rec);
+    const previous = handover.previous?.();
     const history = recentHistory();
     rec.rev++;
     const rev = rec.rev;
+    rec.settled = false;
     clearTargets(rec);
     const swapWhenDone = !!shownText(rec);
+    let answers = settledAnswers(handover);
+    if (answers instanceof Promise) answers = await answers;
+    if (rec.rev !== rev) return;
+    const settled = answers?.();
+    if (settled) {
+      rec.tgt = settled;
+      setSingle(rec, settled);
+      finalShown(rec, settled);
+      rec.settled = true;
+      return;
+    }
     for (let attempt = 0; ; attempt++) {
       try {
         const out = await tr.translate(rec.src, {
@@ -255,8 +277,7 @@ export async function replay({
         if (rec.rev !== rev) return;
         rec.tgt = out;
         setSingle(rec, out);
-        rec.finalText = out;
-        rec.finalShownAt = clock.now();
+        finalShown(rec, out);
         return;
       } catch (err) {
         if (err instanceof RateLimitError && attempt < 3) {
@@ -270,19 +291,35 @@ export async function replay({
   }
 
   async function translateFinalLines(rec) {
-    const previous = takePrevious(rec);
+    const handover = takeHandover(rec);
+    const { previous } = handover;
     rec.rev++;
     const rev = rec.rev;
+    rec.settled = false;
     const source = sourceByScript(rec.src, names) ?? (await tr.identify(rec.src, names).catch(() => 'other'));
     if (rec.rev !== rev) return;
     const targets = targetsFor(source);
     const kept = !setTargets(rec, targets);
     const swap = new Set(kept ? targets.filter((code) => rec.lines.get(code)) : []);
-    await Promise.all(targets.map((code) => translateLine(rec, rev, code, swap.has(code), previous?.(code))));
-    if (rec.rev === rev && rec.tgts.every((x) => x.text)) {
-      rec.finalText = shownText(rec);
-      rec.finalShownAt = clock.now();
+    let answers = settledAnswers(handover);
+    if (answers instanceof Promise) answers = await answers;
+    if (rec.rev !== rev) return;
+    if (answers && targets.every((code) => answers(code))) {
+      for (const code of targets) finishLine(rec, code, answers(code));
+      rec.settled = true;
+    } else {
+      await Promise.all(targets.map((code) => translateLine(rec, rev, code, swap.has(code), previous?.(code))));
     }
+    if (rec.rev === rev && rec.tgts.every((x) => x.text)) finalShown(rec, shownText(rec));
+  }
+
+  function finishLine(rec, code, out) {
+    rec.tgts.find((x) => x.lang === code).text = out;
+    rec.tgt = rec.tgts
+      .map((x) => x.text)
+      .filter(Boolean)
+      .join('\n');
+    setLine(rec, code, out);
   }
 
   async function translateLine(rec, rev, code, swapWhenDone, previous) {
@@ -298,13 +335,7 @@ export async function replay({
           },
         });
         if (rec.rev !== rev) return;
-        rec.tgts.find((x) => x.lang === code).text = out;
-        rec.tgt = rec.tgts
-          .map((x) => x.text)
-          .filter(Boolean)
-          .join('\n');
-        setLine(rec, code, out);
-        return;
+        return finishLine(rec, code, out);
       } catch (err) {
         if (err instanceof RateLimitError && attempt < 3) {
           await wait(1500 * 2 ** attempt);
@@ -350,7 +381,7 @@ export async function replay({
       if (aboveLive) return commit(newRecord(), text);
       const rec = live ?? newRecord();
       live = null;
-      rec.previous = pacer.finish();
+      rec.handover = pacer.finish(text);
       return commit(rec, text);
     },
     setLive(text) {
@@ -397,6 +428,7 @@ export async function replay({
     finalShownAt: rec.finalShownAt === null ? null : rec.finalShownAt - start,
     finalText: rec.finalText,
     error: rec.error,
+    settled: rec.settled,
     displays: rec.displays.map((d) => ({ t: d.t - start, text: d.text })),
   }));
   const rows = sentences.map((s) => ({ id: s.id, ...sentenceMetrics(s) }));
@@ -420,11 +452,11 @@ export const USAGE = `Replays a recorded recognizer trace and scores how the tra
 Options
   --strategy a,b   pacing strategies to compare, one run each (default: interval);
                    one of ${Object.keys(STRATEGIES).join(', ')}
-  --interval 1.5   seconds between in-progress translations for interval, steady and carry
+  --interval 1.5   seconds between in-progress translations for interval, steady, carry and settle
   --speed 1        play the speech faster; delays are then not comparable, use it for a dry run only
   --mock           fake translator on a simulated clock: no key, instant, same numbers every time
   --mock=rephrase  the same, but it reorders like a real model, so flicker shows unless the
-                   strategy passes the shown translation to continue (carry, chunk)
+                   strategy passes the shown translation to continue (carry, chunk, settle)
   --limit 120      replay only the first N seconds of the trace: a quick check
   --together       run the strategies at the same time, so they meet the same model speed
   --out file.json  also write every sentence's timeline
@@ -446,6 +478,7 @@ Second table: was the run sound?
 failed     requests that ended in an error other than the rate limit (with the last error)
 answer ms  how long the model took to answer a request, mean/median/p90
 live       sentences that had a translation on screen before they were finished
+settled    sentences whose final translation was the in-progress one, with no final request (settle)
 A strategy with many failed requests, slow answers or a low "live" share was not measured fairly.`;
 
 export function parseArgs(argv) {

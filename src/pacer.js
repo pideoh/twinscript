@@ -4,10 +4,11 @@
 //
 // One pacer serves one line of in-progress text (the sentence being spoken) for a whole session:
 //   update(text)  the in-progress text changed (the whole sentence so far)
-//   finish()      the sentence was finished; a result still on its way for it is not shown. With a
-//                 strategy that carries the shown translation (carry, chunk) it returns
-//                 previous(line), what was last shown for that sentence, for its final translation;
-//                 otherwise nothing
+//   finish(finalText)  the sentence was finished (finalText: its finished text); a result still on
+//                 its way for it is not shown. With a strategy that carries the shown translation
+//                 (carry, chunk) it returns previous(line), what was last shown for that sentence,
+//                 for its final translation; with settle, { previous, settled, pending } (see
+//                 pacedStrategy); otherwise nothing
 //   cancel()      the sentence was dropped, or the session stopped; same for results
 // The caller supplies
 //   translate(text, { sentence, isCurrent, previous?, keep? }) -> Promise<result>  sends the
@@ -15,7 +16,8 @@
 //       checking isCurrent(); a falsy result then means there is nothing more for the pacer to
 //       show. Strategies that carry the shown translation add previous(line) (what is shown for the
 //       sentence: line omitted for the single translation, or a target's code) and keep(line, out)
-//       (the caller showed `out` on that line itself).
+//       (the caller showed `out` on that line itself). settle adds answer(line, out): the caller got
+//       `out` for that line, whether or not the sentence is still being spoken.
 //   show(result, { text, sentence })  shows a result for the sentence still being spoken; it
 //       replaces whatever was shown for it before.
 //   onRateLimit(err)  told when a request was refused for the rate limit.
@@ -86,6 +88,23 @@ function intervalStrategy({ translate, show, now, setTimer, clearTimer, isRateLi
 // result that does not come).
 const BOUNDARY = /[、。，,.;:!?！？；：…｡､।॥]/u;
 const SENTENCE_END = /[。.!?！？…｡।॥]/u;
+const PUNCTUATION = /[\p{P}\p{S}]/gu;
+
+// Whether two texts of a sentence say the same words: equal after trimming, collapsing whitespace,
+// and ignoring case and punctuation (Unicode punctuation and symbols). The recognizer's final
+// result often differs from its last in-progress one only by a closing full stop. Empty texts are
+// never the same. Pure.
+export function sameText(a, b) {
+  const norm = (s) =>
+    String(s ?? '')
+      .normalize('NFKC')
+      .replace(PUNCTUATION, '')
+      .replace(/\s+/gu, ' ')
+      .trim()
+      .toLowerCase();
+  const x = norm(a);
+  return x !== '' && x === norm(b);
+}
 const NUMERIC = new Set(['.', ',', ':']);
 const DIGIT = /\p{Nd}/u;
 // Writing systems that pack a clause into few characters.
@@ -118,18 +137,29 @@ export function chunkTrigger(sent, text, options) {
   return b.length - a.length >= growthFor(text, options) ? 'growth' : null;
 }
 
-// steady, carry and chunk. Unlike interval, all timing is per sentence: a new sentence's first
+// steady, carry, settle and chunk. Unlike interval, all timing is per sentence: a new sentence's first
 // request goes out as soon as it qualifies, whatever is still in flight or was sent for the one
 // before; never two requests at once for the same sentence; none for text that was already sent.
 //   steady  a request at most every `interval` seconds while the text keeps changing.
 //   carry   steady, and each request passes what is shown for the sentence (context.previous) so
 //           the model continues it instead of starting over.
+//   settle  carry, and finish(finalText) tells whether the finished sentence's last request was
+//           made from the same text (sameText) as its finished text, so the caller can keep that
+//           request's answer as the final translation instead of asking again. It returns
+//             previous(line)  as carry does;
+//             settled  null, or answer(line): that request's answers, when it has been answered
+//                      (line: a target's code, or omitted for the single translation; undefined
+//                      for a line it gave nothing for);
+//             pending  null, or a promise of answer(line) (null when it fails) for that request
+//                      when it is still on its way.
+//           A settled translation may lack the closing punctuation of the source, since the text
+//           it was made from did; nothing patches it in.
 //   chunk   carry, but a request when the text gained a clause boundary or grew by growthDense /
 //           growthSpaced characters since the last one, at most every `minGap` seconds, or when it
 //           has stood still for `maxWait` seconds without being sent.
 function pacedStrategy(
   { translate, show, now, setTimer, clearTimer, isRateLimit, onRateLimit, options },
-  { carry = false, chunk = false },
+  { carry = false, chunk = false, settle = false },
 ) {
   const {
     interval = 1.5,
@@ -150,6 +180,7 @@ function pacedStrategy(
     busy: false,
     timer: null,
     shown: new Map(),
+    last: null, // settle: the latest request, { text, answers, done, ok, result }
   });
   let cur = sentence(0);
   let pausedUntil = 0;
@@ -192,14 +223,31 @@ function pacedStrategy(
     c.sent = text;
     c.lastAt = now();
     const context = { sentence: c.id, isCurrent };
+    // settle: what this request answers is kept for the sentence even when it arrives after the
+    // sentence was finished, so finish() can hand it over as the final translation.
+    let req = null;
+    let resolve = null;
+    if (settle) {
+      req = { text, answers: new Map(), done: false, ok: false };
+      req.result = new Promise((r) => {
+        resolve = r;
+      });
+      c.last = req;
+    }
+    const answer = (line, out) => {
+      if (req && out) req.answers.set(line ?? '', out);
+    };
     if (carry) {
       context.previous = previousOf(c);
       context.keep = (line, out) => {
         if (isCurrent() && out) keep(c, line, out);
       };
     }
+    if (settle) context.answer = answer;
     try {
       const out = await translate(text, context);
+      answer(undefined, out);
+      if (req) req.ok = true;
       if (isCurrent() && out) {
         show(out, { text, sentence: c.id });
         keep(c, undefined, out);
@@ -211,9 +259,14 @@ function pacedStrategy(
       }
     } finally {
       c.busy = false;
+      if (req) {
+        req.done = true;
+        resolve(req.ok ? answersOf(req) : null);
+      }
       if (isCurrent()) schedule();
     }
   }
+  const answersOf = (req) => (line) => req.answers.get(line ?? '');
 
   function end() {
     const c = cur;
@@ -231,9 +284,16 @@ function pacedStrategy(
       }
       schedule();
     },
-    finish() {
+    finish(finalText) {
       const c = end();
-      return carry ? previousOf(c) : undefined;
+      if (!settle) return carry ? previousOf(c) : undefined;
+      const req = c.last;
+      const same = !!req && sameText(req.text, finalText);
+      return {
+        previous: previousOf(c),
+        settled: same && req.done && req.ok ? answersOf(req) : null,
+        pending: same && !req.done ? req.result : null,
+      };
     },
     cancel() {
       end();
@@ -246,6 +306,7 @@ export const STRATEGIES = {
   steady: (deps) => pacedStrategy(deps, {}),
   carry: (deps) => pacedStrategy(deps, { carry: true }),
   chunk: (deps) => pacedStrategy(deps, { carry: true, chunk: true }),
+  settle: (deps) => pacedStrategy(deps, { carry: true, settle: true }),
 };
 export const DEFAULT_STRATEGY = 'carry';
 

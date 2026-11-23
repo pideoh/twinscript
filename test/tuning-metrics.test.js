@@ -108,7 +108,21 @@ test('the health of a run: failed requests, answer times and sentences that show
   assert.equal(h.sentences, 3);
   assert.equal(h.answerMs.mean, 1000);
   assert.deepEqual(formatHealth([{ label: 'carry 1.5s', health: h }]).split('\n'), [
-    'strategy    failed  answer ms mean/med/p90  live  last error',
-    'carry 1.5s  2       1000/600/2000           1/3   HTTP 400: bad request',
+    'strategy    failed  answer ms mean/med/p90  live  settled  last error',
+    'carry 1.5s  2       1000/600/2000           1/3   0/3      HTTP 400: bad request',
+  ]);
+});
+
+test('the health of a run counts the sentences whose final translation needed no request', () => {
+  const sentences = [
+    { finishedAt: 3000, displays: [{ t: 1200 }], settled: true },
+    { finishedAt: 6000, displays: [{ t: 5500 }, { t: 6400 }], settled: false },
+    { finishedAt: 9000, displays: [{ t: 8000 }], settled: true },
+  ];
+  const h = health(sentences, { answerMs: [400] });
+  assert.equal(h.settledSentences, 2);
+  assert.deepEqual(formatHealth([{ label: 'settle 1.5s', health: h }]).split('\n'), [
+    'strategy     failed  answer ms mean/med/p90  live  settled  last error',
+    'settle 1.5s  0       400/400/400             3/3   2/3',
   ]);
 });

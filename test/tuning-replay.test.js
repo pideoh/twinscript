@@ -50,8 +50,8 @@ test('the replay of the sample trace with the fake translator scores the same on
     const { stdout: normal } = await run('test/fixtures/replay-trace.json', '--mock', '--strategy', 'interval');
     assert.deepEqual(scores(normal), EXPECTED);
     assert.deepEqual(healthRows(normal), [
-      'strategy       failed  answer ms mean/med/p90  live  last error',
-      'interval 1.5s  0       400/400/400             4/6',
+      'strategy       failed  answer ms mean/med/p90  live  settled  last error',
+      'interval 1.5s  0       400/400/400             4/6   0/6',
     ]);
 
     const result = JSON.parse(readFileSync(out, 'utf8'));
@@ -106,6 +106,115 @@ test('every pacing strategy replays the sample trace with the same scores on eve
     [EXPECTED[0], ...STRATEGY_ROWS.rephrase],
     'a translator that rephrases makes interval and steady flicker; carry and chunk continue what is shown',
   );
+});
+
+// settle keeps an in-progress translation made from the finished text as the final one: half the
+// sample's sentences need no final request, and those that waited for one on its way wait less.
+const SETTLE_ROWS = {
+  mock: 'settle 1.5s    6          450/400/700            250/300/400            0.00/0.00/0.00        0       14       14        0',
+  rephrase:
+    'settle 1.5s    6          450/400/700            250/300/400            0.00/0.00/0.00        0       14       14        0',
+};
+
+test('settle replays the sample trace with the same scores on every run, and counts the settled sentences', async () => {
+  const strategies = ['--strategy', 'interval,steady,carry,chunk,settle'];
+  for (const mode of ['mock', 'rephrase']) {
+    const { stdout } = await run(
+      'test/fixtures/replay-trace.json',
+      mode === 'mock' ? '--mock' : '--mock=rephrase',
+      ...strategies,
+    );
+    assert.deepEqual(scores(stdout), [EXPECTED[0], ...STRATEGY_ROWS[mode], SETTLE_ROWS[mode]], mode);
+    assert.deepEqual(
+      healthRows(stdout),
+      [
+        'strategy       failed  answer ms mean/med/p90  live  settled  last error',
+        'interval 1.5s  0       400/400/400             4/6   0/6',
+        'steady 1.5s    0       400/400/400             5/6   0/6',
+        'carry 1.5s     0       400/400/400             5/6   0/6',
+        'chunk          0       400/400/400             5/6   0/6',
+        'settle 1.5s    0       400/400/400             5/6   3/6',
+      ],
+      mode,
+    );
+  }
+});
+
+test('settle: a sentence is final as soon as it is finished, or when the request on its way arrives', async () => {
+  const trace = JSON.parse(readFileSync(join(root, 'test/fixtures/replay-trace.json'), 'utf8'));
+  const { requests, result } = await recordRequests(trace, 'settle');
+  const finals = requests.filter((r) => r.final).map((r) => r.text);
+  const settled = result.sentences.filter((s) => s.settled);
+  assert.deepEqual(
+    settled.map((s) => [s.src, s.metrics.finalDelayMs]),
+    [
+      ['おはようございます。', 100],
+      ['今日は新しい検索画面の進め方について話したいと思います。', 200],
+      ['Great, let’s review it on Friday.', 0],
+    ],
+    'the delay is what was left of the request on its way, or none',
+  );
+  for (const s of settled) {
+    assert.ok(!finals.includes(s.src), `no final request for ${s.src}`);
+    assert.equal(s.finalText, s.displays.at(-1).text, 'the final translation is what stays on screen');
+  }
+  assert.equal(finals.length, 3, 'the others are asked for as with carry');
+  for (const s of result.sentences.filter((x) => !x.settled)) assert.ok(finals.includes(s.src), s.src);
+});
+
+test('settle: a sentence corrected after it was finished is translated again', async () => {
+  // The recognizer moves on before finishing the first utterance, then sends its final result with
+  // other punctuation: the finished sentence is corrected.
+  const events = [
+    { t: 500, kind: 'interim', text: 'こんにちは皆さん' },
+    { t: 2000, kind: 'interim', text: '今日は' },
+    { t: 2500, kind: 'interim', text: '今日は天気がいい' },
+    { t: 4000, kind: 'final', text: 'こんにちは、皆さん。' },
+    { t: 6000, kind: 'final', text: '今日は天気がいいですね。' },
+  ];
+  const trace = { version: 1, langs: ['ja-JP', 'en-US'], events, durationMs: 7000 };
+  const { requests, result } = await recordRequests(trace, 'settle');
+  assert.deepEqual(
+    requests.filter((r) => r.final).map((r) => r.text),
+    ['こんにちは、皆さん。', '今日は天気がいいですね。'],
+    'the first sentence settled with no request, then its correction was translated',
+  );
+  assert.deepEqual(
+    result.sentences.map((s) => [s.src, s.settled]),
+    [
+      ['こんにちは、皆さん。', false],
+      ['今日は天気がいいですね。', false],
+    ],
+  );
+  assert.ok(result.sentences[0].finalText.includes('、'), result.sentences[0].finalText);
+});
+
+test('settle: a sentence in neither language settles only when every line has the same text translated', async () => {
+  const words = '안녕하세요 여러분, 오늘은 새로운 검색 화면의 디자인에 대해 이야기하고 싶습니다'.split(' ');
+  const events = words.map((_, i) => ({ t: 500 + i * 400, kind: 'interim', text: words.slice(0, i + 1).join(' ') }));
+  const last = 500 + words.length * 400;
+  const finish = (text) => {
+    const list = [...events, { t: last + 1500, kind: 'final', text }];
+    return { version: 1, langs: ['ja-JP', 'en-US'], events: list, durationMs: last + 2500 };
+  };
+  let { requests, result } = await recordRequests(finish(`${words.join(' ')}.`), 'settle');
+  assert.deepEqual(
+    requests.filter((r) => r.final),
+    [],
+  );
+  assert.equal(result.sentences[0].settled, true);
+  assert.equal(result.sentences[0].finalText.split('\n').length, 2, 'both lines');
+
+  ({ requests, result } = await recordRequests(finish(`${words.join(' ')} 감사합니다.`), 'settle'));
+  assert.deepEqual(
+    requests
+      .filter((r) => r.final)
+      .map((r) => r.into)
+      .sort(),
+    ['English', 'Japanese'],
+    'other words: both lines are asked for',
+  );
+  assert.equal(result.sentences[0].settled, false);
 });
 
 test('an unknown strategy is refused before the replay starts', async () => {
