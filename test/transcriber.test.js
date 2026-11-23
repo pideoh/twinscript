@@ -463,3 +463,27 @@ test('stopping while a token is on its way opens no connection', async (t) => {
   assert.equal(sockets.length, 0);
   assert.deepEqual(log.errors, []);
 });
+
+test('once tokens have worked, a network outage while reconnecting does not put the key in the address', async (t) => {
+  const warnings = t.mock.method(console, 'warn', () => {});
+  // The first token is granted; the next request cannot be made (as during a short outage).
+  respond = (n) => {
+    if (n === 2) throw new TypeError('Failed to fetch');
+    return grantTokens(n);
+  };
+  const { tr, log, sockets, tick } = await setup(t);
+  sockets[0].open();
+  sockets[0].receive({ setupComplete: {} });
+  sockets[0].drop();
+  await settle();
+  await tick(500); // the retry asks for a token and fails
+  await settle();
+  await tick(1000); // the next retry gets one
+  await settle();
+  assert.equal(warnings.mock.callCount(), 0, 'no switch to the key');
+  assert.deepEqual(log.errors, []);
+  assert.ok(sockets.length >= 2);
+  for (const s of sockets) assert.ok(!s.url.includes('KEY'), 'the key is in no address');
+  assert.ok(new URL(sockets.at(-1).url).searchParams.get('access_token'));
+  tr.stop();
+});

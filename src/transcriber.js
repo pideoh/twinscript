@@ -80,8 +80,13 @@ export class GeminiLiveTranscriber {
       const result = await this.#requestToken();
       if (conn.retired || !this.running) return; // stopped or replaced while waiting
       if (result.token) {
+        this.tokenWorked = true;
         conn.viaToken = true;
         url = `${WS_BASE}.BidiGenerateContentConstrained?access_token=${encodeURIComponent(result.token)}`;
+      } else if (result.unavailable && this.tokenWorked) {
+        // Tokens worked earlier in this run, so this is an outage, not a missing service: retry
+        // like a dropped connection instead of going back to the key in the address.
+        return this.#tokenFailed(conn, { failed: result.unavailable });
       } else if (result.unavailable) {
         // The token service is in preview; a meeting must not fail because of it.
         this.keyInUrl = true;
