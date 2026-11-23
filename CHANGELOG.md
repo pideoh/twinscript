@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0](https://github.com/pideoh/twinscript/compare/v0.10.0...v0.11.0) (2026-11-23)
+
+
+### Features
+
+* keep a finished sentence's translation when it already covers the sentence ([#70](https://github.com/pideoh/twinscript/issues/70)) ([212b96d](https://github.com/pideoh/twinscript/commit/212b96d66cdc1a1536c6bac47fb634813e130b97))
+
+
+### Performance
+
+* save one sentence at a time and load transcripts only when a session is opened ([#71](https://github.com/pideoh/twinscript/issues/71)) ([806061e](https://github.com/pideoh/twinscript/commit/806061edd12b4d599c2dd88b1c73c8fddfa9a75b))
+
 ## [0.10.0](https://github.com/pideoh/twinscript/compare/v0.9.0...v0.10.0) (2026-11-23)
 
 
