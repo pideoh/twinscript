@@ -119,6 +119,8 @@ everything else to standard error, so `... > result.txt` saves the table alone.
 | --- | --- |
 | `--strategy a,b` | Pacing strategies to compare, one run after another on the same trace (default `interval`; the strategies are listed under [3](#3-try-another-pacing-strategy)) |
 | `--interval 1.5` | Seconds between in-progress translations for the `interval`, `steady` and `carry` strategies |
+| `--limit 120` | Replay only the first N seconds of the trace: a quick check of the setup or of the model's speed |
+| `--together` | Run the strategies at the same time instead of one after another, so they meet the same model speed |
 | `--out file.json` | Also write every sentence's timeline: what was shown, and when. It contains what was said |
 | `--speed 4` | Play the speech faster. The model answers no faster, so delays are not comparable: for a dry run only |
 | `--mock` | A fake translator on a simulated clock. No key, instant, the same numbers every time. It answers with the target and the text, so flicker is 0 |
@@ -134,6 +136,9 @@ node scripts/tuning/replay.mjs test/fixtures/replay-trace.json --mock
 
 ### Reading the results
 
+- The model's speed changes over time: answers that take 0.6 s in one run can take 3 s in the next. Strategies
+  replayed one after another may not have met the same conditions, so check `answer ms` in the second table, and use
+  `--together` when comparing.
 - Answers from the real model differ from run to run. Compare strategies on the same trace and run each more than
   once before trusting a difference.
 - Delay and flicker pull against each other: waiting longer rewrites less. Look at both columns together, and at

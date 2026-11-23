@@ -213,7 +213,12 @@ test('options are checked', () => {
     trace: 't.json',
     help: false,
     quiet: false,
+    limit: null,
+    together: false,
   });
+  assert.equal(parseArgs(['t.json', '--limit', '90', '--together']).limit, 90);
+  assert.equal(parseArgs(['t.json', '--together']).together, true);
+  assert.throws(() => parseArgs(['t.json', '--limit', '0']), /limit/);
   assert.throws(() => parseArgs([]), /No trace file given[\s\S]*--strategy/);
   assert.equal(parseArgs(['--help']).help, true);
   assert.throws(() => parseArgs(['t.json', '--interval', '0']), /interval/);
@@ -264,4 +269,11 @@ test('failed translation requests are counted and reported with their error', as
     seen.every((p, i) => i === 0 || p.traceMs >= seen[i - 1].traceMs),
     'the position in the trace never goes back',
   );
+});
+
+test('--limit replays only the beginning of the trace', async () => {
+  const { stdout, stderr } = await run('test/fixtures/replay-trace.json', '--mock', '--limit', '8');
+  assert.match(stderr, /Trace: 0:08 of speech/);
+  const sentences = Number(scores(stdout)[1].split(/\s{2,}/)[1]);
+  assert.ok(sentences > 0 && sentences < 6, `fewer sentences than the whole trace has: ${sentences}`);
 });

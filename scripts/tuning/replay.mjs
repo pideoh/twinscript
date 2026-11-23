@@ -425,6 +425,8 @@ Options
   --mock           fake translator on a simulated clock: no key, instant, same numbers every time
   --mock=rephrase  the same, but it reorders like a real model, so flicker shows unless the
                    strategy passes the shown translation to continue (carry, chunk)
+  --limit 120      replay only the first N seconds of the trace: a quick check
+  --together       run the strategies at the same time, so they meet the same model speed
   --out file.json  also write every sentence's timeline
   --quiet          print only the table
   --help           this text
@@ -452,6 +454,8 @@ export function parseArgs(argv) {
     interval: 1.5,
     speed: 1,
     mock: false,
+    limit: null,
+    together: false,
     out: null,
     trace: null,
     help: false,
@@ -466,6 +470,8 @@ export function parseArgs(argv) {
     if (a === '--strategy') args.strategies = value().split(',').filter(Boolean);
     else if (a === '--interval') args.interval = Number(value());
     else if (a === '--speed') args.speed = Number(value());
+    else if (a === '--limit') args.limit = Number(value());
+    else if (a === '--together') args.together = true;
     else if (a === '--mock') args.mock = true;
     else if (a === '--mock=rephrase') args.mock = 'rephrase';
     else if (a === '--quiet') args.quiet = true;
@@ -478,6 +484,7 @@ export function parseArgs(argv) {
   if (!args.trace) throw new Error(`No trace file given.\n\n${USAGE}`);
   if (!(args.interval > 0)) throw new Error('--interval must be a positive number of seconds');
   if (!(args.speed > 0)) throw new Error('--speed must be a positive number');
+  if (args.limit !== null && !(args.limit > 0)) throw new Error('--limit must be a positive number of seconds');
   return args;
 }
 
@@ -511,6 +518,12 @@ export async function main(argv, { log = console.log, warn = console.error, env 
   if (trace.version !== 1) throw new Error(`Unsupported trace version: ${trace.version}`);
   if (!Array.isArray(trace.events) || !trace.events.length) throw new Error('The trace has no recognizer results.');
   if (trace.langs.length > 2) warn(`Note: the trace has ${trace.langs.length} languages; only the first two are used.`);
+  if (args.limit !== null) {
+    const until = args.limit * 1000;
+    trace.events = trace.events.filter((e) => e.t <= until);
+    trace.durationMs = Math.min(trace.durationMs ?? until, until);
+    if (!trace.events.length) throw new Error(`The trace has no recognizer results in its first ${args.limit} s.`);
+  }
   const apiKey = env.GEMINI_API_KEY;
   if (!args.mock && !apiKey) throw new Error('Set GEMINI_API_KEY in the environment, or pass --mock.');
   const [langA, langB] = trace.langs.slice(0, 2).map((code) => LANGS.find((l) => l.code === code)?.name);
@@ -526,18 +539,18 @@ export async function main(argv, { log = console.log, warn = console.error, env 
     );
   else {
     const each = lengthMs / args.speed;
+    const all = args.together ? each : each * args.strategies.length;
     say(
       `Translator: ${MODEL}. Each strategy replays in real time: about ${clockTime(each)}` +
         (args.strategies.length > 1
-          ? `, ${clockTime(each * args.strategies.length)} for all ${args.strategies.length}.`
+          ? `, ${clockTime(all)} for all ${args.strategies.length}${args.together ? ' (run together)' : ''}.`
           : '.'),
     );
     if (args.speed !== 1)
       say('Note: with --speed the speech is shortened but the model answers no faster, so delays are not comparable.');
   }
 
-  const runs = [];
-  for (const strategy of args.strategies) {
+  const runOne = async (strategy) => {
     // --mock runs on a simulated clock: instant and the same on every run.
     const clock = args.mock ? createVirtualClock(Date.parse(trace.startedAt) || Date.UTC(2026, 0, 1)) : realClock();
     const translator = args.mock
@@ -573,12 +586,17 @@ export async function main(argv, { log = console.log, warn = console.error, env 
             );
         },
       });
-      runs.push(await Promise.race([run, failure]));
+      return await Promise.race([run, failure]);
     } finally {
       clearInterval(ticker);
+      line();
     }
-    line();
-  }
+  };
+  // One after another by default. --together starts them at once: the model's speed changes over
+  // time, and strategies replayed one after another may not have met the same conditions.
+  let runs = [];
+  if (args.together && !args.mock) runs = await Promise.all(args.strategies.map(runOne));
+  else for (const strategy of args.strategies) runs.push(await runOne(strategy));
   log(formatTable(runs));
   log(`\n${formatHealth(runs)}`);
   say(LEGEND);
