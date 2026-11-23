@@ -137,3 +137,28 @@ test('PC audio that delivers nothing is reported instead of failing silently', a
   await page.click('#toggle');
   await close();
 });
+
+test('a saved session still shows the language code of each line after a reload', async () => {
+  const { page, errors, close } = await openApp('?mock=1');
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.querySelectorAll('#log .seg:not(.live) .tgt[data-lang="JA"]').length > 0);
+  await page.click('#toggle');
+  await saved(page);
+  const codes = () =>
+    page
+      .locator('#log .seg')
+      .evaluateAll((ss) =>
+        ss.slice(0, 3).map((s) => [s.querySelector('.src').dataset.lang, s.querySelector('.tgt').dataset.lang]),
+      );
+  const before = await codes();
+  assert.deepEqual(before, [
+    ['JA', 'EN'],
+    ['JA', 'EN'],
+    ['EN', 'JA'],
+  ]);
+  await reload(page);
+  await page.waitForFunction(() => document.querySelectorAll('#log .seg').length >= 3);
+  assert.deepEqual(await codes(), before);
+  assert.deepEqual(errors, []);
+  await close();
+});
