@@ -725,6 +725,16 @@ function setTargets(seg, codes) {
   showTargets(seg);
   return true;
 }
+// The short code that leads a translation line: "EN", "JA", "ZH". All tags have the same width,
+// so the translations start at the same place. Two selected languages that share the code
+// (Simplified and Traditional Chinese) keep their full one.
+function langTag(code) {
+  const display = LANGS.find((l) => l.code === code)?.display ?? code;
+  const short = (d) => d.split('-')[0];
+  const selected = [settings.langA, settings.langB, settings.langC].filter((c) => c && c !== code);
+  const clash = selected.some((c) => short(LANGS.find((l) => l.code === c)?.display ?? c) === short(display));
+  return (clash ? display : short(display)).toUpperCase();
+}
 function setLine(seg, code, text, cls) {
   const wasNear = nearBottom();
   let line = seg.lines.get(code);
@@ -732,8 +742,9 @@ function setLine(seg, code, text, cls) {
     const lang = LANGS.find((l) => l.code === code);
     line = document.createElement('div');
     const tag = document.createElement('span');
-    tag.className = 'label lang-tag';
-    tag.textContent = lang?.display ?? code;
+    tag.className = 'lang-tag';
+    tag.textContent = langTag(code);
+    if (lang) tag.title = langLabel(code);
     const body = document.createElement('span');
     body.className = 'tgt-text';
     if (lang) body.lang = lang.display;

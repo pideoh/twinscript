@@ -903,8 +903,15 @@ input[type="range"] {
   align-items: baseline;
   gap: var(--base-size-8);
 }
+/* A quiet, fixed-width code instead of a pill, so every translation starts at the same place. */
 .tgt-line .lang-tag {
+  flex: none;
+  min-width: var(--base-size-24);
+  color: var(--fgColor-muted);
+  font-family: var(--fontStack-monospace);
+  font-size: var(--text-body-size-small);
   font-weight: var(--base-text-weight-normal);
+  letter-spacing: 0;
 }
 .tgt-text {
   min-width: 0;

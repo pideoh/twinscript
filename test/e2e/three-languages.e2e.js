@@ -76,37 +76,37 @@ test('with a third language every sentence is translated into the other two, a f
     {
       src: 'それでは会議を始めます。',
       lines: [
-        ['en', '[English] それでは会議を始めます。'],
-        ['zh-Hans', '[Simplified Chinese] それでは会議を始めます。'],
+        ['EN', '[English] それでは会議を始めます。'],
+        ['ZH', '[Simplified Chinese] それでは会議を始めます。'],
       ],
     },
     {
       src: "Let's begin the meeting now.",
       lines: [
-        ['ja', "[Japanese] Let's begin the meeting now."],
-        ['zh-Hans', "[Simplified Chinese] Let's begin the meeting now."],
+        ['JA', "[Japanese] Let's begin the meeting now."],
+        ['ZH', "[Simplified Chinese] Let's begin the meeting now."],
       ],
     },
     {
       src: '我们这一代人要为未来思考',
       lines: [
-        ['ja', '[Japanese] 我们这一代人要为未来思考'],
-        ['en', '[English] 我们这一代人要为未来思考'],
+        ['JA', '[Japanese] 我们这一代人要为未来思考'],
+        ['EN', '[English] 我们这一代人要为未来思考'],
       ],
     },
     {
       src: 'और यह है छोटे सिंक्रोनस मोटर।',
       lines: [
-        ['ja', '[Japanese] और यह है छोटे सिंक्रोनस मोटर।'],
-        ['en', '[English] और यह है छोटे सिंक्रोनस मोटर।'],
-        ['zh-Hans', '[Simplified Chinese] और यह है छोटे सिंक्रोनस मोटर।'],
+        ['JA', '[Japanese] और यह है छोटे सिंक्रोनस मोटर।'],
+        ['EN', '[English] और यह है छोटे सिंक्रोनस मोटर।'],
+        ['ZH', '[Simplified Chinese] और यह है छोटे सिंक्रोनस मोटर।'],
       ],
     },
     {
       src: '東京都知事',
       lines: [
-        ['en', '[English] 東京都知事'],
-        ['zh-Hans', '[Simplified Chinese] 東京都知事'],
+        ['EN', '[English] 東京都知事'],
+        ['ZH', '[Simplified Chinese] 東京都知事'],
       ],
     },
   ];
@@ -289,7 +289,7 @@ test('with a third language the sentence in progress is translated when its writ
   const live = await page
     .locator('.seg.live .tgt-line')
     .evaluateAll((ls) => ls.map((l) => l.querySelector('.lang-tag').textContent));
-  assert.deepEqual(live, ['en', 'zh-Hans']);
+  assert.deepEqual(live, ['EN', 'ZH']);
   // In the caption zone, translations only: the source is hidden once a translation is there.
   assert.ok(await page.locator('#now .seg.live .src').isHidden());
   await linesDone(page, [2]);
