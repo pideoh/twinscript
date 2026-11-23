@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.12.0](https://github.com/pideoh/twinscript/compare/v0.11.0...v0.12.0) (2026-11-23)
+
+
+### Features
+
+* label the speakers of a session from its recording ([#79](https://github.com/pideoh/twinscript/issues/79)) ([d7eba37](https://github.com/pideoh/twinscript/commit/d7eba37f4f94fcb027f42886dfb654d6f7438f75))
+* make summaries from templates, as often as wanted, and keep them all ([#75](https://github.com/pideoh/twinscript/issues/75)) ([82ac269](https://github.com/pideoh/twinscript/commit/82ac269ce293de233a10fb4ecb67ecc3bc244ebf))
+* show what each session used and an estimate of its cost ([#77](https://github.com/pideoh/twinscript/issues/77)) ([417f560](https://github.com/pideoh/twinscript/commit/417f56081ae922603368549a5fcccd060f4877f1))
+
+
+### Bug Fixes
+
+* keep the API key out of the live connection's address ([#74](https://github.com/pideoh/twinscript/issues/74)) ([abb3d6e](https://github.com/pideoh/twinscript/commit/abb3d6e0f75746386c0245000e6f8139921ee546))
+* show the language codes of a saved session after it is opened again ([#78](https://github.com/pideoh/twinscript/issues/78)) ([d9235c0](https://github.com/pideoh/twinscript/commit/d9235c066f398f1475879eebb14164365c919813))
+
 ## [0.11.0](https://github.com/pideoh/twinscript/compare/v0.10.0...v0.11.0) (2026-11-23)
 
 
