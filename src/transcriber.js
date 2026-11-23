@@ -1,10 +1,13 @@
 // Streaming speech-to-text over the Gemini Live API (gemini-3.5-transcribe-live).
 // A session lasts at most 10 minutes, so connections are rotated transparently:
 // a fresh one is opened in the background and audio is switched over at a pause.
+// Each connection authenticates with its own single-use token, requested with the API key in a
+// header just before connecting, so the key never appears in the connection's address.
 import { MessageError } from './message-error.js';
 
-const WS_URL =
-  'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
+const WS_BASE = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService';
+const TOKEN_URL = 'https://generativelanguage.googleapis.com/v1beta/auth_tokens';
+const TOKEN_TIMEOUT_MS = 10_000;
 const MODEL = 'models/gemini-3.5-transcribe-live';
 const ROTATE_SOFT_MS = 8.5 * 60 * 1000; // rotate at the next pause after this
 const ROTATE_HARD_MS = 9.5 * 60 * 1000; // rotate regardless
@@ -12,6 +15,11 @@ const READY_FALLBACK_MS = 1500;
 const MAX_PENDING_CHUNKS = 150; // ~15 s of audio buffered while (re)connecting
 const MAX_RETRIES = 5;
 const FATAL_REASON = /api.?key|permission|unauth|credential|quota|billing|not found|not supported/i;
+const KEY_REASON = /api.?key|permission|unauth|credential/i;
+const API_KEY_REASON = /api.?key/i;
+const TOKEN_REASON = /\btoken\b|expired/i; // a used-up or expired token: get a new one
+// Token requests answered like this mean the token service is unavailable, not that the key is wrong.
+const NO_TOKEN_SERVICE = new Set([400, 404, 501]);
 
 export class GeminiLiveTranscriber {
   constructor({ apiKey, languageCodes, smart, customVocabulary = [], onInterim, onFinal, onState, onError }) {
@@ -27,6 +35,7 @@ export class GeminiLiveTranscriber {
     this.active = null;
     this.pending = [];
     this.retries = 0;
+    this.keyInUrl = false; // set once the token service turns out to be unavailable
   }
 
   start() {
@@ -58,10 +67,42 @@ export class GeminiLiveTranscriber {
     }
   }
 
+  // Returns the connection at once; its socket opens once a token has been obtained.
   #open() {
-    const ws = new WebSocket(`${WS_URL}?key=${encodeURIComponent(this.apiKey)}`);
+    const conn = { ws: null, ready: false, retired: false, viaToken: false, timers: [] };
+    this.#connect(conn);
+    return conn;
+  }
+
+  async #connect(conn) {
+    let url;
+    if (!this.keyInUrl) {
+      const result = await this.#requestToken();
+      if (conn.retired || !this.running) return; // stopped or replaced while waiting
+      if (result.token) {
+        // Said once per run, so the path taken can be checked from outside (--enable-logging).
+        if (!this.tokenWorked) console.info('Twinscript: the live connection uses single-use tokens.');
+        this.tokenWorked = true;
+        conn.viaToken = true;
+        url = `${WS_BASE}.BidiGenerateContentConstrained?access_token=${encodeURIComponent(result.token)}`;
+      } else if (result.unavailable && this.tokenWorked) {
+        // Tokens worked earlier in this run, so this is an outage, not a missing service: retry
+        // like a dropped connection instead of going back to the key in the address.
+        return this.#tokenFailed(conn, { failed: result.unavailable });
+      } else if (result.unavailable) {
+        // The token service is in preview; a meeting must not fail because of it.
+        this.keyInUrl = true;
+        console.warn(
+          `Twinscript: single-use tokens are unavailable (${result.unavailable}); the live connection uses the API key for the rest of this session.`,
+        );
+      } else {
+        return this.#tokenFailed(conn, result);
+      }
+    }
+    url ??= `${WS_BASE}.BidiGenerateContent?key=${encodeURIComponent(this.apiKey)}`;
+    const ws = new WebSocket(url);
     ws.binaryType = 'arraybuffer';
-    const conn = { ws, ready: false, retired: false, timers: [] };
+    conn.ws = ws;
 
     ws.onopen = () => {
       const transcription = { languageCodes: this.languageCodes };
@@ -110,14 +151,67 @@ export class GeminiLiveTranscriber {
         this.next = null;
         return;
       } // background rotation failed; hard timer or drop will retry
-      this.#handleDrop(conn, event);
+      const reason = event.reason || '';
+      const tokenTrouble = conn.viaToken && TOKEN_REASON.test(reason) && !API_KEY_REASON.test(reason);
+      this.#handleDrop(conn, event, tokenTrouble);
     };
     ws.onerror = () => {}; // onclose follows with details
-    return conn;
+  }
+
+  // Resolves to { token }, { unavailable: reason } (fall back to the key), { fatal: reason }
+  // (the key is refused) or { failed: reason } (worth retrying). Never rejects.
+  async #requestToken() {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TOKEN_TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch(TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
+        body: '{}',
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (controller.signal.aborted) return { failed: 'token request timed out' };
+      return { unavailable: this.#redact(`request failed: ${err?.message || err}`) };
+    } finally {
+      clearTimeout(timer);
+    }
+    let body = null;
+    try {
+      body = await res.json();
+    } catch {
+      /* not JSON */
+    }
+    if (res.ok) {
+      const name = body?.name;
+      return typeof name === 'string' && name ? { token: name } : { unavailable: 'no token in the response' };
+    }
+    const message = this.#redact(typeof body?.error?.message === 'string' ? body.error.message : '');
+    const reason = message || `HTTP ${res.status}`;
+    const status = res.status;
+    if (status === 401 || status === 403 || (status === 400 && KEY_REASON.test(message))) return { fatal: reason };
+    if (NO_TOKEN_SERVICE.has(status)) return { unavailable: `HTTP ${status}${message ? `: ${message}` : ''}` };
+    if (FATAL_REASON.test(message)) return { fatal: reason };
+    return { failed: reason };
+  }
+
+  #redact(text) {
+    return this.apiKey ? text.split(this.apiKey).join('***') : text;
+  }
+
+  #tokenFailed(conn, { fatal, failed }) {
+    if (conn === this.next) {
+      this.next = null; // background rotation failed; hard timer or drop will retry
+      return;
+    }
+    if (conn !== this.active) return;
+    if (fatal) return this.#fail(new MessageError('error.connectFailed', { reason: fatal }));
+    this.#handleDrop(conn, { reason: failed, code: 0 }, true);
   }
 
   #markReady(conn) {
-    if (conn.ready || conn.retired || conn.ws.readyState !== WebSocket.OPEN) return;
+    if (conn.ready || conn.retired || conn.ws?.readyState !== WebSocket.OPEN) return;
     conn.ready = true;
     conn.softAt = Date.now() + ROTATE_SOFT_MS;
     conn.timers.push(
@@ -150,6 +244,7 @@ export class GeminiLiveTranscriber {
   #retire(conn, delay = 0) {
     conn.retired = true;
     conn.timers.forEach(clearTimeout);
+    if (!conn.ws) return; // still waiting for its token; it will not connect now
     try {
       if (conn.ws.readyState === WebSocket.OPEN)
         conn.ws.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
@@ -167,24 +262,26 @@ export class GeminiLiveTranscriber {
     else close();
   }
 
-  #handleDrop(conn, event) {
+  // `transient`: the setup was not the problem (a used-up token, a failed token request), so neither
+  // the term list nor the language hint is dropped; it is retried like any dropped connection.
+  #handleDrop(conn, event, transient = false) {
     const reason = event.reason || '';
     if (this.next) {
       this.#retire(this.next);
       this.next = null;
     }
 
-    if (!conn.ready && FATAL_REASON.test(reason)) {
+    if (!transient && !conn.ready && FATAL_REASON.test(reason)) {
       return this.#fail(new MessageError('error.connectFailed', { reason }));
     }
-    if (!conn.ready && this.customVocabulary.length && !this.triedWithoutVocabulary) {
+    if (!transient && !conn.ready && this.customVocabulary.length && !this.triedWithoutVocabulary) {
       // The term list may be rejected; transcribing without it beats not transcribing at all.
       this.triedWithoutVocabulary = true;
       this.customVocabulary = [];
       this.active = this.#open();
       return;
     }
-    if (!conn.ready && this.languageCodes.length && !this.triedAuto) {
+    if (!transient && !conn.ready && this.languageCodes.length && !this.triedAuto) {
       // The language hint may be unsupported; fall back to automatic detection.
       this.triedAuto = true;
       this.languageCodes = [];

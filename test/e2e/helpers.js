@@ -75,6 +75,9 @@ export function setup() {
       }
     }, stored);
     if (init) await context.addInitScript(init.script, init.arg);
+    // Every live connection first asks for a single-use token; tests that mock the WebSocket
+    // themselves get one here (mockGemini's own answer takes precedence).
+    await context.route(TOKEN_ENDPOINT, grantToken);
     await page.goto(`${origin}/${query}`);
     await ready(page);
     return { page, errors, close: () => context.close() };
@@ -102,10 +105,36 @@ export const rows = (page) =>
   );
 export const sessionNames = (page) => page.locator('#sessionList .name').allTextContents();
 
-// Mocks both Gemini endpoints. `script` is a list of [audioChunkNumber, 'interim' | 'final', text].
-export async function mockGemini(page, script) {
+const TOKEN_ENDPOINT = /generativelanguage\.googleapis\.com\/v1beta\/auth_tokens/;
+let tokensIssued = 0;
+const grantToken = (route) =>
+  route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ name: `auth_tokens/e2e-${++tokensIssued}` }),
+  });
+
+// Mocks the Gemini endpoints: the live transcription (WebSocket), its token request and translation.
+// `script` is a list of [audioChunkNumber, 'interim' | 'final', text]. `tokens` is how the token
+// request is answered: 'grant', 'unreachable' (a network failure) or an HTTP status with
+// `tokenError` as the error message. Returns the token requests and the WebSocket addresses seen.
+export async function mockGemini(page, script, { tokens = 'grant', tokenError = '' } = {}) {
   let chunks = 0;
+  const tokenRequests = [];
+  const sockets = [];
+  await page.route(TOKEN_ENDPOINT, (route) => {
+    const request = route.request();
+    tokenRequests.push({ url: request.url(), headers: request.headers(), body: request.postData() });
+    if (tokens === 'grant') return grantToken(route);
+    if (tokens === 'unreachable') return route.abort('failed');
+    return route.fulfill({
+      status: tokens,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: tokens, message: tokenError } }),
+    });
+  });
   await page.routeWebSocket(/generativelanguage/, (ws) => {
+    sockets.push(ws.url());
     ws.onMessage((raw) => {
       const msg = JSON.parse(raw);
       if (msg.setup) ws.send(JSON.stringify({ setupComplete: {} }));
@@ -127,6 +156,8 @@ export async function mockGemini(page, script) {
     restart: () => {
       chunks = 0;
     },
+    tokenRequests,
+    sockets,
   };
 }
 // Mocks the summary request (the one whose prompt holds a <transcript>), leaving translation

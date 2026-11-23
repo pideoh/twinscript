@@ -138,6 +138,10 @@ Twinscript has no server. Audio and text go directly from your computer to Googl
 which is stored on your computer, encrypted by the operating system (the Keychain on macOS, DPAPI on Windows). If the
 system cannot encrypt it, the key is not saved and the app asks for it again the next time.
 
+For the live transcription, the key is sent only in a request header, to obtain a single-use, short-lived token for each
+connection; the key is not placed in the connection's address. If Google's token service is unavailable, the app
+connects with the key in the address instead for the rest of the session and logs a warning to the developer console.
+
 On macOS the encryption key lives in the Keychain, in an item named "Twinscript Safe Storage". If macOS asks whether
 Twinscript may use it, choose "Always Allow"; the app uses it only to read and save your API key.
 
