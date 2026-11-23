@@ -1,4 +1,5 @@
 import { AudioCapture, canCaptureSystemAudio, inMacDesktopApp } from './audio.js';
+import { addFileSourceOption, FILE_TAIL_MS, pickAudioFile, traceDownloadButton } from './debug-tools.js';
 import { buildTranscript, formatDateTime, formatElapsed, safeFileName } from './exporter.js';
 import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './i18n.js';
 import { octicon } from './icons.js';
@@ -12,6 +13,7 @@ import { loadApiKey, saveApiKey } from './secrets.js';
 import { UtteranceTracker } from './segmenter.js';
 import { store } from './store.js';
 import { GeminiSummarizer } from './summarizer.js';
+import { createTrace } from './trace.js';
 import { GeminiLiveTranscriber } from './transcriber.js';
 import { GeminiTranslator, RateLimitError } from './translator.js';
 import { applyReplacements, parseVocabulary } from './vocabulary.js';
@@ -67,6 +69,9 @@ const HISTORY_LINES = 3;
 const SILENT_SYSTEM_AUDIO_MS = 8000; // how long PC audio may deliver nothing before the user is told
 const MOCK = new URLSearchParams(location.search).has('mock');
 const DEBUG = new URLSearchParams(location.search).has('debug'); // log raw recognizer output to the console
+// Debug only: the recognizer trace of the last run (src/trace.js), also readable from the console.
+let lastTrace = null;
+if (DEBUG) window.__twinscriptTrace = () => lastTrace;
 
 const $ = (id) => document.getElementById(id);
 const els = Object.fromEntries(
@@ -252,6 +257,8 @@ if (!canCaptureSystemAudio()) {
   for (const option of els.source.querySelectorAll('option:not([value=mic])')) option.remove();
   settings.source = 'mic';
 }
+if (DEBUG) addFileSourceOption(els.source);
+else if (settings.source === 'file') settings.source = 'mic';
 els.source.value = settings.source;
 applyFontSize();
 
@@ -967,7 +974,7 @@ function download(blob, name) {
 }
 
 els.export.onclick = () => {
-  if (isEmpty(current)) return toast(t('toast.nothingToSave'));
+  if (isEmpty(current) && !(DEBUG && lastTrace)) return toast(t('toast.nothingToSave'));
   flushSaves(); // so the title and recording lengths are up to date
   const sess = current;
   const rows = sess.recordings.map((rec, i) => {
@@ -996,6 +1003,7 @@ els.export.onclick = () => {
     heading.textContent = t('export.recordings');
     rows.unshift(heading);
   }
+  if (DEBUG && lastTrace) rows.push(traceDownloadButton(lastTrace, download));
   els.recordings.replaceChildren(...rows);
   els.exportDialog.showModal();
 };
@@ -1216,10 +1224,12 @@ async function start() {
   const handlers = {
     onInterim: (text) => {
       if (DEBUG) console.log('[interim]', text);
+      if (run === r) r.trace?.add('interim', text);
       if (run === r) r.tracker.interim(applyReplacements(text, vocabulary.rules));
     },
     onFinal: (text) => {
       if (DEBUG) console.log('[final]', text);
+      if (run === r) r.trace?.add('final', text);
       if (run === r) r.tracker.final(applyReplacements(text, vocabulary.rules));
     },
     onState: (state) => run === r && setStatus(state),
@@ -1256,6 +1266,9 @@ async function start() {
 
   try {
     if (!MOCK) {
+      const file = settings.source === 'file' ? await pickAudioFile() : undefined;
+      if (file === null) return run === r && stop(); // the file picker was cancelled
+      if (run !== r) return;
       r.capture = new AudioCapture({
         onChunk: (b64) => r.transcriber.sendAudio(b64),
         onLevel: (rms) => {
@@ -1267,12 +1280,21 @@ async function start() {
             stop();
           }
         },
+        onFileEnded: () => {
+          setTimeout(() => {
+            if (run !== r) return;
+            toast(t('toast.audioEnded'));
+            stop();
+          }, FILE_TAIL_MS);
+        },
       });
-      await r.capture.start(settings.source);
+      await r.capture.start(settings.source, file);
       if (run !== r) return r.capture.stop(); // stopped while the permission prompt was open
     }
     r.startedAt = Date.now();
-    if (!MOCK && settings.record && canRecord()) startRecording(r);
+    // Times in the trace count from here, which for a file is (about) where its playback starts.
+    if (DEBUG) r.trace = createTrace({ langs: r.langs.map((l) => l.code), source: settings.source });
+    if (!MOCK && settings.record && settings.source !== 'file' && canRecord()) startRecording(r);
     r.transcriber.start();
     r.ticker = setInterval(() => {
       els.clock.textContent = formatElapsed(elapsedNow());
@@ -1337,6 +1359,10 @@ function stop() {
   clearInterval(r.autosave);
   if (r.startedAt) r.session.activeMs = elapsedNow();
   if (r.recording) r.recording.durationMs = Date.now() - r.recording.startedAt;
+  if (r.trace) {
+    r.trace.end();
+    lastTrace = r.trace.toJSON();
+  }
   run = null;
   // Let the recorder hand over its last chunk before the audio graph is torn down.
   const release = () => r.capture?.stop();

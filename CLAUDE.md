@@ -24,6 +24,9 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/secrets.js` | Where the API key is kept (desktop: `window.secretStore`; browser: memory only). DOM-free |
 | `src/exporter.js` | Transcript export (txt / md / csv / srt). Pure functions |
 | `src/mock.js` | Stand-in engines for the `?mock=1` demo |
+| `src/pacer.js` | When the sentence being spoken is translated and whether a result is still shown (strategy `interval`: at most every interval seconds, no overlap, at least 4 characters, a 60 s pause after a rate limit). DOM-free, clock and timers injected |
+| `src/trace.js` | Debug-only (`?debug=1`) trace of raw recognizer results with times; JSON format v1 and the download file name. DOM-free |
+| `src/debug-tools.js` | Debug-only tools wired into `app.js`: the "Audio file (debug)" input and file picker, the trace download entry |
 | `src/i18n.js` | Display-language resolution (`resolveLocale`), `t(key, params)`, applying `data-i18n*` to static HTML. Languages are registered only in its `LOCALES` array |
 | `src/locales/*.js` | Message catalogs (`en` is the reference and fallback, `ja`, `zh-Hans`). Dotted keys |
 | `src/icons.js` | Octicons (SVG) for buttons that are created at runtime |
@@ -39,6 +42,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `.github/workflows/release.yml`, `release-please-config.json`, `.release-please-manifest.json` | release-please keeps a release pull request open on `main`; merging it tags `vX.Y.Z`, creates the GitHub Release, and the workflow builds and uploads the zips |
 | `.github/workflows/preview-build.yml` | Started by hand: builds signed zips of a branch as workflow artifacts, to try the app before a release. Publishes nothing |
 | `scripts/check-commits.js` | Checks that a pull request's commit subjects and title follow Conventional Commits (run in `test.yml`) |
+| `scripts/tuning/replay.mjs`, `scripts/tuning/metrics.mjs`, `scripts/tuning/clock.mjs` | Replays a recognizer trace through the segmenter, the pacer and the translator (real, or `--mock` on a simulated clock) and scores first / final delay, flicker and requests. See "Tuning tools" in CONTRIBUTING.md |
 | `scripts/sign-mac.js`, `scripts/verify-mac-signature.js`, `scripts/ci-mac-signing-keychain.sh` | macOS releases are re-signed with a fixed self-signed certificate (electron-builder `afterSign` hook) so the app's identity, and the permissions tied to it, survive updates; the check and the CI keychain setup. `.github/workflows/sign-check.yml` exercises this on pull requests |
 
 ## Commands
@@ -46,7 +50,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 - `npm run lint`: Biome checks formatting and lint rules; `npm run format` applies the fixes. Run before committing.
 - `npm test`: unit tests. Run after every logic change.
 - `npm run test:e2e`: only when `src/app.js`, `src/audio.js`, HTML or CSS changed.
-- `npm start`: http://localhost:5173 (`?mock=1` for a demo without a key, `?debug=1` to log raw recognizer output).
+- `npm start`: http://localhost:5173 (`?mock=1` for a demo without a key, `?debug=1` to log raw recognizer output, download a recognizer trace and use an audio file as input; see "Tuning tools" in CONTRIBUTING.md).
 - `npm run app`: start the desktop app. `npm run test:app` only when `app/` or the caption window changed.
 - `npm run dist:mac` / `npm run dist:win`: build zips into `dist/`.
 

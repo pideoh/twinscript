@@ -61,17 +61,52 @@ it replaces the installed app and keeps its permissions.
 
 ## Tuning tools
 
+Opening the app with `?debug=1` (for example http://localhost:5173/?debug=1) turns on tools for tuning segmentation
+and translation timing. None of them exist without it.
+
+- **Raw recognizer output**: every interim and final result is logged to the console as `[interim]` / `[final]`.
+- **Recognizer trace**: each run records what the recognizer delivered and when. After you stop, the download dialog
+  has a "Download recognizer trace (debug)" entry that saves `twinscript-trace-<yyyymmdd-hhmmss>.json`;
+  `window.__twinscriptTrace()` in the console returns the same object.
+- **Audio file as input**: the audio input select gets "Audio file (debug)". Starting asks for a file (audio, or WebM /
+  MP4 video), which is decoded and played in real time into the recognizer, silently. The run stops by itself 2 seconds
+  after the file ends. Nothing is recorded to the session. The whole file is decoded into memory first (about 11 MB
+  per minute of stereo audio).
+
+The trace format (`src/trace.js`):
+
+```json
+{
+  "version": 1,
+  "startedAt": "2026-11-23T01:02:03.456Z",
+  "langs": ["ja-JP", "en-US"],
+  "source": "mic",
+  "events": [
+    { "t": 812, "kind": "interim", "text": "Hello" },
+    { "t": 2040, "kind": "final", "text": "Hello everyone." }
+  ],
+  "durationMs": 5310
+}
+```
+
+`source` is `mic`, `system`, `both` or `file`; `t` is whole milliseconds since audio capture started (for a file, about where its
+playback starts); `text` is the
+recognizer's text before the correction rules in Settings are applied.
+
+A trace contains what was said in the meeting. Do not commit traces or attach them to public issues;
+`*.trace.json` and `twinscript-trace-*.json` are ignored by Git.
+
+### Replaying a trace
+
 When the sentence being spoken is translated is decided by `src/pacer.js`. To compare ways of pacing those
-requests, replay a recognizer trace through it with the real translation model:
+requests, replay a recorded trace through it with the real translation model:
 
 ```sh
 GEMINI_API_KEY=... node scripts/tuning/replay.mjs trace.json [--strategy interval[,other]] [--interval 1.5] [--speed 1] [--out result.json]
 node scripts/tuning/replay.mjs test/fixtures/replay-trace.json --mock   # no key: a fake translator on a simulated clock
 ```
 
-A trace is JSON: `{ version: 1, startedAt, langs: ['ja-JP', 'en-US'], source, durationMs, events: [{ t, kind, text }] }`,
-where `t` is milliseconds since the start and `kind` is `interim` or `final`. Only the first two languages are used.
-The tool prints one row per strategy (mean / median / p90 over sentences) and writes every sentence's timeline to `--out`:
+Only the first two languages of a trace are used. The tool prints one row per strategy (mean / median / p90 over sentences) and writes every sentence's timeline to `--out`:
 
 - `first ms`: from a sentence's first in-progress text to its first translation on screen. Lower is better.
 - `final ms`: from the sentence being finished to its complete final translation on screen.
