@@ -55,6 +55,10 @@ Dependency updates from Dependabot are committed as `chore(deps): ...` and ship 
 one releasable on its own, for example an Electron security fix, a maintainer can merge it with a
 `fix(deps): ...` title.
 
+To try the app before a release, a maintainer can build it from any branch: Actions → preview-build → Run workflow.
+The zips are attached to that run for a week and nothing is published. The macOS build is signed like a release, so
+it replaces the installed app and keeps its permissions.
+
 ## Adding a display language
 
 Copy `src/locales/en.js` to a new file, translate the values, and register it in the `LOCALES`
