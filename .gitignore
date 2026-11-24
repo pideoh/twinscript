@@ -4,3 +4,4 @@ dist/
 CLAUDE.local.md
 *.trace.json
 twinscript-trace-*.json
+native/
