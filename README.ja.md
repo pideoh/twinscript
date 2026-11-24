@@ -26,7 +26,8 @@
 | --- | --- |
 | `twinscript-<バージョン>-mac-arm64.zip` | Apple シリコンの Mac |
 | `twinscript-<バージョン>-mac-x64.zip` | Intel の Mac |
-| `twinscript-<バージョン>-win-x64.zip` | Windows（64ビット） |
+| `twinscript-<バージョン>-win-x64.zip` | Intel / AMD の Windows |
+| `twinscript-<バージョン>-win-arm64.zip` | Arm の Windows（Snapdragon X など） |
 
 アプリは Apple の公証を受けておらず、Windows の発行元証明書での署名もしていないため、初回に OS の警告が出ます。
 
@@ -218,7 +219,7 @@ macOS に尋ねられたら、「常に許可」を選んでください。ア�
 npm install
 npm run app        # デスクトップアプリを起動
 npm run dist:mac   # dist/ に macOS 用 zip（Apple シリコン / Intel）
-npm run dist:win   # dist/ に Windows 用 zip（x64）
+npm run dist:win   # dist/ に Windows 用 zip（x64 と arm64）
 ```
 
 リリースは、`main` 上で自動的に更新されるリリース用プルリクエストから行います。これをマージすると zip がビルド・公開されます。

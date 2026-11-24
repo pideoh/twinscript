@@ -53,6 +53,10 @@ jobs:
           - name: win-x64
             os: windows-latest
             args: --win zip --x64
+          # Built on the x64 runner; electron-builder downloads the arm64 Electron.
+          - name: win-arm64
+            os: windows-latest
+            args: --win zip --arm64
     runs-on: ${{ matrix.os }}
     env:
       # 7-Zip level for the zips (default is 5). Level 1 is about three times faster and the
