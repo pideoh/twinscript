@@ -26,7 +26,8 @@ Download the zip for your computer from [Releases](../../releases):
 | --- | --- |
 | `twinscript-<version>-mac-arm64.zip` | Mac with Apple silicon |
 | `twinscript-<version>-mac-x64.zip` | Mac with an Intel processor |
-| `twinscript-<version>-win-x64.zip` | Windows (64-bit) |
+| `twinscript-<version>-win-x64.zip` | Windows on an Intel or AMD processor |
+| `twinscript-<version>-win-arm64.zip` | Windows on Arm (Snapdragon X and the like) |
 
 The app is not notarized by Apple or signed with a Windows publisher certificate, so the operating system warns the first time you open it.
 
@@ -230,7 +231,7 @@ The app is built with web technology and packaged with Electron.
 npm install
 npm run app        # run the desktop app
 npm run dist:mac   # macOS zips in dist/ (Apple silicon / Intel)
-npm run dist:win   # Windows zip in dist/ (x64)
+npm run dist:win   # Windows zips in dist/ (x64 and arm64)
 ```
 
 Releases are made from a release pull request that is kept up to date on `main`; merging it builds and publishes

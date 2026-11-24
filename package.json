@@ -16,7 +16,7 @@
     "test:app": "node --test test/app/*.app.js",
     "app": "electron .",
     "dist:mac": "electron-builder --mac zip --arm64 --x64",
-    "dist:win": "electron-builder --win zip --x64"
+    "dist:win": "electron-builder --win zip --x64 --arm64"
   },
   "type": "module",
   "devDependencies": {

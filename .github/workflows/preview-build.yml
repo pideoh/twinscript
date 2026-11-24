@@ -30,6 +30,9 @@ jobs:
           - name: win-x64
             os: windows-latest
             args: --win zip --x64
+          - name: win-arm64
+            os: windows-latest
+            args: --win zip --arm64
     runs-on: ${{ matrix.os }}
     env:
       ELECTRON_BUILDER_COMPRESSION_LEVEL: 1
