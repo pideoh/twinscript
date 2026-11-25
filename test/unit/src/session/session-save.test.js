@@ -196,6 +196,20 @@ test('a session deleted before its save is not written', () => {
   assert.equal(store.saved.length, 0);
 });
 
+test('a deleted session stays deleted when work on it finishes afterwards', () => {
+  const { clock, store, sessions, saver } = setup();
+  const sess = spoken('a', 'Hello.');
+  saver.forget(sess);
+  assert.equal(saver.isForgotten(sess), true);
+  assert.equal(saver.isForgotten(spoken('b', 'Hi.')), false);
+  sess.summaries = [{ id: 's1', markdown: '## Summary' }]; // a summary that was still being made
+  saver.markDirty(sess);
+  clock.advance(1000);
+  saver.flushSaves();
+  assert.equal(store.saved.length, 0);
+  assert.deepEqual(sessions, []);
+});
+
 test('a failed write is reported', async () => {
   const { saver, failures } = setup({ fail: true });
   saver.markDirty(spoken('a', 'Hello.'));

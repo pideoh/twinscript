@@ -310,3 +310,48 @@ test('a failed summary request leaves the earlier summaries in place and says wh
   assert.deepEqual(errors, []);
   await close();
 });
+
+test('a session deleted while its summary is being made stays deleted when the summary arrives', async () => {
+  const { page, errors, close } = await openApp('', { apiKey: 'test-key' });
+  await finishedSession(page, 'Budget review.');
+  await saved(page);
+  let answer;
+  const answered = new Promise((resolve) => {
+    answer = resolve;
+  });
+  await mockSummary(page, async () => {
+    await answered;
+    return { body: quickMarkdown('予算の確認を行った。') };
+  });
+  await page.click('#summarize');
+  await page.waitForFunction(() => document.getElementById('summarize').getAttribute('aria-busy') === 'true');
+
+  page.once('dialog', (d) => d.accept());
+  await page.locator('#sessionList .session').first().locator('.act').last().click();
+  await page.waitForFunction(() => document.querySelectorAll('#sessionList .session').length === 0);
+  answer();
+  await page.waitForFunction(() => document.getElementById('summarize').getAttribute('aria-disabled') === 'false');
+  await saved(page);
+  assert.equal(await page.locator('#sessionList .session').count(), 0);
+  assert.ok(await page.locator('#toast').isHidden(), 'no notice about a session the user removed');
+
+  await reload(page);
+  assert.equal(await page.locator('#sessionList .session').count(), 0);
+  assert.deepEqual(await storedSessions(page), []);
+  const storedSummaries = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const open = indexedDB.open('twinscript');
+        open.onsuccess = () => {
+          const all = open.result.transaction('summaries').objectStore('summaries').getAll();
+          all.onsuccess = () => {
+            open.result.close();
+            resolve(all.result.length);
+          };
+        };
+      }),
+  );
+  assert.equal(storedSummaries, 0, 'no summary is kept for the removed session');
+  assert.deepEqual(errors, []);
+  await close();
+});

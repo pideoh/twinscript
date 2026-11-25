@@ -56,10 +56,12 @@ export function createSessionSaver({
   delay = 250,
 }) {
   const dirty = new Set();
+  const forgotten = new WeakSet(); // deleted sessions: work on them that finishes later is not saved
   let saveTimer;
 
   // The session changed: it is written `delay` ms after the last change to any session.
   function markDirty(sess) {
+    if (forgotten.has(sess)) return;
     dirty.add(sess);
     clearTimer(saveTimer);
     saveTimer = setTimer(flushSaves, delay);
@@ -87,7 +89,11 @@ export function createSessionSaver({
   return {
     markDirty,
     flushSaves,
-    // A session about to be deleted is not written again.
-    forget: (sess) => dirty.delete(sess),
+    // A session about to be deleted is not written again, even when it is marked changed later.
+    forget: (sess) => {
+      forgotten.add(sess);
+      dirty.delete(sess);
+    },
+    isForgotten: (sess) => forgotten.has(sess),
   };
 }

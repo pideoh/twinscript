@@ -30,7 +30,8 @@ const SPEAKERS_CONSENT_KEY = 'rt-speakers-consent';
 // toast(message, ms, variant); errorText(err): an error's message; getCurrent(), getRun(): the
 // session on screen and the run in progress (or null); getApiKey(): the API key now;
 // openSettings(): opens the settings dialog; flushSaves(): writes pending saves now;
-// markDirty(sess): saves it soon; recordUsage(sess, usage): counts what a request used;
+// markDirty(sess): saves it soon; isDeleted(sess): the user deleted it (labels that arrive after
+// that are dropped quietly); recordUsage(sess, usage): counts what a request used;
 // renderSummary(): redraws the summary panel, which redraws the speaker tools too (renderTools);
 // debug: logs how the parts were matched.
 export function createSpeakerPanel({
@@ -47,6 +48,7 @@ export function createSpeakerPanel({
   openSettings,
   flushSaves,
   markDirty,
+  isDeleted,
   recordUsage,
   renderSummary,
   debug = false,
@@ -157,6 +159,7 @@ export function createSpeakerPanel({
         onPart: debug ? (report) => console.log('[speakers]', JSON.stringify(report)) : undefined,
       });
       decoded.length = 0;
+      if (isDeleted(sess)) return;
       const { segmentSpeakers, speakers } = numberByFirstLine(assignSpeakers(sess.segments, result.words, timeline));
       sess.segments.forEach((seg, i) => {
         if (segmentSpeakers[i]) seg.speaker = segmentSpeakers[i];
@@ -177,6 +180,7 @@ export function createSpeakerPanel({
       );
     } catch (err) {
       // The labels made before, if any, stay as they were.
+      if (isDeleted(sess)) return;
       if (err?.name === 'AbortError') toast(t('speakers.cancelled'));
       else if (err instanceof RateLimitError) toast(errorText(err), 10000, 'warning');
       else toast(t('toast.speakersFailed', { message: errorText(err) }), 10000, 'critical');
