@@ -9,7 +9,7 @@ import { MessageError } from './message-error.js';
 import { MockSummarizer, MockTranscriber, MockTranslator } from './mock.js';
 import { createPacer, DEFAULT_STRATEGY, strategyNamed } from './pacer.js';
 import { formatUsd, mergePrices, PRICES } from './pricing.js';
-import { ReadAloud } from './read-aloud.js';
+import { ReadAloud, readAloudLanguages } from './read-aloud.js';
 import { canRecord, Recorder } from './recorder.js';
 import { languageByScript, scriptsDiffer, sourceByScript, targetByScript, targetLanguages } from './script-hint.js';
 import { loadApiKey, saveApiKey } from './secrets.js';
@@ -84,7 +84,9 @@ const DEFAULTS = {
   // Speech in none of the selected languages goes into all of them ('all') or only into the one
   // in that place ('A', 'B' or 'C').
   otherInto: 'all',
-  readAloud: 'off', // 'off', 'A', 'B' or 'both': translations into which language are read aloud
+  // Translations into which language are read aloud: 'off', 'A', 'B', 'C' (three languages only) or
+  // 'both' (two languages only). A choice that does not fit the languages selected reads nothing.
+  readAloud: 'off',
   captionItems: 3, // sentences kept in the caption zone, including the one being spoken
   captionContent: 'both', // 'both' or 'tgt' (translation only) in the caption zone
   // The same two with a third language, remembered apart. Translations only, so a sentence takes
@@ -159,7 +161,6 @@ const els = Object.fromEntries(
     'readAloud',
     'readAloudField',
     'readAloudUnavailable',
-    'readAloudUnavailableThree',
     'captionItems',
     'captionItemsOut',
     'captionContent',
@@ -386,7 +387,7 @@ function onThirdLangChange() {
 }
 // The choices for another language and for reading aloud are stored as a place (A / B / C) but
 // mean a language, so they follow that language when it changes places. A choice of the third
-// language that is turned off becomes 'all'.
+// language that is turned off becomes 'all' for other languages and 'off' for reading aloud.
 function setLangs(a, b, c) {
   const was = { A: settings.langA, B: settings.langB, C: settings.langC };
   const now = { A: a, B: b, C: c };
@@ -394,7 +395,8 @@ function setLangs(a, b, c) {
     sides.includes(side) && was[side] ? (sides.find((s) => now[s] === was[side]) ?? side) : side;
   settings.otherInto = follow(settings.otherInto, ['A', 'B', 'C']);
   if (settings.otherInto === 'C' && !c) settings.otherInto = 'all';
-  settings.readAloud = follow(settings.readAloud, ['A', 'B']);
+  settings.readAloud = follow(settings.readAloud, ['A', 'B', 'C']);
+  if (settings.readAloud === 'C' && !c) settings.readAloud = 'off';
   Object.assign(settings, { langA: a, langB: b, langC: c });
 }
 function langsChanged() {
@@ -471,20 +473,26 @@ function fillOtherInto() {
   els.otherInto.value = value;
   if (!els.otherInto.value) els.otherInto.value = 'all';
 }
-// Reading aloud needs the language of each translation, which only the writing system tells.
+// With two languages, reading aloud needs the language of each translation, which only the writing
+// system tells. With three, each translation line is requested into a known language.
 const canReadAloudPair = () =>
   scriptsDiffer(LANGS.find((l) => l.code === settings.langA).name, LANGS.find((l) => l.code === settings.langB).name);
+const selectedLangs = () => [settings.langA, settings.langB, settings.langC].filter(Boolean);
+// Off, one choice per selected language, and both directions with two languages only. A stored
+// choice that does not fit the languages selected shows as Off.
 function fillReadAloud() {
   els.readAloudField.hidden = !reader.available;
-  els.readAloud.options[1].text = t('settings.readAloud.into', { lang: langLabel(settings.langA) });
-  els.readAloud.options[2].text = t('settings.readAloud.into', { lang: langLabel(settings.langB) });
-  els.readAloud.value = settings.readAloud;
-  // Reading aloud is for two languages only.
   const three = !!settings.langC;
-  const pair = canReadAloudPair();
-  els.readAloud.disabled = three || !pair;
-  els.readAloudUnavailable.hidden = three || pair;
-  els.readAloudUnavailableThree.hidden = !three;
+  const sides = three ? ['A', 'B', 'C'] : ['A', 'B'];
+  els.readAloud.replaceChildren(
+    new Option(t('settings.readAloud.off'), 'off'),
+    ...sides.map((s) => new Option(t('settings.readAloud.into', { lang: langLabel(settings[`lang${s}`]) }), s)),
+    ...(three ? [] : [new Option(t('settings.readAloud.both'), 'both')]),
+  );
+  els.readAloud.value = readAloudLanguages(settings.readAloud, selectedLangs()).length ? settings.readAloud : 'off';
+  const pair = three || canReadAloudPair();
+  els.readAloud.disabled = !pair;
+  els.readAloudUnavailable.hidden = pair;
 }
 // Applies at once, also while listening.
 els.readAloud.onchange = () => {
@@ -2683,21 +2691,31 @@ function finishLine(r, seg, code, out) {
   markDirty(r.session);
   // Each line is in a known language, so the one(s) chosen for reading aloud are read.
   seg.spokenLines ??= new Set();
-  if (r.langs.length === 2 && !seg.spokenLines.has(code) && readTranslation(r, out, langName(code)))
-    seg.spokenLines.add(code);
+  if (seg.spokenLines.has(code)) return;
+  const read = r.langs.length === 2 ? readTranslation(r, out, langName(code)) : readLine(r, out, code);
+  if (read) seg.spokenLines.add(code);
+}
+
+// With three languages: reads a finished translation line aloud when it is into the language
+// chosen. A sentence in that language has no line into it, so it is not read. Returns whether it
+// was read.
+function readLine(r, text, code) {
+  if (run !== r || !reader.available) return false;
+  if (!readAloudLanguages(settings.readAloud, selectedLangs()).includes(code)) return false;
+  reader.speak(text, code);
+  return true;
 }
 
 // Reads a finished translation aloud when it is in a language the user chose. Its language comes
 // from its writing system, else from what the translator was told to translate into; when neither
 // settles it, it is not read. Returns whether it was read.
 function readTranslation(r, text, target) {
-  if (run !== r || settings.readAloud === 'off' || !reader.available) return false;
+  if (run !== r || r.langs.length !== 2 || settings.readAloud === 'off' || !reader.available) return false;
   const [a, b] = r.langs;
   if (!scriptsDiffer(a.name, b.name)) return false;
   const name = languageByScript(text, a.name, b.name) ?? target;
   const lang = r.langs.find((l) => l.name === name);
-  const wanted = { A: [settings.langA], B: [settings.langB], both: [settings.langA, settings.langB] };
-  if (!lang || !wanted[settings.readAloud]?.includes(lang.code)) return false;
+  if (!lang || !readAloudLanguages(settings.readAloud, selectedLangs()).includes(lang.code)) return false;
   reader.speak(text, lang.code);
   return true;
 }

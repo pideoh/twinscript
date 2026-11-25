@@ -92,11 +92,12 @@ In a browser the caption window is a picture-in-picture window, which is always 
 
 ### Reading translations aloud
 
-"Read translations aloud" in settings speaks each finished translation into the language you choose (or into both)
-with the voices of your operating system; sentences still being spoken are not read. It takes effect at once, also
-while listening. It is not available with a third language. It needs two languages with different writing systems (such as Japanese and English), because that
-is how the app tells which language a translation is in. Use headphones: from speakers, the microphone picks up the
-voice and transcribes it again.
+"Read translations aloud" in settings speaks each finished translation into the language you choose (or, with two
+languages, into both) with the voices of your operating system; sentences still being spoken are not read. It takes
+effect at once, also while listening. With three languages you choose one of them, and only the translations into it
+are read; sentences spoken in that language are not. With two languages it needs different writing systems (such as
+Japanese and English), because that is how the app tells which language a translation is in. Use headphones: from
+speakers, the microphone picks up the voice and transcribes it again.
 
 ### Shortcuts
 

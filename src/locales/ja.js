@@ -219,7 +219,6 @@ export default {
   'settings.readAloud.off': 'オフ',
   'settings.readAloud.into': '{lang}への訳文',
   'settings.readAloud.both': '両方向',
-  'settings.readAloud.unavailableThree': '3つ目の言語を選んでいる間は使えません。読み上げは2言語のときだけ使えます。',
   'settings.readAloud.help':
     '確定した文をシステムの音声で読み上げます。ヘッドホンを使ってください。スピーカーから流すとマイクが音声を拾い、もう一度文字起こしされてしまいます。',
   'settings.readAloud.unavailable': 'この2言語は同じ文字を使うため訳文の言語を判別できず、読み上げは使えません。',

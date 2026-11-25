@@ -2,12 +2,13 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { listening, setup } from './helpers.js';
+import { listening, mockTargets, setup } from './helpers.js';
 
 const { openApp } = setup();
 
 // Stands in for the system's speech synthesis: what the page asks to read is kept in
-// window.spoken, and calls to cancel() are counted in window.cancels. Nothing finishes on its own.
+// window.spoken, and calls to cancel() are counted in window.cancels. Nothing finishes on its own:
+// window.finishSpeaking() ends the sentence being read.
 function fakeSpeech({ missing = false } = {}) {
   if (window !== top) return;
   if (missing) {
@@ -17,9 +18,14 @@ function fakeSpeech({ missing = false } = {}) {
   }
   window.spoken = [];
   window.cancels = 0;
+  let last;
+  window.finishSpeaking = () => last?.onend?.();
   const synth = {
     getVoices: () => [],
-    speak: (u) => window.spoken.push({ text: u.text, lang: u.lang }),
+    speak: (u) => {
+      last = u;
+      window.spoken.push({ text: u.text, lang: u.lang });
+    },
     cancel: () => {
       window.cancels++;
     },
@@ -165,6 +171,100 @@ test('reading aloud is unavailable for two languages written in the same alphabe
   await page.click('#openSettings');
   assert.ok(await page.locator('#readAloud').isEnabled());
   assert.ok(await page.locator('#readAloudUnavailable').isHidden());
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+// Waits until `count` distinct translation lines are finished, the last sentence's included.
+const linesFinished = (page, count) =>
+  page.waitForFunction(
+    (n) =>
+      new Set(
+        [...document.querySelectorAll('.seg .tgt-line:not(.pending) .tgt-text')]
+          .map((t) => t.textContent)
+          .filter((t) => t.startsWith('[')),
+      ).size === n,
+    count,
+  );
+const readAloudOptions = (page) =>
+  page.locator('#readAloud option').evaluateAll((os) => os.map((o) => [o.value, o.textContent]));
+
+test('with three languages each of them can be chosen for reading aloud, both directions cannot', async () => {
+  const { page, errors, close } = await openApp('', { langC: 'ko-KR' }, { script: fakeSpeech });
+  await page.click('#openSettings');
+  assert.ok(await page.locator('#readAloud').isEnabled());
+  assert.deepEqual(await readAloudOptions(page), [
+    ['off', 'オフ'],
+    ['A', '日本語への訳文'],
+    ['B', '英語への訳文'],
+    ['C', '韓国語への訳文'],
+  ]);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('with three languages only the translation into the chosen language is read, never a sentence in it', async () => {
+  const { page, errors, close } = await openApp(
+    '',
+    { apiKey: 'test-key', langC: 'ko-KR', readAloud: 'C', interimTranslate: false },
+    { script: fakeSpeech },
+  );
+  const send = await mockMeeting(page);
+  await mockTargets(page);
+  await page.click('#toggle');
+  await listening(page);
+
+  send('inputTranscription', 'It is raining today.');
+  await linesFinished(page, 2);
+  await page.waitForFunction(() => window.spoken.length === 1);
+  assert.deepEqual(
+    await spoken(page),
+    [{ text: '[Korean] It is raining today.', lang: 'ko-KR' }],
+    'the Korean line, not the Japanese one',
+  );
+
+  await page.evaluate(() => window.finishSpeaking());
+  send('inputTranscription', '오늘은 비가 옵니다.');
+  send('inputTranscription', 'See you next week.');
+  await linesFinished(page, 6);
+  await page.waitForFunction(() => window.spoken.length === 2);
+  assert.deepEqual(
+    (await spoken(page)).map((x) => x.text),
+    ['[Korean] It is raining today.', '[Korean] See you next week.'],
+    'a sentence spoken in Korean is not read',
+  );
+  await page.click('#toggle');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('a choice of reading aloud that does not fit the number of languages shows and acts as off', async () => {
+  const { page, errors, close } = await openApp('', { readAloud: 'both' }, { script: fakeSpeech });
+  const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('rt-settings')).readAloud);
+  await page.selectOption('#langC', 'ko-KR');
+  await page.click('#openSettings');
+  assert.equal(await page.inputValue('#readAloud'), 'off', 'both directions, with three languages');
+  await page.selectOption('#readAloud', 'C');
+  await page.click('#settings button[value=ok]');
+
+  await page.selectOption('#langC', '');
+  await page.click('#openSettings');
+  assert.equal(await page.inputValue('#readAloud'), 'off', 'the third language, once it is turned off');
+  assert.deepEqual(
+    (await readAloudOptions(page)).map(([value]) => value),
+    ['off', 'A', 'B', 'both'],
+  );
+  assert.equal(await stored(), 'off');
+  await page.click('#settings button[value=ok]');
+
+  await page.selectOption('#langC', 'ko-KR');
+  await page.click('#openSettings');
+  assert.equal(await page.inputValue('#readAloud'), 'off', 'turning a third language on again does not bring it back');
+  await page.selectOption('#readAloud', 'C');
+  await page.click('#settings button[value=ok]');
+  await page.selectOption('#langA', 'ko-KR');
+  await page.click('#openSettings');
+  assert.equal(await page.inputValue('#readAloud'), 'A', 'the choice follows Korean to another place');
   assert.deepEqual(errors, []);
   await close();
 });

@@ -221,8 +221,6 @@ export default {
   'settings.readAloud.off': 'Off',
   'settings.readAloud.into': 'Translations into {lang}',
   'settings.readAloud.both': 'Both directions',
-  'settings.readAloud.unavailableThree':
-    'Not available while a third language is selected: reading aloud works with two languages only.',
   'settings.readAloud.help':
     'Finished sentences are read with your system’s voices. Use headphones: from speakers, the microphone would pick up the voice and transcribe it again.',
   'settings.readAloud.unavailable':

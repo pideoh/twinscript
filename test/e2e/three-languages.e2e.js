@@ -181,11 +181,10 @@ test('the third language never equals the other two', async () => {
   await close();
 });
 
-test('with a third language the settings keep the choice for other languages and turn off reading aloud', async () => {
+test('with a third language the settings keep the choice for other languages and keep reading aloud', async () => {
   const { page, close } = await openApp('', {});
   await page.click('#openSettings');
   assert.ok(await page.locator('#otherInto').isVisible());
-  assert.ok(await page.locator('#readAloudUnavailableThree').isHidden());
   const twoLanguages = [await page.inputValue('#captionContent'), await page.inputValue('#captionItems')];
   assert.deepEqual(twoLanguages, ['both', '3']);
   await page.click('#settings button[value=ok]');
@@ -194,8 +193,7 @@ test('with a third language the settings keep the choice for other languages and
   await page.click('#openSettings');
   assert.ok(await page.locator('#otherInto').isVisible());
   assert.ok(await page.locator('#readAloudField').isVisible(), 'Chrome can speak');
-  assert.ok(await page.locator('#readAloud').isDisabled());
-  assert.ok(await page.locator('#readAloudUnavailableThree').isVisible());
+  assert.ok(await page.locator('#readAloud').isEnabled());
   assert.ok(await page.locator('#readAloudUnavailable').isHidden());
   assert.deepEqual(
     [await page.inputValue('#captionContent'), await page.inputValue('#captionItems')],

@@ -19,6 +19,15 @@ export function pickVoice(voices, lang) {
   );
 }
 
+// The languages whose translations are read aloud, for the setting ('off', 'A', 'B', 'C' or 'both')
+// and the selected languages ([A, B] or [A, B, C]). 'C' needs a third language; 'both' is for two
+// languages only, since with three a sentence has two translations. Anything else reads nothing.
+export function readAloudLanguages(choice, langs) {
+  if (choice === 'both') return langs.length === 2 ? [...langs] : [];
+  const i = ['A', 'B', 'C'].indexOf(choice);
+  return i >= 0 && langs[i] ? [langs[i]] : [];
+}
+
 export class ReadAloud {
   // maxWaiting: sentences kept in line behind the one being read. When another one arrives the
   // oldest waiting one is dropped, so the voice never falls far behind the meeting.
