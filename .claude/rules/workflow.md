@@ -14,6 +14,7 @@ Sections 1 to 3 apply to everyone, in a clone of the repository or of a fork. Se
 ## 2. While working
 
 - Tests come with the behavior change, in the same commit. Docs for a visible change come in the same pull request (README in both languages, `docs/`).
+- In a fresh checkout or worktree, run `npm ci` first and use the npm scripts (`npm run lint`, `npm run format`). Never `npx <tool>` without installed dependencies: npx then downloads and runs whatever package has that name (`npx biome` is not `@biomejs/biome`).
 - Before pushing: `npm run lint`, `npm test`, and `npm run test:e2e` when `src/app.js`, `src/speech/audio.js`, HTML or CSS changed.
 - Run one browser test suite at a time on a machine. Several at once (for example from parallel agents) make tests time out that are not broken.
 - Code that touches paths, line endings or the file system must work on Windows: `fileURLToPath` instead of `URL.pathname`, and no assumption that a checked-out file ends lines with LF only.
