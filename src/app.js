@@ -7,20 +7,7 @@ import { markdownToHtml } from './session/markdown.js';
 import { decodeRecording } from './session/speaker-audio.js';
 import { assignSpeakers, recordingTimeline } from './session/speakers.js';
 import { GeminiSummarizer, legacySummaryToMarkdown } from './session/summarizer.js';
-import {
-  DEFAULT_TEMPLATE,
-  exportTemplates,
-  LENGTHS,
-  MAX_FILE_BYTES,
-  MAX_TEMPLATES,
-  mergeTemplates,
-  PRESETS,
-  parseTemplateFile,
-  presetById,
-  readStoredTemplates,
-  storedTemplatesJson,
-  validateTemplate,
-} from './session/summary-templates.js';
+import { DEFAULT_TEMPLATE, LENGTHS, PRESETS, presetById } from './session/summary-templates.js';
 import { AudioCapture, canCaptureSystemAudio, inMacDesktopApp } from './speech/audio.js';
 import { canRecord, Recorder } from './speech/recorder.js';
 import { UtteranceTracker } from './speech/segmenter.js';
@@ -43,6 +30,7 @@ import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocal
 import { octicon } from './ui/icons.js';
 import { followPlace, LANGS, langLabel as labelIn, langName, langTag as tagAmong } from './ui/langs.js';
 import { MessageError } from './ui/message-error.js';
+import { createTemplateEditor, createTemplateStore } from './ui/template-editor.js';
 import {
   afterCheck,
   checkDue,
@@ -1202,24 +1190,10 @@ const shownSummaryId = new WeakMap(); // session -> id of the summary on screen 
 const hasFinished = (sess) => sess.segments.some((seg) => seg.src);
 const displayLangCode = () => LANGS.find((l) => l.display === getLocale())?.code;
 
-// Custom templates are kept in localStorage under their own key, apart from the settings (which
-// are rewritten on every change); at most MAX_TEMPLATES of at most ~8 KB each stay well inside
-// the browser's quota for this origin.
-const TEMPLATES_KEY = 'rt-summary-templates';
-let customTemplates = [];
-try {
-  customTemplates = readStoredTemplates(localStorage.getItem(TEMPLATES_KEY));
-} catch {
-  /* private mode */
-}
-// Throws when the browser refuses to store them (quota, private mode).
-function saveTemplates(list) {
-  localStorage.setItem(TEMPLATES_KEY, storedTemplatesJson(list));
-  customTemplates = list;
-}
-const templateById = (id) => presetById(id) ?? customTemplates.find((tpl) => tpl.id === id) ?? null;
-const templateName = (tpl) => (tpl.preset ? t(tpl.nameKey) : tpl.name);
-const templateDescription = (tpl) => (tpl.preset ? t(tpl.descriptionKey) : tpl.description);
+// The user's own templates (src/ui/template-editor.js), read from localStorage here.
+const templates = createTemplateStore({ storage: browserStorage, t });
+const templateById = (id) => templates.byId(id);
+const templateName = (tpl) => templates.name(tpl);
 
 // A summary made by an earlier version, shown as the session's oldest summary. It stays on disk
 // as it was until it is deleted; its Markdown is made here, in the display language.
@@ -1259,7 +1233,7 @@ function fillSummaryTemplates() {
   };
   els.summaryTemplate.replaceChildren(
     group(t('summary.presets'), PRESETS),
-    ...(customTemplates.length ? [group(t('summary.custom'), customTemplates)] : []),
+    ...(templates.custom().length ? [group(t('summary.custom'), templates.custom())] : []),
   );
   if (!templateById(settings.summaryTemplate)) settings.summaryTemplate = DEFAULT_TEMPLATE;
   els.summaryTemplate.value = settings.summaryTemplate;
@@ -1702,173 +1676,22 @@ els.speakerDialog.addEventListener('close', () => {
 });
 
 // ---------- summary templates (settings dialog) ----------
-let editingTemplate = null; // { id } of the template in the editor; id null for a new one
-
-function showTemplateStatus(message, variant = 'info') {
-  els.templateStatus.textContent = message;
-  els.templateStatus.dataset.variant = variant;
-  els.templateStatus.hidden = false;
-}
-
+const templateEditor = createTemplateEditor({
+  els,
+  t,
+  octicon,
+  templates,
+  uid,
+  errorText,
+  download,
+  onTemplatesChanged: () => fillSummaryTemplates(),
+});
 function renderTemplateList() {
-  const action = (icon, label, fn) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'icon-btn';
-    button.title = label.short;
-    button.setAttribute('aria-label', label.full);
-    button.append(octicon(icon));
-    button.onclick = fn;
-    return button;
-  };
-  els.templateList.replaceChildren(
-    ...[...PRESETS, ...customTemplates].map((tpl) => {
-      const name = templateName(tpl);
-      const row = document.createElement('li');
-      row.className = 'template-row';
-      const text = document.createElement('div');
-      text.className = 'template-text';
-      const title = document.createElement('span');
-      title.className = 'template-name';
-      title.textContent = name;
-      text.append(title);
-      if (tpl.preset) {
-        const badge = document.createElement('span');
-        badge.className = 'label';
-        badge.textContent = t('templates.builtIn');
-        text.append(' ', badge);
-      }
-      const description = templateDescription(tpl);
-      if (description) {
-        const line = document.createElement('span');
-        line.className = 'template-description';
-        line.textContent = description;
-        text.append(line);
-      }
-      const acts = document.createElement('div');
-      acts.className = 'template-acts';
-      const label = (key, full) => ({ short: t(key), full: t(full, { name }) });
-      acts.append(
-        action('copy', label('templates.duplicate', 'templates.duplicateOf'), () => openTemplateEditor(tpl, true)),
-      );
-      if (!tpl.preset)
-        acts.append(
-          action('pencil', label('templates.edit', 'templates.editOf'), () => openTemplateEditor(tpl)),
-          action('trash', label('templates.delete', 'templates.deleteOf'), () => deleteTemplate(tpl)),
-        );
-      row.append(text, acts);
-      return row;
-    }),
-  );
-  els.templateExport.disabled = !customTemplates.length;
-  els.templateNew.disabled = customTemplates.length >= MAX_TEMPLATES;
-}
-
-// tpl: the template to edit, or to start from when `copy` (a duplicate); none for a new one.
-function openTemplateEditor(tpl, copy = false) {
-  editingTemplate = { id: tpl && !copy ? tpl.id : null };
-  els.templateEditorTitle.textContent = t(editingTemplate.id ? 'templates.editTitle' : 'templates.newTitle');
-  els.templateName.value = tpl
-    ? (copy ? t('templates.copyName', { name: templateName(tpl) }) : tpl.name).slice(0, els.templateName.maxLength)
-    : '';
-  els.templateDescription.value = tpl ? templateDescription(tpl) : '';
-  els.templatePrompt.value = tpl?.prompt ?? '';
-  els.templateError.hidden = true;
-  els.templateStatus.hidden = true;
-  els.templateEditor.hidden = false;
-  els.templateEditor.scrollIntoView({ block: 'nearest' });
-  els.templateName.focus();
+  templateEditor.renderList();
 }
 function closeTemplateEditor() {
-  editingTemplate = null;
-  els.templateEditor.hidden = true;
+  templateEditor.close();
 }
-function templatesChanged() {
-  fillSummaryTemplates();
-  renderTemplateList();
-}
-
-els.templateNew.onclick = () => openTemplateEditor(null);
-els.templateCancel.onclick = () => {
-  closeTemplateEditor();
-  els.templateNew.focus();
-};
-// Enter in a one-line field would submit the settings form and close the dialog.
-for (const input of [els.templateName, els.templateDescription]) {
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') e.preventDefault();
-  });
-}
-els.templateSave.onclick = () => {
-  const error = (message) => {
-    els.templateError.textContent = message;
-    els.templateError.hidden = false;
-  };
-  if (!els.templateName.value.trim()) return error(t('templates.nameRequired'));
-  if (!els.templatePrompt.value.trim()) return error(t('templates.promptRequired'));
-  let template;
-  try {
-    template = validateTemplate({
-      id: editingTemplate?.id ?? uid(),
-      name: els.templateName.value,
-      description: els.templateDescription.value,
-      prompt: els.templatePrompt.value,
-    });
-  } catch (err) {
-    return error(errorText(err));
-  }
-  const list = customTemplates.some((tpl) => tpl.id === template.id)
-    ? customTemplates.map((tpl) => (tpl.id === template.id ? template : tpl))
-    : [...customTemplates, template];
-  try {
-    if (list.length > MAX_TEMPLATES) throw new MessageError('templates.error.tooMany', { max: MAX_TEMPLATES });
-    saveTemplates(list);
-  } catch (err) {
-    return error(t('templates.saveFailed', { message: errorText(err) }));
-  }
-  closeTemplateEditor();
-  templatesChanged();
-  showTemplateStatus(t('templates.saved', { name: template.name }));
-  els.templateNew.focus();
-};
-
-function deleteTemplate(tpl) {
-  if (!confirm(t('templates.deleteConfirm', { name: tpl.name }))) return;
-  try {
-    saveTemplates(customTemplates.filter((x) => x.id !== tpl.id));
-  } catch (err) {
-    return showTemplateStatus(t('templates.saveFailed', { message: errorText(err) }), 'critical');
-  }
-  if (editingTemplate?.id === tpl.id) closeTemplateEditor();
-  templatesChanged();
-  showTemplateStatus(t('templates.deleted', { name: tpl.name }));
-  els.templateNew.focus();
-}
-
-els.templateExport.onclick = () => {
-  if (!customTemplates.length) return;
-  download(
-    new Blob([exportTemplates(customTemplates)], { type: 'application/json' }),
-    'twinscript-summary-templates.json',
-  );
-};
-els.templateImport.onclick = () => els.templateImportFile.click();
-els.templateImportFile.onchange = async () => {
-  const file = els.templateImportFile.files[0];
-  els.templateImportFile.value = '';
-  if (!file) return;
-  try {
-    if (file.size > MAX_FILE_BYTES)
-      throw new MessageError('templates.error.tooLarge', { max: Math.round(MAX_FILE_BYTES / 1000) });
-    const imported = parseTemplateFile(await file.text(), { newId: uid });
-    const { templates, added, replaced } = mergeTemplates(customTemplates, imported);
-    saveTemplates(templates);
-    templatesChanged();
-    showTemplateStatus(t('templates.imported', { added, replaced }));
-  } catch (err) {
-    showTemplateStatus(t('templates.importFailed', { message: errorText(err) }), 'critical');
-  }
-};
 
 // ---------- usage and cost estimates ----------
 // What each session used and the daily totals (src/usage/usage-log.js), the usage dialog and the price
