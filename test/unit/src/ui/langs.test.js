@@ -130,6 +130,21 @@ test('choosing for one side the language of the other never leaves the two the s
   assert.deepEqual(followLangChange('B', places('ja-JP', 'ja-JP'), stored), places('en-US', 'ja-JP'));
 });
 
+test('choosing for one side the language of the other swaps the two', () => {
+  const stored = places('ja-JP', 'en-US');
+  assert.deepEqual(followLangChange('A', places('en-US', 'en-US'), stored), places('en-US', 'ja-JP'));
+  assert.deepEqual(followLangChange('B', places('ja-JP', 'ja-JP'), stored), places('en-US', 'ja-JP'));
+  const other = places('fr-FR', 'de-DE');
+  assert.deepEqual(followLangChange('A', places('de-DE', 'de-DE'), other), places('de-DE', 'fr-FR'));
+  assert.deepEqual(followLangChange('B', places('fr-FR', 'fr-FR'), other), places('de-DE', 'fr-FR'));
+});
+
+test("choosing the other side's language with a third language selected swaps the two and leaves the third", () => {
+  const stored = places('ja-JP', 'en-US', 'ko-KR');
+  assert.deepEqual(followLangChange('A', places('en-US', 'en-US', 'ko-KR'), stored), places('en-US', 'ja-JP', 'ko-KR'));
+  assert.deepEqual(followLangChange('B', places('ja-JP', 'ja-JP', 'ko-KR'), stored), places('en-US', 'ja-JP', 'ko-KR'));
+});
+
 test('choosing the third language for the first or second moves the third to the language that was there', () => {
   const stored = places('ja-JP', 'en-US', 'ko-KR');
   assert.deepEqual(followLangChange('A', places('ko-KR', 'en-US', 'ko-KR'), stored), places('ko-KR', 'en-US', 'ja-JP'));
