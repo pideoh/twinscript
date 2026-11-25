@@ -1,23 +1,24 @@
 #!/usr/bin/env node
-// Replays a recorded recognizer trace through the app's segmentation and in-progress translation
-// pacing, with the real translation model (or a fake one with --mock), and scores how the
-// translations appeared: delay and flicker. See docs/tuning.md.
+// Replays a recorded recognizer trace through the app's translation flow (src/translation/flow.js:
+// segmentation, in-progress translation paced by src/translation/pacer.js, final translations), with
+// the real translation model (or a fake one with --mock), and scores how the translations appeared:
+// delay and flicker. See docs/tuning.md.
 //
 //   GEMINI_API_KEY=... node scripts/tuning/replay.mjs <trace.json> [--strategy interval[,other]]
-//     [--interval 1.5] [--speed 1] [--mock [--rephrase]] [--out result.json]
+//     [--interval 1.5] [--speed 1] [--mock | --mock=rephrase] [--out result.json]
 //
-// The translation flow below mirrors src/app.js (createTracker, the pacer's callbacks,
-// translateInterimLines, translateFinal, translateFinalLines, recentHistory) for two languages,
-// without the DOM. Keep the two in step when that flow changes.
+// The flow runs as in the app for two languages, with a view that records what would be shown
+// (recording-view.mjs), the clock of the run (simulated with --mock) and reading aloud off.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
-import { UtteranceTracker } from '../../src/speech/segmenter.js';
-import { createPacer, DEFAULT_STRATEGY, STRATEGIES } from '../../src/translation/pacer.js';
-import { sourceByScript, targetByScript, targetLanguages } from '../../src/translation/script-hint.js';
+import { createFlow } from '../../src/translation/flow.js';
+import { DEFAULT_STRATEGY, STRATEGIES } from '../../src/translation/pacer.js';
+import { targetByScript } from '../../src/translation/script-hint.js';
 import { GeminiTranslator, RateLimitError } from '../../src/translation/translator.js';
 import { createVirtualClock } from './clock.mjs';
 import { aggregate, formatHealth, formatTable, health, sentenceMetrics } from './metrics.mjs';
+import { createRecordingView } from './recording-view.mjs';
 
 // Codes and English names as in LANGS in src/ui/langs.js (test/unit/scripts/tuning-replay.test.js keeps them equal).
 export const LANGS = [
@@ -37,9 +38,8 @@ export const LANGS = [
   ['hi-IN', 'Hindi'],
 ].map(([code, name]) => ({ code, name }));
 
-// The app's defaults (DEFAULTS in src/storage/settings.js, HISTORY_LINES in src/app.js).
+// The app's defaults (DEFAULTS in src/storage/settings.js).
 const MODEL = 'gemini-3.5-flash-lite';
-const HISTORY_LINES = 3;
 const OTHER_INTO = 'all';
 const MOCK_LATENCY_MS = 400;
 
@@ -85,9 +85,11 @@ export class MockTranslator {
   }
 }
 
-// Runs one strategy over a trace. clock: { now, setTimer, clearTimer } plus runAll() when simulated.
-// onProgress({ traceMs, sentences, requests, rateLimited, failed, lastError }) is called whenever one
-// of those changes; traceMs is how far into the trace the replay is.
+// Runs one strategy over a trace through the app's translation flow (src/translation/flow.js), with
+// a view that records what would be shown (recording-view.mjs). clock: { now, setTimer, clearTimer }
+// plus runAll() and pending() when simulated. onProgress({ traceMs, sentences, requests, rateLimited,
+// failed, answered, lastError }) is called whenever one of those changes; traceMs is how far into
+// the trace the replay is.
 export async function replay({
   trace,
   strategy = DEFAULT_STRATEGY,
@@ -102,336 +104,121 @@ export async function replay({
     if (!lang) throw new Error(`Unknown language code in trace: ${code}`);
     return lang;
   });
-  const names = langs.map((l) => l.name);
+  const recording = createRecordingView({ now: clock.now });
+  const session = { segments: [] };
   const counts = { requests: 0, rateLimited: 0, failed: 0, answered: 0, lastError: null, answerMs: [] };
   let traceNow = () => 0;
   const report = () =>
     onProgress?.({
       traceMs: traceNow(),
-      sentences: segments.length,
+      sentences: session.segments.length,
       requests: counts.requests,
       rateLimited: counts.rateLimited,
       failed: counts.failed,
       answered: counts.answered,
       lastError: counts.lastError,
     });
-  const counted = async (call) => {
-    counts.requests++;
-    const asked = clock.now();
-    try {
-      const out = await call();
-      counts.answered++;
-      counts.answerMs.push(clock.now() - asked);
-      return out;
-    } catch (err) {
-      if (err instanceof RateLimitError) counts.rateLimited++;
-      else {
-        counts.failed++;
-        counts.lastError = String(err?.message ?? err);
-      }
-      throw err;
-    } finally {
-      report();
-    }
-  };
-  const tr = {
-    translate: (text, opts) => counted(() => translator.translate(text, opts)),
-    identify: (text, list) => counted(() => translator.identify(text, list)),
-  };
 
-  const segments = []; // finished sentences, in the order the app keeps them
+  // What is still on its way (requests, and waits before a refused request is tried again): the
+  // replay ends only when the flow has nothing left to do.
   const pending = new Set();
   const track = (promise) => {
-    pending.add(promise);
-    promise.finally(() => pending.delete(promise));
+    const done = promise.catch(() => {});
+    pending.add(done);
+    done.finally(() => pending.delete(done));
+    return promise;
   };
-  let nextId = 1;
-  let live = null;
-
-  const newRecord = () => ({
-    id: nextId++,
-    src: '',
-    firstInterimAt: null,
-    finishedAt: null,
-    finalShownAt: null,
-    finalText: null,
-    displays: [],
-    single: '',
-    tgts: null, // [{ lang, text }] for a sentence in neither language (one line per target)
-    lines: null, // Map code -> shown text
-    tgt: '',
-    rev: 0,
-    settled: false, // its final translation was an in-progress one (settle), without a request
-  });
-  const shownText = (rec) =>
-    rec.lines
-      ? rec.tgts
-          .map((x) => rec.lines.get(x.lang))
-          .filter(Boolean)
-          .join('\n')
-      : rec.single;
-  const redraw = (rec) => {
-    const text = shownText(rec);
-    if (text !== (rec.displays.at(-1)?.text ?? '')) rec.displays.push({ t: clock.now(), text });
-  };
-  const setSingle = (rec, text) => {
-    rec.single = text;
-    redraw(rec);
-  };
-  const setLine = (rec, code, text) => {
-    rec.lines.set(code, text);
-    redraw(rec);
-  };
-  const setTargets = (rec, codes) => {
-    if (rec.tgts && rec.lines && rec.tgts.map((x) => x.lang).join() === codes.join()) return false;
-    rec.tgts = codes.map((lang) => ({ lang, text: '' }));
-    rec.lines = new Map();
-    redraw(rec);
-    return true;
-  };
-  const clearTargets = (rec) => {
-    if (!rec.tgts) return;
-    rec.single = shownText(rec);
-    rec.tgts = null;
-    rec.lines = null;
-  };
-
-  const langName = (code) => langs.find((l) => l.code === code)?.name;
-  const targetsFor = (source) =>
-    targetLanguages(names, source, OTHER_INTO).map((name) => langs.find((l) => l.name === name).code);
-  const intoSeveral = (text) => sourceByScript(text, names) === 'other' && targetsFor('other').length > 1;
-  const recentHistory = (lang) =>
-    segments
-      .filter((x) => x.tgt)
-      .slice(-HISTORY_LINES)
-      .map(({ src, tgt, tgts }) => ({ src, tgt: (lang && tgts?.find((x) => x.lang === lang)?.text) || tgt }));
-  const wait = (ms) => new Promise((resolve) => clock.setTimer(resolve, ms));
-
-  async function interimLines(rec, text, { isCurrent, previous, keep, answer }) {
-    const source = sourceByScript(text, names);
-    if (!source) return;
-    const targets = targetsFor(source);
-    setTargets(rec, targets);
-    const results = await Promise.allSettled(
-      targets.map(async (code) => {
-        const out = await tr.translate(text, {
-          history: recentHistory(code),
-          into: langName(code),
-          previous: previous?.(code),
-        });
-        if (out) answer?.(code, out);
-        if (isCurrent() && out && rec.tgts?.some((x) => x.lang === code)) {
-          setLine(rec, code, out);
-          keep?.(code, out);
+  const counted = (call) =>
+    track(
+      (async () => {
+        counts.requests++;
+        const asked = clock.now();
+        try {
+          const out = await call();
+          counts.answered++;
+          counts.answerMs.push(clock.now() - asked);
+          return out;
+        } catch (err) {
+          if (err instanceof RateLimitError) counts.rateLimited++;
+          else {
+            counts.failed++;
+            counts.lastError = String(err?.message ?? err);
+          }
+          throw err;
+        } finally {
+          report();
         }
-      }),
+      })(),
     );
-    const limited = results.find((x) => x.status === 'rejected' && x.reason instanceof RateLimitError);
-    if (limited) throw limited.reason;
-  }
-
-  // What the pacer handed over when the sentence was finished, only for its first final translation:
-  // { previous, settled, pending } (takeHandover and settledAnswers in src/app.js).
-  const takeHandover = (rec) => {
-    const handed = rec.handover;
-    delete rec.handover;
-    if (typeof handed === 'function') return { previous: handed };
-    return handed ?? {};
-  };
-  const settledAnswers = ({ settled, pending }) => settled ?? pending ?? null;
-  const finalShown = (rec, text) => {
-    rec.finalText = text;
-    rec.finalShownAt = clock.now();
+  // The run as the app's start() makes it, for two languages.
+  const run = {
+    session,
+    langs,
+    otherInto: OTHER_INTO,
+    translator: {
+      translate: (text, options) => {
+        // A final translation streams its answer (onDelta); an in-progress one does not.
+        if (options?.onDelta) recording.finalRequested(text);
+        return counted(() => translator.translate(text, options));
+      },
+      identify: (text, names) => counted(() => translator.identify(text, names)),
+    },
   };
 
-  async function translateFinal(rec) {
-    if (intoSeveral(rec.src)) return translateFinalLines(rec);
-    const handover = takeHandover(rec);
-    const previous = handover.previous?.();
-    const history = recentHistory();
-    rec.rev++;
-    const rev = rec.rev;
-    rec.settled = false;
-    clearTargets(rec);
-    const swapWhenDone = !!shownText(rec);
-    let answers = settledAnswers(handover);
-    if (answers instanceof Promise) answers = await answers;
-    if (rec.rev !== rev) return;
-    const settled = answers?.();
-    if (settled) {
-      rec.tgt = settled;
-      setSingle(rec, settled);
-      finalShown(rec, settled);
-      rec.settled = true;
-      return;
-    }
-    for (let attempt = 0; ; attempt++) {
-      try {
-        const out = await tr.translate(rec.src, {
-          history,
-          previous,
-          onDelta: (partial) => {
-            if (rec.rev === rev && !swapWhenDone) setSingle(rec, partial);
-          },
-        });
-        if (rec.rev !== rev) return;
-        rec.tgt = out;
-        setSingle(rec, out);
-        finalShown(rec, out);
-        return;
-      } catch (err) {
-        if (err instanceof RateLimitError && attempt < 3) {
-          await wait(1500 * 2 ** attempt);
-          continue;
-        }
-        if (rec.rev === rev) rec.error = String(err.message ?? err);
-        return;
-      }
-    }
-  }
-
-  async function translateFinalLines(rec) {
-    const handover = takeHandover(rec);
-    const { previous } = handover;
-    rec.rev++;
-    const rev = rec.rev;
-    rec.settled = false;
-    const source = sourceByScript(rec.src, names) ?? (await tr.identify(rec.src, names).catch(() => 'other'));
-    if (rec.rev !== rev) return;
-    const targets = targetsFor(source);
-    const kept = !setTargets(rec, targets);
-    const swap = new Set(kept ? targets.filter((code) => rec.lines.get(code)) : []);
-    let answers = settledAnswers(handover);
-    if (answers instanceof Promise) answers = await answers;
-    if (rec.rev !== rev) return;
-    if (answers && targets.every((code) => answers(code))) {
-      for (const code of targets) finishLine(rec, code, answers(code));
-      rec.settled = true;
-    } else {
-      await Promise.all(targets.map((code) => translateLine(rec, rev, code, swap.has(code), previous?.(code))));
-    }
-    if (rec.rev === rev && rec.tgts.every((x) => x.text)) finalShown(rec, shownText(rec));
-  }
-
-  function finishLine(rec, code, out) {
-    rec.tgts.find((x) => x.lang === code).text = out;
-    rec.tgt = rec.tgts
-      .map((x) => x.text)
-      .filter(Boolean)
-      .join('\n');
-    setLine(rec, code, out);
-  }
-
-  async function translateLine(rec, rev, code, swapWhenDone, previous) {
-    const history = recentHistory(code);
-    for (let attempt = 0; ; attempt++) {
-      try {
-        const out = await tr.translate(rec.src, {
-          history,
-          into: langName(code),
-          previous,
-          onDelta: (partial) => {
-            if (rec.rev === rev && !swapWhenDone) setLine(rec, code, partial);
-          },
-        });
-        if (rec.rev !== rev) return;
-        return finishLine(rec, code, out);
-      } catch (err) {
-        if (err instanceof RateLimitError && attempt < 3) {
-          await wait(1500 * 2 ** attempt);
-          continue;
-        }
-        if (rec.rev === rev) rec.error = String(err.message ?? err);
-        return;
-      }
-    }
-  }
-
-  const pacer = createPacer({
+  let ids = 0;
+  let sentences = 0;
+  const flow = createFlow({
+    view: recording.view,
+    reader: { available: false },
+    settings: { interimTranslate: true, interimInterval: interval, readAloud: 'off' },
+    getRun: () => run,
+    selectedLangs: () => langs.map((l) => l.code),
+    markDirty: () => {
+      if (session.segments.length === sentences) return;
+      sentences = session.segments.length;
+      report();
+    },
+    errorText: (err) => String(err?.message ?? err),
+    onRateLimit: () => {},
+    uid: () => ++ids,
+    elapsedNow: () => 0,
     strategy,
-    options: { interval },
     now: clock.now,
+    wait: (ms) => track(new Promise((resolve) => clock.setTimer(resolve, ms))),
     setTimer: clock.setTimer,
     clearTimer: clock.clearTimer,
-    translate: (text, context) => {
-      const p = intoSeveral(text)
-        ? interimLines(live, text, context)
-        : tr.translate(text, { history: recentHistory(), previous: context.previous?.() });
-      track(p.catch(() => {}));
-      return p;
-    },
-    show: (out) => {
-      clearTargets(live);
-      setSingle(live, out);
-    },
   });
-
-  const commit = (rec, text) => {
-    rec.src = text;
-    rec.finishedAt = clock.now();
-    if (!segments.includes(rec)) {
-      segments.push(rec);
-      report();
-    }
-    track(translateFinal(rec));
-    return rec;
-  };
-  const tracker = new UtteranceTracker({
-    commit(text, aboveLive) {
-      if (aboveLive) return commit(newRecord(), text);
-      const rec = live ?? newRecord();
-      live = null;
-      rec.handover = pacer.finish(text);
-      return commit(rec, text);
-    },
-    setLive(text) {
-      if (!text) {
-        live = null;
-        pacer.cancel();
-        return;
-      }
-      live ??= newRecord();
-      live.firstInterimAt ??= clock.now();
-      live.src = text;
-      pacer.update(text);
-    },
-    correct: (rec, text) => commit(rec, text),
-  });
+  run.tracker = flow.tracker(run);
+  run.pacer = flow.pacer(run);
 
   const start = clock.now();
   const at = (ms) => Math.max(0, start + ms / speed - clock.now());
   traceNow = () => Math.round((clock.now() - start) * speed);
   for (const e of trace.events) {
-    clock.setTimer(() => (e.kind === 'final' ? tracker.final(e.text) : tracker.interim(e.text)), at(e.t));
+    clock.setTimer(() => (e.kind === 'final' ? run.tracker.final(e.text) : run.tracker.interim(e.text)), at(e.t));
   }
   const end = Math.max(trace.durationMs ?? 0, ...trace.events.map((e) => e.t));
   const ended = new Promise((resolve) =>
     clock.setTimer(() => {
-      // as stop() does
-      tracker.flush();
-      pacer.cancel();
+      // as the app's stop() does
+      run.tracker.flush();
+      flow.dropLive();
+      run.pacer.cancel();
       resolve();
     }, at(end)),
   );
   if (clock.runAll) await clock.runAll();
   await ended;
-  while (pending.size || clock.pending?.()) {
+  const idle = () => new Promise((resolve) => setImmediate(resolve));
+  for (;;) {
     if (clock.runAll) await clock.runAll();
     await Promise.all([...pending]);
+    await idle(); // the flow acts on the last answers first, and may send another request
+    if (!pending.size && !clock.pending?.()) break;
   }
 
-  const sentences = segments.map((rec) => ({
-    id: rec.id,
-    src: rec.src,
-    firstInterimAt: rec.firstInterimAt === null ? null : rec.firstInterimAt - start,
-    finishedAt: rec.finishedAt - start,
-    finalShownAt: rec.finalShownAt === null ? null : rec.finalShownAt - start,
-    finalText: rec.finalText,
-    error: rec.error,
-    settled: rec.settled,
-    displays: rec.displays.map((d) => ({ t: d.t - start, text: d.text })),
-  }));
-  const rows = sentences.map((s) => ({ id: s.id, ...sentenceMetrics(s) }));
+  const shown = session.segments.map((seg) => recording.sentence(seg, start));
+  const rows = shown.map((s) => ({ id: s.id, ...sentenceMetrics(s) }));
   return {
     label: strategy === 'chunk' ? strategy : `${strategy} ${interval}s`, // chunk does not use the interval
     strategy,
@@ -439,8 +226,8 @@ export async function replay({
     summary: aggregate(rows, counts),
     // Whether the run itself was sound: failed requests, how long answers took, and how many
     // sentences had a translation on screen before they were finished.
-    health: health(sentences, counts),
-    sentences: sentences.map((s, i) => ({ ...s, metrics: rows[i] })),
+    health: health(shown, counts),
+    sentences: shown.map((s, i) => ({ ...s, metrics: rows[i] })),
   };
 }
 

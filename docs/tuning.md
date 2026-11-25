@@ -69,8 +69,10 @@ is the recognizer's text before the correction rules from the settings. `source`
 GEMINI_API_KEY=... node scripts/tuning/replay.mjs twinscript-trace-20261123-101500.json
 ```
 
-The trace is played back on its own timestamps through the app's sentence segmentation (`src/speech/segmenter.js`), the
-pacer (`src/translation/pacer.js`) and the real translation model, without a browser. **A run takes as long as the speech in the
+The trace is played back on its own timestamps through the app's translation flow (`src/translation/flow.js`, with
+its sentence segmentation from `src/speech/segmenter.js` and the pacer from `src/translation/pacer.js`) and the real
+translation model, without a browser. In place of the page, the flow is given a view that records what would be shown
+and when (`scripts/tuning/recording-view.mjs`), which is what the scores are made from. **A run takes as long as the speech in the
 trace**; a line of progress is printed every ten seconds:
 
 ```
@@ -144,9 +146,10 @@ node scripts/tuning/replay.mjs test/fixtures/replay-trace.json --mock
   once before trusting a difference.
 - Delay and flicker pull against each other: waiting longer rewrites less. Look at both columns together, and at
   `requests`, which is what a strategy costs.
-- Only the first two languages of a trace are replayed.
-- The replay copies the translation flow of `src/translation/flow.js` for two languages. When that flow changes, change
-  `scripts/tuning/replay.mjs` with it.
+- Only the first two languages of a trace are replayed, with the app's default settings for them: in-progress
+  translation on, every language other than the two translated into both, reading aloud off.
+- The replay runs the app's own translation flow, so a change to `src/translation/flow.js` is measured as it is. With
+  `--mock` the flow and the pacer run on the simulated clock they are given.
 
 ### When answers are slow
 

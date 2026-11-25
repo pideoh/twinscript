@@ -274,3 +274,56 @@ test('when the run stops, the sentence in progress is taken off the page', () =>
   assert.equal(view.page.get(seg).onPage, false);
   assert.equal(run.session.segments.length, 0);
 });
+
+test('the pacer the flow builds runs on the clock and timers it is given', async () => {
+  let time = 1_000_000;
+  const timers = [];
+  const translator = standInTranslator();
+  const settings = { langA: 'ja-JP', langB: 'en-US', langC: '', readAloud: 'off' };
+  Object.assign(settings, { interimTranslate: true, interimInterval: 1.5 });
+  const flow = createFlow({
+    view: standInView(),
+    reader: { available: false },
+    settings,
+    getRun: () => run,
+    selectedLangs: () => ['ja-JP', 'en-US'],
+    markDirty: () => {},
+    errorText: (err) => err.message,
+    onRateLimit: () => {},
+    uid: () => 'seg-1',
+    elapsedNow: () => 0,
+    strategy: 'interval',
+    now: () => time,
+    setTimer: (fn, ms) => timers.push({ fn, at: time + ms }),
+    clearTimer: () => {},
+  });
+  const run = { session: { segments: [] }, langs: [JA, EN], otherInto: 'all', translator };
+  run.pacer = flow.pacer(run);
+  run.tracker = flow.tracker(run);
+  const fireNext = async () => {
+    const timer = timers.shift();
+    time = timer.at;
+    timer.fn();
+    await settle();
+  };
+  run.tracker.interim('おはようございます');
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(translator.requests.length, 0, 'nothing goes out on a real timer');
+  assert.deepEqual(
+    timers.map((x) => x.at),
+    [1_000_000],
+  );
+  await fireNext();
+  assert.equal(translator.requests.length, 1, 'the request goes out when the injected timer fires');
+  translator.requests[0].resolve('Good morning');
+  await settle();
+  run.tracker.interim('おはようございます、皆さん');
+  assert.deepEqual(
+    timers.map((x) => x.at),
+    [1_000_000 + 1500],
+    'the next one waits the interval on the injected clock',
+  );
+  await fireNext();
+  assert.equal(translator.requests.length, 2);
+  assert.equal(translator.requests[1].text, 'おはようございます、皆さん');
+});
