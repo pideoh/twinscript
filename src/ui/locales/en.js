@@ -312,6 +312,7 @@ export default {
   'error.disconnectedCode': 'Disconnected (code {code})',
   'error.rateLimit': 'The translation API rate limit was reached',
   'error.translate': 'Translation error ({status}): {message}',
+  'error.noTranslation': 'No translation came back',
   'error.summarize': 'Summary error ({status}): {message}',
   'error.summaryRateLimit': 'The API rate limit was reached. Try again in a minute.',
   'error.summaryInvalid': 'The response could not be read as a summary. Try again.',

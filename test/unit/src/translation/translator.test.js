@@ -418,3 +418,26 @@ test('a failing usage callback does not break the translation', async () => {
   });
   assert.equal(await translator.translate('やあ'), 'Hi');
 });
+
+test('an answer with no translation in it is reported as an error with a message key, and its usage is counted', async () => {
+  const usage = { promptTokenCount: 10 };
+  const stopped = `data: ${JSON.stringify({ candidates: [{ finishReason: 'SAFETY' }], usageMetadata: usage })}\n\n`;
+  const thoughtOnly = `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'hmm', thought: true }] } }] })}\n\n`;
+  stubFetch(
+    () => new Response(stopped, { status: 200 }),
+    () => new Response(sse('  ', '\n'), { status: 200 }),
+    () => new Response(thoughtOnly, { status: 200 }),
+  );
+  const { translator, reports } = counted();
+  for (const answer of ['stopped by a safety filter', 'only blanks', 'only thoughts']) {
+    await assert.rejects(translator.translate('やあ'), (err) => {
+      assert.equal(err.key, 'error.noTranslation', answer);
+      assert.ok(!(err instanceof RateLimitError), answer);
+      return true;
+    });
+  }
+  assert.deepEqual(
+    reports.map((r) => r.usageMetadata),
+    [usage],
+  );
+});

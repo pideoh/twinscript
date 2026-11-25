@@ -1,4 +1,5 @@
-// Streaming text translation with a small Gemini model.
+// Streaming text translation with a small Gemini model. An answer with no translation in it (the model
+// stopped, for example by a safety filter) is an error (`error.noTranslation`), not an empty string.
 import { MessageError } from '../ui/message-error.js';
 import { targetByScript } from './script-hint.js';
 
@@ -82,7 +83,8 @@ export class GeminiTranslator {
       .join('\n');
   }
 
-  // history: [{src, tgt}], onDelta(fullTextSoFar). Resolves with the full translation.
+  // history: [{src, tgt}], onDelta(fullTextSoFar). Resolves with the full translation, never empty:
+  // an answer without text rejects with MessageError('error.noTranslation').
   // onTarget(language) is told the language the model was told to translate into, or null when
   // the model was left to pick the direction itself. into: the language to translate into, chosen
   // by the caller; without it the writing system decides when it can. previous: the translation
@@ -158,7 +160,9 @@ export class GeminiTranslator {
     } finally {
       this.#report(usage);
     }
-    return out.trim();
+    const translation = out.trim();
+    if (!translation) throw new MessageError('error.noTranslation');
+    return translation;
   }
 
   // Which of `languages` (English names) the speech `text` is in, or 'other' for none of them.
