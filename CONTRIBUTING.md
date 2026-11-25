@@ -116,6 +116,13 @@ pull request, `fix: update the Gemini prices used for cost estimates`, with the 
 maintainer checks the numbers against the page and merges it; it is never merged automatically. When the page
 cannot be read or a change is refused, the run fails instead, and the update is made by hand.
 
+## Repository metrics
+
+GitHub keeps views and clones for 14 days. Every Monday the `metrics` workflow records them, with referrers,
+stars and release downloads, as CSV files on the `metrics` branch (`scripts/record-metrics.mjs`). It uses
+the secret `RELEASE_PR_TOKEN`, which needs "Administration: read" for the traffic figures besides the
+permissions the release workflow uses.
+
 ## Adding a display language
 
 Copy `src/locales/en.js` to a new file, translate the values, and register it in the `LOCALES`
