@@ -344,7 +344,7 @@ test('options are checked', () => {
 });
 
 test('the replay knows the same languages as the app', () => {
-  const app = readFileSync(join(root, 'src/app.js'), 'utf8');
+  const app = readFileSync(join(root, 'src/ui/langs.js'), 'utf8');
   const block = app.slice(app.indexOf('const LANGS = ['), app.indexOf('];', app.indexOf('const LANGS = [')));
   const inApp = [...block.matchAll(/code: '([^']+)'.*?name: '([^']+)'/g)].map(([, code, name]) => ({ code, name }));
   assert.ok(inApp.length > 2);

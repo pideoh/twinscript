@@ -19,7 +19,7 @@ import { GeminiTranslator, RateLimitError } from '../../src/translation/translat
 import { createVirtualClock } from './clock.mjs';
 import { aggregate, formatHealth, formatTable, health, sentenceMetrics } from './metrics.mjs';
 
-// Codes and English names as in LANGS in src/app.js (test/unit/scripts/tuning-replay.test.js keeps them equal).
+// Codes and English names as in LANGS in src/ui/langs.js (test/unit/scripts/tuning-replay.test.js keeps them equal).
 export const LANGS = [
   ['ja-JP', 'Japanese'],
   ['en-US', 'English'],
@@ -37,7 +37,7 @@ export const LANGS = [
   ['hi-IN', 'Hindi'],
 ].map(([code, name]) => ({ code, name }));
 
-// The app's defaults (DEFAULTS and HISTORY_LINES in src/app.js).
+// The app's defaults (DEFAULTS in src/storage/settings.js, HISTORY_LINES in src/app.js).
 const MODEL = 'gemini-3.5-flash-lite';
 const HISTORY_LINES = 3;
 const OTHER_INTO = 'all';
