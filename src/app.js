@@ -1,11 +1,10 @@
 import { addFileSourceOption, FILE_TAIL_MS, pickAudioFile, traceDownloadButton } from './debug/debug-tools.js';
 import { MockSummarizer, MockTranscriber, MockTranslator } from './debug/mock.js';
 import { createTrace } from './debug/trace.js';
-import { MODEL as DIARIZE_MODEL, GeminiDiarizer, labelSpeakers } from './session/diarizer.js';
+import { MODEL as DIARIZE_MODEL } from './session/diarizer.js';
 import { formatDateTime, formatElapsed, safeFileName } from './session/exporter.js';
 import { markdownToHtml } from './session/markdown.js';
-import { decodeRecording } from './session/speaker-audio.js';
-import { assignSpeakers, recordingTimeline } from './session/speakers.js';
+import { hasLabels } from './session/speaker-labels.js';
 import { GeminiSummarizer, legacySummaryToMarkdown } from './session/summarizer.js';
 import { DEFAULT_TEMPLATE, LENGTHS, PRESETS, presetById } from './session/summary-templates.js';
 import { AudioCapture, canCaptureSystemAudio, inMacDesktopApp } from './speech/audio.js';
@@ -32,6 +31,7 @@ import { octicon } from './ui/icons.js';
 import { followPlace, LANGS, langLabel as labelIn, langName, langTag as tagAmong } from './ui/langs.js';
 import { MessageError } from './ui/message-error.js';
 import { createShortcutsPanel } from './ui/shortcuts-panel.js';
+import { createSpeakerPanel } from './ui/speaker-panel.js';
 import { createTemplateEditor, createTemplateStore } from './ui/template-editor.js';
 import { createUpdateNotice } from './ui/update-notice.js';
 import { createUsageDialog } from './ui/usage-dialog.js';
@@ -1305,225 +1305,43 @@ els.summaryDelete.onclick = () => {
 };
 
 // ---------- speaker labels ----------
-// After a session, who spoke when is told from its recording by the transcription model (src/session/speakers.js,
-// src/session/diarizer.js). The session keeps `speakerLabels` (its speakers, numbered by their first line, when
-// they were labelled, and whether any part of the recording could not be matched with certainty) and each
-// segment the id of its `speaker`. An empty name is the default one, "Speaker n" in the display language.
-// Labelling again replaces all of it. One labelling at a time; it goes on if another session is opened.
-const SPEAKERS_CONSENT_KEY = 'rt-speakers-consent';
-const MAX_SPEAKER_NAME = 40;
-let labeling = null; // { session, controller, text } while speakers are being labelled
-let speakerEditing = null; // { session, seg } while the editor is open; seg null when opened from the bar
-
-function hasLabels(sess) {
-  return Array.isArray(sess?.speakerLabels?.speakers);
-}
+// After a session, who spoke when is told from its recording (src/ui/speaker-panel.js); the rules
+// about a session's labels are in src/session/speaker-labels.js. Speaker names and the speaker
+// control of each line are also used by the transcript, the summary and the export.
+const speakerPanel = createSpeakerPanel({
+  els,
+  t,
+  octicon,
+  store,
+  storage: browserStorage,
+  toast,
+  errorText,
+  getCurrent: () => current,
+  getRun: () => run,
+  getApiKey: () => apiKey,
+  openSettings,
+  flushSaves,
+  markDirty,
+  recordUsage,
+  renderSummary,
+  debug: DEBUG,
+});
 // The name shown for a speaker id of `sess`, or '' for none.
 function speakerName(sess, id) {
-  const list = hasLabels(sess) && id ? sess.speakerLabels.speakers : [];
-  const i = list.findIndex((s) => s.id === id);
-  return i === -1 ? '' : list[i].name || t('speakers.default', { n: i + 1 });
+  return speakerPanel.speakerName(sess, id);
 }
-// A stopped session with speech and a recording can be labelled.
-const canLabel = (sess) => !run && hasFinished(sess) && sess.recordings.some((rec) => rec.durationMs > 0);
-
-// A line's speaker: its name, quiet, in a column of its own; an empty slot (an icon on hover) without one.
 function showSpeaker(seg) {
-  const button = seg.speakerEl;
-  if (!button || !hasLabels(current)) return;
-  const name = speakerName(current, seg.speaker);
-  button.classList.toggle('none', !name);
-  if (name) {
-    const text = document.createElement('span');
-    text.className = 'speaker-name';
-    text.textContent = name;
-    button.replaceChildren(text);
-    button.title = name;
-  } else {
-    button.replaceChildren(octicon('person'));
-    button.removeAttribute('title');
-  }
-  button.setAttribute('aria-label', name ? t('speakers.lineButton', { name }) : t('speakers.lineButtonNone'));
+  speakerPanel.showSpeaker(seg);
 }
 function renderSpeakers() {
-  if (!current) return;
-  els.log.classList.toggle('has-speakers', hasLabels(current));
-  for (const seg of current.segments ?? []) showSpeaker(seg);
-  renderSpeakerTools();
+  speakerPanel.render();
 }
 function renderSpeakerTools() {
-  const sess = current;
-  const busy = labeling?.session === sess;
-  const ready = canLabel(sess);
-  els.speakerTools.hidden = !busy && !ready && !hasLabels(sess);
-  els.labelSpeakers.hidden = !busy && !ready;
-  els.labelSpeakers.setAttribute('aria-busy', String(busy));
-  els.labelSpeakers.setAttribute('aria-disabled', String(!!labeling));
-  els.cancelSpeakers.hidden = !busy;
-  els.editSpeakers.hidden = busy || !hasLabels(sess);
-  els.speakersStatus.textContent = busy ? labeling.text : '';
+  speakerPanel.renderTools();
 }
-function setLabelingText(text) {
-  labeling.text = text;
-  if (labeling.session === current) els.speakersStatus.textContent = text;
+function openSpeakerEditor(seg) {
+  speakerPanel.openEditor(seg);
 }
-
-// Whether the user agreed that recordings are uploaded for this; asked once.
-function speakersConsented() {
-  try {
-    if (localStorage.getItem(SPEAKERS_CONSENT_KEY) === '1') return true;
-  } catch {
-    /* private mode: ask every time */
-  }
-  if (!confirm(t('speakers.consent'))) return false;
-  try {
-    localStorage.setItem(SPEAKERS_CONSENT_KEY, '1');
-  } catch {
-    /* private mode */
-  }
-  return true;
-}
-
-els.labelSpeakers.onclick = async () => {
-  const sess = current;
-  if (labeling || !canLabel(sess)) return;
-  if (!apiKey) {
-    toast(t('toast.apiKeyFirst'), 6000, 'warning');
-    return openSettings();
-  }
-  if (!speakersConsented()) return;
-  if (hasLabels(sess) && !confirm(t('speakers.replaceConfirm'))) return;
-  const controller = new AbortController();
-  labeling = { session: sess, controller, text: t('speakers.preparing') };
-  renderSpeakerTools();
-  flushSaves(); // so the lengths of the recordings are on disk
-  try {
-    // Each recording is decoded on its own and kept as 16 kHz mono samples (about 115 MB an hour).
-    const decoded = [];
-    for (const rec of sess.recordings) {
-      const chunks = await store.getAudioChunks(sess.id, rec.id).catch(() => []);
-      controller.signal.throwIfAborted();
-      if (!chunks.length) continue;
-      try {
-        const audio = await decodeRecording(new Blob(chunks, { type: rec.mime }));
-        if (audio.samples.length) decoded.push({ elapsedStart: rec.elapsedStart ?? 0, ...audio });
-      } catch {
-        /* a recording that cannot be decoded: its lines get no speaker */
-      }
-      controller.signal.throwIfAborted();
-    }
-    if (!decoded.length) throw new MessageError('error.speakersNoAudio');
-    const timeline = recordingTimeline(decoded);
-    const result = await labelSpeakers({
-      pieces: decoded,
-      diarizer: new GeminiDiarizer({ apiKey }),
-      signal: controller.signal,
-      onProgress: ({ step, part, parts }) =>
-        setLabelingText(t(step === 'upload' ? 'speakers.uploading' : 'speakers.analyzing', { part, parts })),
-      onUsage: (usageMetadata, model) =>
-        recordUsage(sess, addTokens(emptyUsage(), 'diarization', model, usageMetadata)),
-      // How the parts were matched, to judge it on real meetings: numbers only, no speech.
-      onPart: DEBUG ? (report) => console.log('[speakers]', JSON.stringify(report)) : undefined,
-    });
-    decoded.length = 0;
-    // Speakers are numbered by their first line; one who got no line is not listed.
-    const ids = assignSpeakers(sess.segments, result.words, timeline);
-    const order = [...new Set(ids.filter(Boolean))];
-    const renumber = new Map(order.map((id, i) => [id, `s${i + 1}`]));
-    sess.segments.forEach((seg, i) => {
-      if (ids[i]) seg.speaker = renumber.get(ids[i]);
-      else delete seg.speaker;
-    });
-    sess.speakerLabels = {
-      speakers: order.map((_, i) => ({ id: `s${i + 1}`, name: '' })),
-      madeAt: Date.now(),
-      uncertain: result.uncertain,
-      model: DIARIZE_MODEL,
-    };
-    markDirty(sess);
-    if (sess === current) renderSpeakers();
-    toast(
-      t(result.uncertain ? 'speakers.doneUncertain' : 'speakers.done', { count: order.length }),
-      result.uncertain ? 10000 : 6000,
-      result.uncertain ? 'warning' : 'info',
-    );
-  } catch (err) {
-    // The labels made before, if any, stay as they were.
-    if (err?.name === 'AbortError') toast(t('speakers.cancelled'));
-    else if (err instanceof RateLimitError) toast(errorText(err), 10000, 'warning');
-    else toast(t('toast.speakersFailed', { message: errorText(err) }), 10000, 'critical');
-  } finally {
-    labeling = null;
-    renderSummary();
-  }
-};
-els.cancelSpeakers.onclick = () => labeling?.controller.abort();
-
-// The editor: the names of the session's speakers and, when opened from a line, that line's speaker.
-function openSpeakerEditor(seg = null) {
-  const sess = current;
-  if (!hasLabels(sess) || labeling?.session === sess || run) return;
-  const list = sess.speakerLabels.speakers;
-  speakerEditing = { session: sess, seg };
-  els.speakerLine.hidden = !seg;
-  if (seg) {
-    els.speakerLineSelect.replaceChildren(
-      new Option(t('speakers.none'), ''),
-      ...list.map((s) => new Option(speakerName(sess, s.id), s.id)),
-    );
-    els.speakerLineSelect.value = list.some((s) => s.id === seg.speaker) ? seg.speaker : '';
-    els.speakerLineText.textContent = `${formatElapsed(seg.elapsed)}  ${seg.src}`;
-  }
-  els.speakerNames.replaceChildren(
-    ...list.map((s, i) => {
-      const label = document.createElement('label');
-      label.className = 'form-control';
-      const name = document.createElement('span');
-      name.className = 'form-label';
-      name.textContent = t('speakers.default', { n: i + 1 });
-      const input = document.createElement('input');
-      input.className = 'text-input';
-      input.type = 'text';
-      input.maxLength = MAX_SPEAKER_NAME;
-      input.autocomplete = 'off';
-      input.dataset.id = s.id;
-      input.value = s.name;
-      input.placeholder = t('speakers.default', { n: i + 1 });
-      // Enter saves (in a dialog form it would close the dialog without saving).
-      input.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter') return;
-        e.preventDefault();
-        els.speakerSave.click();
-      });
-      label.append(name, input);
-      return label;
-    }),
-  );
-  els.speakerUncertain.hidden = !sess.speakerLabels.uncertain;
-  els.speakerNote.textContent = t('speakers.madeAt', { date: formatDateTime(sess.speakerLabels.madeAt) });
-  els.speakerDialog.showModal();
-  (seg ? els.speakerLineSelect : els.speakerNames.querySelector('input'))?.focus();
-}
-els.editSpeakers.onclick = () => openSpeakerEditor();
-els.speakerSave.onclick = () => {
-  const { session: sess, seg } = speakerEditing ?? {};
-  if (!sess || !hasLabels(sess)) return els.speakerDialog.close();
-  for (const input of els.speakerNames.querySelectorAll('input')) {
-    const speaker = sess.speakerLabels.speakers.find((s) => s.id === input.dataset.id);
-    if (speaker) speaker.name = input.value.replace(/\s+/g, ' ').trim().slice(0, MAX_SPEAKER_NAME);
-  }
-  if (seg) {
-    const id = els.speakerLineSelect.value;
-    if (id) seg.speaker = id;
-    else delete seg.speaker;
-  }
-  markDirty(sess);
-  if (sess === current) renderSpeakers();
-  els.speakerDialog.close();
-};
-els.speakerDialog.addEventListener('close', () => {
-  speakerEditing = null;
-});
 
 // ---------- summary templates (settings dialog) ----------
 const templateEditor = createTemplateEditor({
