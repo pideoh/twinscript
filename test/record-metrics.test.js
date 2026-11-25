@@ -32,13 +32,18 @@ test('a second run on the same day replaces that day, and earlier days stay', ()
   assert.equal(again, `${SNAPSHOT_HEADER}\n2026-11-20,1,0,2,10\n2026-11-27,1,0,2,16\n`);
 });
 
-test('referrers are recorded per run, without characters that would break the file or run as a formula', () => {
+test('referrers are recorded per run; a name that is not a site name is recorded as "other"', () => {
   const csv = mergeReferrers('', '2026-11-27', [
     { referrer: 'zenn.dev', count: 9, uniques: 4 },
     { referrer: '=cmd,"x"', count: 1, uniques: 1 },
   ]);
-  assert.equal(csv, `${REFERRER_HEADER}\n2026-11-27,zenn.dev,9,4\n2026-11-27,'=cmd  x ,1,1\n`);
+  assert.equal(csv, `${REFERRER_HEADER}\n2026-11-27,zenn.dev,9,4\n2026-11-27,other,1,1\n`);
   assert.equal(mergeReferrers(csv, '2026-11-27', []), `${REFERRER_HEADER}\n`);
+});
+
+test('figures that are not counts, and days that are not dates, do not reach the file', () => {
+  const csv = mergeDaily('', [at('2026-11-01', '5,9', -1), { timestamp: 'x\n1,1', count: 1, uniques: 1 }], []);
+  assert.equal(csv, `${DAILY_HEADER}\n2026-11-01,0,0,0,0\n`);
 });
 
 test('downloads are counted over every file of every release', () => {

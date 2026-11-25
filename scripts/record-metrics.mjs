@@ -7,7 +7,7 @@
 //                there are replaced by newer figures for the same day, as the last day is partial)
 // snapshots.csv  one row per run: stars, forks, watchers and release downloads so far
 // referrers.csv  one row per run and site: where visitors of the last 14 days came from
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -22,19 +22,26 @@ const rowsOf = (csv) =>
     .filter(Boolean)
     .map((line) => line.split(','));
 const toCsv = (header, rows) => `${[header, ...rows.map((r) => r.join(','))].join('\n')}\n`;
-const day = (timestamp) => String(timestamp).slice(0, 10);
-// A referrer is a site name from GitHub, but it ends up in a CSV file that people open in spreadsheets.
-const cell = (text) =>
-  String(text)
-    .replace(/[",\r\n]/g, ' ')
-    .replace(/^[=+\-@]/, "'$&");
+// Everything written comes from GitHub's answers, so each value is rebuilt as what it should be: a
+// count, a date, or a site name. Anything else becomes 0, is skipped, or is recorded as "other".
+const count = (n) => (Number.isSafeInteger(n) && n >= 0 ? Number(n) : 0);
+const day = (timestamp) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(timestamp));
+  return m
+    ? [m[1], m[2], m[3]]
+        .map(Number)
+        .map((n, i) => String(n).padStart(i ? 2 : 4, '0'))
+        .join('-')
+    : null;
+};
+const site = (text) => (typeof text === 'string' && /^[A-Za-z0-9][A-Za-z0-9.-]{0,99}$/.test(text) ? text : 'other');
 
 // views, clones: the `views` and `clones` arrays of the traffic API ({ timestamp, count, uniques }).
 export function mergeDaily(csv, views = [], clones = []) {
   const byDate = new Map(rowsOf(csv).map(([date, ...rest]) => [date, rest.map(Number)]));
   const at = (date) => byDate.get(date) ?? byDate.set(date, [0, 0, 0, 0]).get(date);
-  for (const v of views) at(day(v.timestamp)).splice(0, 2, v.count, v.uniques);
-  for (const c of clones) at(day(c.timestamp)).splice(2, 2, c.count, c.uniques);
+  for (const v of views) if (day(v.timestamp)) at(day(v.timestamp)).splice(0, 2, count(v.count), count(v.uniques));
+  for (const c of clones) if (day(c.timestamp)) at(day(c.timestamp)).splice(2, 2, count(c.count), count(c.uniques));
   const rows = [...byDate].sort(([a], [b]) => a.localeCompare(b)).map(([date, n]) => [date, ...n]);
   return toCsv(DAILY_HEADER, rows);
 }
@@ -42,7 +49,7 @@ export function mergeDaily(csv, views = [], clones = []) {
 // One row per date: a second run on the same day replaces the first.
 export function mergeSnapshot(csv, date, { stars, forks, watchers, downloads }) {
   const rows = rowsOf(csv).filter(([d]) => d !== date);
-  rows.push([date, stars, forks, watchers, downloads]);
+  rows.push([date, count(stars), count(forks), count(watchers), count(downloads)]);
   return toCsv(
     SNAPSHOT_HEADER,
     rows.sort(([a], [b]) => a.localeCompare(b)),
@@ -51,12 +58,12 @@ export function mergeSnapshot(csv, date, { stars, forks, watchers, downloads }) 
 
 export function mergeReferrers(csv, date, referrers = []) {
   const rows = rowsOf(csv).filter(([d]) => d !== date);
-  for (const r of referrers) rows.push([date, cell(r.referrer), r.count, r.uniques]);
+  for (const r of referrers) rows.push([date, site(r.referrer), count(r.count), count(r.uniques)]);
   return toCsv(REFERRER_HEADER, rows);
 }
 
 export const totalDownloads = (releases = []) =>
-  releases.reduce((sum, release) => sum + (release.assets ?? []).reduce((n, a) => n + (a.download_count ?? 0), 0), 0);
+  releases.reduce((sum, release) => sum + (release.assets ?? []).reduce((n, a) => n + count(a.download_count), 0), 0);
 
 async function main([dir, repo = process.env.GITHUB_REPOSITORY]) {
   const token = process.env.GH_TOKEN;
@@ -90,7 +97,13 @@ async function main([dir, repo = process.env.GITHUB_REPOSITORY]) {
   mkdirSync(dir, { recursive: true });
   const update = (name, merge) => {
     const file = join(dir, name);
-    writeFileSync(file, merge(existsSync(file) ? readFileSync(file, 'utf8') : ''));
+    let before = '';
+    try {
+      before = readFileSync(file, 'utf8');
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+    writeFileSync(file, merge(before));
   };
   update('daily.csv', (csv) => mergeDaily(csv, views.views, clones.clones));
   update('snapshots.csv', (csv) =>
