@@ -2,7 +2,7 @@ import { addFileSourceOption, FILE_TAIL_MS, pickAudioFile, traceDownloadButton }
 import { MockSummarizer, MockTranscriber, MockTranslator } from './debug/mock.js';
 import { createTrace } from './debug/trace.js';
 import { MODEL as DIARIZE_MODEL, GeminiDiarizer, labelSpeakers } from './session/diarizer.js';
-import { buildTranscript, formatDateTime, formatElapsed, safeFileName } from './session/exporter.js';
+import { formatDateTime, formatElapsed, safeFileName } from './session/exporter.js';
 import { markdownToHtml } from './session/markdown.js';
 import { decodeRecording } from './session/speaker-audio.js';
 import { assignSpeakers, recordingTimeline } from './session/speakers.js';
@@ -26,6 +26,7 @@ import {
   targetLanguages,
 } from './translation/script-hint.js';
 import { GeminiTranslator, RateLimitError } from './translation/translator.js';
+import { createExportDialog } from './ui/export-dialog.js';
 import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './ui/i18n.js';
 import { octicon } from './ui/icons.js';
 import { followPlace, LANGS, langLabel as labelIn, langName, langTag as tagAmong } from './ui/langs.js';
@@ -557,20 +558,6 @@ function blankSession() {
   };
 }
 
-const serialize = (sess) => ({
-  ...sess,
-  segments: sess.segments.map(({ id, at, elapsed, src, tgt, lang, tgts, speaker }) => ({
-    id,
-    at,
-    elapsed,
-    src,
-    tgt,
-    ...(lang && { lang }),
-    ...(tgts && { tgts: tgts.map(({ lang, text }) => ({ lang, text })) }),
-    ...(speaker && { speaker }),
-  })),
-});
-
 function markDirty(sess) {
   dirty.add(sess);
   clearTimeout(saveTimer);
@@ -1019,74 +1006,24 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
 }
 
-els.export.onclick = () => {
-  if (isEmpty(current) && !(DEBUG && lastTrace)) return toast(t('toast.nothingToSave'));
-  flushSaves(); // so the title and recording lengths are up to date
-  const sess = current;
-  const rows = sess.recordings.map((rec, i) => {
-    const row = document.createElement('div');
-    row.className = 'rec';
-    const info = document.createElement('span');
-    const length = run?.recording === rec ? t('export.recordingNow') : formatElapsed(rec.durationMs);
-    info.textContent = t('export.recording', { n: i + 1, date: formatDateTime(rec.startedAt), length });
-    const save = document.createElement('button');
-    save.type = 'button';
-    save.className = 'btn';
-    const label = document.createElement('span');
-    label.textContent = t('export.save');
-    save.append(octicon('download'), label);
-    save.onclick = async () => {
-      const chunks = await store.getAudioChunks(sess.id, rec.id).catch(() => []);
-      if (!chunks.length) return toast(t('toast.recordingMissing'), 6000, 'critical');
-      const ext = rec.mime.includes('mp4') ? 'm4a' : 'webm';
-      download(new Blob(chunks, { type: rec.mime }), `${safeFileName(sess.title)}-${i + 1}.${ext}`);
-    };
-    row.append(info, save);
-    return row;
-  });
-  if (rows.length) {
-    const heading = document.createElement('h3');
-    heading.textContent = t('export.recordings');
-    rows.unshift(heading);
-  }
-  if (DEBUG && lastTrace) rows.push(traceDownloadButton(lastTrace, download));
-  els.recordings.replaceChildren(...rows);
-  els.exportDialog.showModal();
-};
-
-els.exportTranscript.onclick = () => {
-  if (!current.segments.length) return toast(t('toast.noTranscript'));
-  const latest = summariesOf(current).at(-1);
-  const exported = serialize(current);
-  // Names, not ids, go into the file; a session without labels has none.
-  for (const seg of exported.segments) seg.speaker = speakerName(current, seg.speaker);
-  const { text, ext, mime } = buildTranscript(exported, {
-    format: els.exportFormat.value,
-    content: els.exportContent.value,
-    langLabel,
-    // The latest summary; the panel downloads any other one on its own.
-    summary: latest && { markdown: latest.markdown, title: latest.templateName, truncated: latest.truncated },
-    labels: {
-      ...Object.fromEntries(
-        [
-          'title',
-          'date',
-          'languages',
-          'duration',
-          'time',
-          'speaker',
-          'source',
-          'translation',
-          'separator',
-          'transcript',
-        ].map((k) => [k, t(`file.${k}`)]),
-      ),
-      summary: t('summary.title'),
-      summaryTruncated: t('summary.truncated'),
-    },
-  });
-  download(new Blob([text], { type: `${mime};charset=utf-8` }), `${safeFileName(current.title)}.${ext}`);
-};
+// The download dialog (src/ui/export-dialog.js).
+createExportDialog({
+  els,
+  t,
+  octicon,
+  store,
+  toast,
+  download,
+  getCurrent: () => current,
+  getRun: () => run,
+  isEmpty,
+  flushSaves,
+  getTrace: () => (DEBUG ? lastTrace : null),
+  traceButton: (trace) => traceDownloadButton(trace, download),
+  summariesOf,
+  speakerName,
+  langLabel,
+});
 
 // ---------- summary ----------
 // One summary request at a time; every summary made is kept with its session, newest last. The

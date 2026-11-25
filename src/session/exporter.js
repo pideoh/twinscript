@@ -153,3 +153,52 @@ export function safeFileName(title) {
       .slice(0, 60) || 'transcript'
   );
 }
+
+// A session as plain data for a file: its fields as they are, and each segment with only what is
+// saved of it (no elements or state of the screen). Optional fields of a segment (`lang`, `tgts`,
+// `speaker`) are left out when it has none.
+export const serializeSession = (sess) => ({
+  ...sess,
+  segments: sess.segments.map(({ id, at, elapsed, src, tgt, lang, tgts, speaker }) => ({
+    id,
+    at,
+    elapsed,
+    src,
+    tgt,
+    ...(lang && { lang }),
+    ...(tgts && { tgts: tgts.map(({ lang, text }) => ({ lang, text })) }),
+    ...(speaker && { speaker }),
+  })),
+});
+
+// The session with names, not ids, as each segment's speaker: nameOf(id) gives the name, or ''
+// for none (every segment of a session without labels gets '').
+export const withSpeakerNames = (session, nameOf) => ({
+  ...session,
+  segments: session.segments.map((seg) => ({ ...seg, speaker: nameOf(seg.speaker) })),
+});
+
+// The words of a transcript file (see DEFAULT_LABELS) in the display language, from `t`.
+export const transcriptLabels = (t) => ({
+  ...Object.fromEntries(
+    [
+      'title',
+      'date',
+      'languages',
+      'duration',
+      'time',
+      'speaker',
+      'source',
+      'translation',
+      'separator',
+      'transcript',
+    ].map((k) => [k, t(`file.${k}`)]),
+  ),
+  summary: t('summary.title'),
+  summaryTruncated: t('summary.truncated'),
+});
+
+// The file name of a session's recording: its title and its number (1-based `n`), with the
+// extension of its type (MP4 audio is .m4a; everything else is WebM).
+export const recordingFileName = (title, n, mime) =>
+  `${safeFileName(title)}-${n}.${mime.includes('mp4') ? 'm4a' : 'webm'}`;
