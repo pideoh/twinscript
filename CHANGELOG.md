@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/pideoh/twinscript/compare/v0.13.0...v0.14.0) (2026-11-25)
+
+
+### Features
+
+* say when a newer version is available ([#110](https://github.com/pideoh/twinscript/issues/110)) ([a73b31a](https://github.com/pideoh/twinscript/commit/a73b31a4fce816c7f281299bba29fcaa1066f68e))
+
 ## [0.13.0](https://github.com/pideoh/twinscript/compare/v0.12.0...v0.13.0) (2026-11-25)
 
 
