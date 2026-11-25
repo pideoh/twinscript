@@ -129,8 +129,16 @@ test('a failed check answers null and only warns', async () => {
 });
 
 test('a check that takes too long is given up', async () => {
+  // The timer of AbortSignal.timeout does not keep Node running, so the request that never answers
+  // holds a timer of its own, as a real request holds a socket.
   const fetch = (_url, { signal }) =>
-    new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason)));
+    new Promise((_resolve, reject) => {
+      const pending = setTimeout(() => reject(new Error('the timeout did not fire')), 5000);
+      signal.addEventListener('abort', () => {
+        clearTimeout(pending);
+        reject(signal.reason);
+      });
+    });
   assert.equal(await checkForUpdate({ fetch, current: '0.13.0', timeoutMs: 20 }), null);
 });
 
