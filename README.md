@@ -258,6 +258,12 @@ npm run test:app  # desktop app smoke tests; they open real windows
 
 The Gemini API is mocked in all of them, so no API key is needed.
 
+## Questions, ideas and plans
+
+- Questions and ideas: [Discussions](https://github.com/pideoh/twinscript/discussions).
+- Bugs: [Issues](https://github.com/pideoh/twinscript/issues).
+- What is planned, in progress and done: the [project board](https://github.com/users/pideoh/projects/1).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). To report a security problem, see [SECURITY.md](SECURITY.md).
