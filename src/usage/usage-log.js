@@ -119,12 +119,20 @@ export function createUsageLog({
 
   // Listening time counts while the recognizer is connected (state 'listening'): r.listeningSince
   // is when that began, or 0. The time up to now is recorded for r.session and counting goes on
-  // from now.
+  // from now. Recording re-renders an open usage dialog, which accrues again: that nested call
+  // returns at once, or it would record (and re-render) again without end.
+  let accruing = false;
   function accrueListening(r) {
-    if (!r.listeningSince) return;
+    if (!r.listeningSince || accruing) return;
     const time = now();
-    recordUsage(r.session, addListening(emptyUsage(), LIVE_MODEL, time - r.listeningSince));
+    const ms = time - r.listeningSince;
     r.listeningSince = time;
+    accruing = true;
+    try {
+      recordUsage(r.session, addListening(emptyUsage(), LIVE_MODEL, ms));
+    } finally {
+      accruing = false;
+    }
   }
 
   return { currentPrices, readDailyTotals, recordUsage, accrueListening };

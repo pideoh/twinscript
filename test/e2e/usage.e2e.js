@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mockGemini, reload, saved, setup, translated } from './helpers.js';
+import { listening, mockGemini, reload, saved, setup, translated } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -113,6 +113,27 @@ test('a session shows its requests, tokens and estimated cost, and the totals ke
     ],
   );
   assert.deepEqual(await cells(page, 'usageSessions'), [['保存されたセッションはありません']]);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('with the usage dialog open while listening, listening time is counted once', async () => {
+  const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
+  await mockGemini(page, [[20, 'final', 'One is done.']]);
+  const started = Date.now();
+  await page.click('#toggle');
+  await listening(page);
+  await openUsage(page);
+  await translated(page, 1); // a request is recorded while the dialog is open
+  await closeUsage(page);
+  await openUsage(page);
+  const seconds = (duration) => duration.split(':').reduce((sum, part) => sum * 60 + Number(part), 0);
+  const [session] = await cells(page, 'usageSession');
+  const [today] = await cells(page, 'usageTotals');
+  const elapsed = Date.now() - started;
+  for (const shown of [session[1], today[1]]) {
+    assert.ok(seconds(shown) * 1000 <= elapsed, `${shown} listened in ${elapsed} ms`);
+  }
   assert.deepEqual(errors, []);
   await close();
 });

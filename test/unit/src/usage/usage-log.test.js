@@ -142,6 +142,30 @@ test('listening time is counted up to now and goes on from there, only while con
   assert.equal(saved.length, 2);
 });
 
+test('with the usage dialog open while listening, listening time is counted once', () => {
+  const storage = memoryStorage();
+  let recorded = 0;
+  const r = { session: blank(), listeningSince: NOW - 5000 };
+  const log = createUsageLog({
+    settings: { priceOverrides: {} },
+    storage,
+    isEmpty: () => true,
+    markDirty: () => {},
+    // As in the app: each record re-renders the open dialog, and rendering accrues listening time.
+    onRecorded: () => {
+      recorded++;
+      log.accrueListening(r);
+    },
+    now: () => NOW,
+  });
+  log.accrueListening(r);
+  assert.equal(r.session.usage.transcription[LIVE_MODEL].listeningMs, 5000);
+  const daily = JSON.parse(storage.items[DAILY_KEY]);
+  assert.equal(daily.days[dayKey(NOW)].transcription[LIVE_MODEL].listeningMs, 5000);
+  assert.equal(r.listeningSince, NOW);
+  assert.equal(recorded, 1);
+});
+
 test('estimates use the prices the user changed, and the defaults when the stored ones are not valid', () => {
   const settings = { priceOverrides: { [TRANSLATION]: { input: 1 } } };
   const { log } = setup({ settings });
