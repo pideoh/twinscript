@@ -7,6 +7,7 @@
 //   storage.js  saved sessions read from IndexedDB
 //   pc-audio.js the getDisplayMedia stand-in
 //   speakers.js the recorded session and the speaker-label mocks
+//   translation-errors.js  the translation mock a test answers itself, speech said on demand, a movable clock
 //   updates.js  the desktop app's update bridge (window.appUpdates)
 
 export * from './helpers/app.js';
@@ -16,4 +17,5 @@ export * from './helpers/speakers.js';
 export * from './helpers/storage.js';
 export * from './helpers/summary.js';
 export * from './helpers/targets.js';
+export * from './helpers/translation-errors.js';
 export * from './helpers/updates.js';
