@@ -11,9 +11,9 @@ import { createServer } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
-import { availableLocales } from '../src/i18n.js';
-import { addListening, addTokens, emptyUsage } from '../src/usage.js';
-import { addToDaily, DAILY_KEY, emptyDaily, LIVE_MODEL } from '../src/usage-stats.js';
+import { availableLocales } from '../src/ui/i18n.js';
+import { addListening, addTokens, emptyUsage } from '../src/usage/usage.js';
+import { addToDaily, DAILY_KEY, emptyDaily, LIVE_MODEL } from '../src/usage/usage-stats.js';
 
 const [out, filter] = process.argv.slice(2);
 if (!out) {

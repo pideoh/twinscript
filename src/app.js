@@ -1,23 +1,12 @@
-import { AudioCapture, canCaptureSystemAudio, inMacDesktopApp } from './audio.js';
-import { addFileSourceOption, FILE_TAIL_MS, pickAudioFile, traceDownloadButton } from './debug-tools.js';
-import { MODEL as DIARIZE_MODEL, GeminiDiarizer, labelSpeakers } from './diarizer.js';
-import { buildTranscript, formatDateTime, formatElapsed, safeFileName } from './exporter.js';
-import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './i18n.js';
-import { octicon } from './icons.js';
-import { markdownToHtml } from './markdown.js';
-import { MessageError } from './message-error.js';
-import { MockSummarizer, MockTranscriber, MockTranslator } from './mock.js';
-import { createPacer, DEFAULT_STRATEGY, strategyNamed } from './pacer.js';
-import { formatUsd, mergePrices, PRICES } from './pricing.js';
-import { ReadAloud, readAloudLanguages } from './read-aloud.js';
-import { canRecord, Recorder } from './recorder.js';
-import { languageByScript, scriptsDiffer, sourceByScript, targetByScript, targetLanguages } from './script-hint.js';
-import { loadApiKey, saveApiKey } from './secrets.js';
-import { UtteranceTracker } from './segmenter.js';
-import { decodeRecording } from './speaker-audio.js';
-import { assignSpeakers, recordingTimeline } from './speakers.js';
-import { store } from './store.js';
-import { GeminiSummarizer, legacySummaryToMarkdown } from './summarizer.js';
+import { addFileSourceOption, FILE_TAIL_MS, pickAudioFile, traceDownloadButton } from './debug/debug-tools.js';
+import { MockSummarizer, MockTranscriber, MockTranslator } from './debug/mock.js';
+import { createTrace } from './debug/trace.js';
+import { MODEL as DIARIZE_MODEL, GeminiDiarizer, labelSpeakers } from './session/diarizer.js';
+import { buildTranscript, formatDateTime, formatElapsed, safeFileName } from './session/exporter.js';
+import { markdownToHtml } from './session/markdown.js';
+import { decodeRecording } from './session/speaker-audio.js';
+import { assignSpeakers, recordingTimeline } from './session/speakers.js';
+import { GeminiSummarizer, legacySummaryToMarkdown } from './session/summarizer.js';
 import {
   DEFAULT_TEMPLATE,
   exportTemplates,
@@ -31,10 +20,27 @@ import {
   readStoredTemplates,
   storedTemplatesJson,
   validateTemplate,
-} from './summary-templates.js';
-import { createTrace } from './trace.js';
-import { GeminiLiveTranscriber } from './transcriber.js';
-import { GeminiTranslator, RateLimitError } from './translator.js';
+} from './session/summary-templates.js';
+import { AudioCapture, canCaptureSystemAudio, inMacDesktopApp } from './speech/audio.js';
+import { canRecord, Recorder } from './speech/recorder.js';
+import { UtteranceTracker } from './speech/segmenter.js';
+import { GeminiLiveTranscriber } from './speech/transcriber.js';
+import { applyReplacements, parseVocabulary } from './speech/vocabulary.js';
+import { loadApiKey, saveApiKey } from './storage/secrets.js';
+import { store } from './storage/store.js';
+import { createPacer, DEFAULT_STRATEGY, strategyNamed } from './translation/pacer.js';
+import { ReadAloud, readAloudLanguages } from './translation/read-aloud.js';
+import {
+  languageByScript,
+  scriptsDiffer,
+  sourceByScript,
+  targetByScript,
+  targetLanguages,
+} from './translation/script-hint.js';
+import { GeminiTranslator, RateLimitError } from './translation/translator.js';
+import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './ui/i18n.js';
+import { octicon } from './ui/icons.js';
+import { MessageError } from './ui/message-error.js';
 import {
   afterCheck,
   checkDue,
@@ -42,8 +48,9 @@ import {
   readUpdateState,
   UPDATE_KEY,
   versionToAnnounce,
-} from './update-check.js';
-import { addListening, addTokens, addUsage, emptyUsage } from './usage.js';
+} from './ui/update-check.js';
+import { formatUsd, mergePrices, PRICES } from './usage/pricing.js';
+import { addListening, addTokens, addUsage, emptyUsage } from './usage/usage.js';
 import {
   addToDaily,
   DAILY_KEY,
@@ -55,8 +62,7 @@ import {
   sessionRows,
   totalsRows,
   usageView,
-} from './usage-stats.js';
-import { applyReplacements, parseVocabulary } from './vocabulary.js';
+} from './usage/usage-stats.js';
 
 // code: what the recognizer is told; display: the tag whose name is shown in the UI language
 // (no region, but the script for Chinese); name: what the translation prompt says.
@@ -110,17 +116,17 @@ const DEFAULTS = {
   summaryTemplate: DEFAULT_TEMPLATE, // the template, length and language last used for a summary
   summaryLength: 'standard',
   summaryLanguage: '', // a language code, or '' for the display language
-  // Prices for cost estimates that differ from src/pricing.js: { [model]: { input?, output?, ... } }.
+  // Prices for cost estimates that differ from src/usage/pricing.js: { [model]: { input?, output?, ... } }.
   priceOverrides: {},
 };
 const HISTORY_LINES = 3;
 const SILENT_SYSTEM_AUDIO_MS = 8000; // how long PC audio may deliver nothing before the user is told
 const MOCK = new URLSearchParams(location.search).has('mock');
 const DEBUG = new URLSearchParams(location.search).has('debug'); // log raw recognizer output to the console
-// Debug only: the recognizer trace of the last run (src/trace.js), also readable from the console.
+// Debug only: the recognizer trace of the last run (src/debug/trace.js), also readable from the console.
 let lastTrace = null;
 if (DEBUG) window.__twinscriptTrace = () => lastTrace;
-// Debug only: ?pacer=<name> picks the pacing strategy of src/pacer.js for this page load.
+// Debug only: ?pacer=<name> picks the pacing strategy of src/translation/pacer.js for this page load.
 const PACER = DEBUG ? strategyNamed(new URLSearchParams(location.search).get('pacer')) : DEFAULT_STRATEGY;
 
 const $ = (id) => document.getElementById(id);
@@ -650,7 +656,7 @@ function blankSession() {
     langB: settings.langB,
     ...(settings.langC && { langC: settings.langC }),
     activeMs: 0,
-    usage: emptyUsage(), // what it used of the API (src/usage.js); absent in sessions made before it was counted
+    usage: emptyUsage(), // what it used of the API (src/usage/usage.js); absent in sessions made before it was counted
     segments: [],
     summaries: [],
     recordings: [],
@@ -1070,7 +1076,7 @@ window.appShortcuts?.onCommand((command) => {
 if (window.appShortcuts && !settings.globalShortcuts) applyGlobalShortcuts();
 
 // ---------- newer versions (desktop app) ----------
-// The main process asks GitHub (app/updates.js); this page decides when (src/update-check.js): at
+// The main process asks GitHub (app/updates.js); this page decides when (src/ui/update-check.js): at
 // start and then at most once every 24 hours, only while the setting is on. The last answer is
 // kept, so the notice comes back at the next start without a request until it is dismissed or
 // the app is updated. Failures say nothing.
@@ -1570,8 +1576,8 @@ els.summaryDelete.onclick = () => {
 };
 
 // ---------- speaker labels ----------
-// After a session, who spoke when is told from its recording by the transcription model (src/speakers.js,
-// src/diarizer.js). The session keeps `speakerLabels` (its speakers, numbered by their first line, when
+// After a session, who spoke when is told from its recording by the transcription model (src/session/speakers.js,
+// src/session/diarizer.js). The session keeps `speakerLabels` (its speakers, numbered by their first line, when
 // they were labelled, and whether any part of the recording could not be matched with certainty) and each
 // segment the id of its `speaker`. An empty name is the default one, "Speaker n" in the display language.
 // Labelling again replaces all of it. One labelling at a time; it goes on if another session is opened.
@@ -1960,8 +1966,8 @@ els.templateImportFile.onchange = async () => {
 };
 
 // ---------- usage and cost estimates ----------
-// Each session keeps what it used in `usage` (src/usage.js), saved with its metadata. The same usage
-// is added to running totals per calendar day in localStorage (src/usage-stats.js), which outlive the
+// Each session keeps what it used in `usage` (src/usage/usage.js), saved with its metadata. The same usage
+// is added to running totals per calendar day in localStorage (src/usage/usage-stats.js), which outlive the
 // sessions. In the demo mode the made-up usage goes into its session only, which is marked `demo`;
 // the daily totals, the only source of the totals shown, never see it. `usagePartial` marks a session
 // from before usage was counted that was used again afterwards: only the later part is known.
@@ -2539,7 +2545,7 @@ function createTracker(r) {
   });
 }
 
-// The sentence being spoken is translated as it grows; src/pacer.js decides when.
+// The sentence being spoken is translated as it grows; src/translation/pacer.js decides when.
 function createInterimPacer(r) {
   return createPacer({
     strategy: PACER,

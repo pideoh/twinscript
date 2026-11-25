@@ -1,14 +1,14 @@
-// Checks the Gemini prices in src/pricing.js against Google's pricing page and, with --write, updates them.
+// Checks the Gemini prices in src/usage/pricing.js against Google's pricing page and, with --write, updates them.
 //
 // Usage: node scripts/update-pricing.mjs [--write] [--force] [--report <file>] [--page <file>] [--file <file>]
 //   (no option)      print the differences; exit 1 when there are any (a check)
-//   --write          rewrite the price block in src/pricing.js, with today's date as "as of", when prices changed
+//   --write          rewrite the price block in src/usage/pricing.js, with today's date as "as of", when prices changed
 //   --force          accept changes that look wrong: a price that moves by more than 5x, or a model that is no
 //                    longer on the page (it is removed from the table)
 //   --report <file>  also write the differences as Markdown (used as the pull request body by
 //                    .github/workflows/pricing-check.yml)
 //   --page <file>    read the page text from a file instead of fetching it
-//   --file <file>    the price table to check (default: src/pricing.js)
+//   --file <file>    the price table to check (default: src/usage/pricing.js)
 //
 // Exit codes: 0 nothing to do (or written), 1 differences found (without --write), 2 the page could not be read
 // or parsed, or a change was refused. Nothing is written unless every model was parsed without doubt.
@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 
 export const PAGE_TEXT_URL = 'https://aistudio.google.com/docs/pricing.md.txt';
 export const MAX_RATIO = 5;
-const PRICING_FILE = join(fileURLToPath(new URL('..', import.meta.url)), 'src', 'pricing.js');
+const PRICING_FILE = join(fileURLToPath(new URL('..', import.meta.url)), 'src', 'usage', 'pricing.js');
 const FIELDS = ['input', 'output', 'inputPerMinute', 'outputPerMinute'];
 const BEGIN = '// BEGIN PRICES';
 const END = '// END PRICES';
@@ -212,7 +212,7 @@ function number(value, what) {
   return String(value);
 }
 
-/** The price block as it stands in src/pricing.js, in the project's formatting, markers included. */
+/** The price block as it stands in src/usage/pricing.js, in the project's formatting, markers included. */
 export function renderPricesBlock(table) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(table.asOf)) throw new PricingError(`Cannot write the date: ${table.asOf}`);
   const lines = [
@@ -244,7 +244,7 @@ function blockRange(source) {
   return [start, end + END.length];
 }
 
-/** `source` (the text of src/pricing.js) with its price block replaced by `table`. */
+/** `source` (the text of src/usage/pricing.js) with its price block replaced by `table`. */
 export function replacePricesBlock(source, table) {
   const [start, end] = blockRange(source);
   // Keep the file's line endings: a checkout on Windows may have CRLF.
@@ -252,7 +252,7 @@ export function replacePricesBlock(source, table) {
   return source.slice(0, start) + renderPricesBlock(table).replaceAll('\n', eol) + source.slice(end);
 }
 
-/** Reads the price table from the text of src/pricing.js by evaluating only its price block. */
+/** Reads the price table from the text of src/usage/pricing.js by evaluating only its price block. */
 export async function readPricesBlock(source) {
   const [start, end] = blockRange(source);
   const block = source.slice(start, end);
@@ -286,7 +286,7 @@ export function describe({ changes, missing }) {
 /** The differences as Markdown, for a pull request body. */
 export function markdownReport(table, comparison) {
   const lines = [
-    `The prices on ${table.source} (paid tier, Standard) differ from \`src/pricing.js\` (as of ${table.asOf}):`,
+    `The prices on ${table.source} (paid tier, Standard) differ from \`src/usage/pricing.js\` (as of ${table.asOf}):`,
     '',
   ];
   if (comparison.changes.length) {

@@ -21,12 +21,12 @@ test('serves the files the web app is made of, with their content types', () => 
     path: 'src/app.js',
     type: 'text/javascript; charset=utf-8',
   });
-  assert.deepEqual(resolveAppFile('app://rt/src/pcm-worklet.js'), {
-    path: 'src/pcm-worklet.js',
+  assert.deepEqual(resolveAppFile('app://rt/src/speech/pcm-worklet.js'), {
+    path: 'src/speech/pcm-worklet.js',
     type: 'text/javascript; charset=utf-8',
   });
-  assert.deepEqual(resolveAppFile('app://rt/src/locales/zh-Hans.js'), {
-    path: 'src/locales/zh-Hans.js',
+  assert.deepEqual(resolveAppFile('app://rt/src/ui/locales/zh-Hans.js'), {
+    path: 'src/ui/locales/zh-Hans.js',
     type: 'text/javascript; charset=utf-8',
   });
   assert.deepEqual(resolveAppFile('app://rt/icons/icon.svg'), { path: 'icons/icon.svg', type: 'image/svg+xml' });
@@ -42,11 +42,11 @@ test('everything else is not served', () => {
     'app://rt/.git/config',
     'app://rt/src/.hidden.js',
     'app://rt/src/sub/app.js',
-    'app://rt/src/locales/sub/en.js',
-    'app://rt/src/locales/.hidden.js',
-    'app://rt/src/locales/en.json',
-    'app://rt/src/locales/',
-    'app://rt/src/locales/..%2F..%2Fpackage.json',
+    'app://rt/src/ui/locales/sub/en.js',
+    'app://rt/src/ui/locales/.hidden.js',
+    'app://rt/src/ui/locales/en.json',
+    'app://rt/src/ui/locales/',
+    'app://rt/src/ui/locales/..%2F..%2Fpackage.json',
     'app://rt/locales/en.js',
     'app://rt/src/app.ts',
     'app://rt/icons/icon.ico',

@@ -33,7 +33,7 @@ SOFTWARE.
 
 ## Octicons
 
-Icon path data inlined in `index.html`, `styles.css` and `src/icons.js` from
+Icon path data inlined in `index.html`, `styles.css` and `src/ui/icons.js` from
 [@primer/octicons](https://github.com/primer/octicons) 19.42.0.
 
 ```text

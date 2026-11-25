@@ -12,10 +12,10 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
-import { createPacer, DEFAULT_STRATEGY, STRATEGIES } from '../../src/pacer.js';
-import { sourceByScript, targetByScript, targetLanguages } from '../../src/script-hint.js';
-import { UtteranceTracker } from '../../src/segmenter.js';
-import { GeminiTranslator, RateLimitError } from '../../src/translator.js';
+import { UtteranceTracker } from '../../src/speech/segmenter.js';
+import { createPacer, DEFAULT_STRATEGY, STRATEGIES } from '../../src/translation/pacer.js';
+import { sourceByScript, targetByScript, targetLanguages } from '../../src/translation/script-hint.js';
+import { GeminiTranslator, RateLimitError } from '../../src/translation/translator.js';
 import { createVirtualClock } from './clock.mjs';
 import { aggregate, formatHealth, formatTable, health, sentenceMetrics } from './metrics.mjs';
 

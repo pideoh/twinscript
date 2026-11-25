@@ -1,4 +1,4 @@
-# Once a month, compares the Gemini prices in src/pricing.js (used for cost estimates) with Google's pricing
+# Once a month, compares the Gemini prices in src/usage/pricing.js (used for cost estimates) with Google's pricing
 # page. When they differ, it opens a pull request with the new prices, or updates the one already open, for a
 # maintainer to check against the page and merge; it is never merged automatically. When the page cannot be
 # read or parsed, or a change looks wrong (more than 5x, a model gone), the run fails and nothing is proposed:
@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: 22
       # Exits non-zero (and fails the run) when the page cannot be parsed or a change is refused. Otherwise it
-      # rewrites src/pricing.js only when the prices changed, and writes the differences to the report.
+      # rewrites src/usage/pricing.js only when the prices changed, and writes the differences to the report.
       - name: Compare with the pricing page
         run: node scripts/update-pricing.mjs --write --report "$RUNNER_TEMP/pricing-report.md"
       # The pull request is opened with RELEASE_PR_TOKEN, as in release.yml: one opened with the workflow's own
@@ -42,7 +42,7 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN }}
           BASE: ${{ github.event.repository.default_branch }}
         run: |
-          if git diff --quiet -- src/pricing.js; then
+          if git diff --quiet -- src/usage/pricing.js; then
             echo "The prices match the pricing page; nothing to propose."
             exit 0
           fi
@@ -65,7 +65,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
           git switch -c "$BRANCH"
-          git commit -q -m "$TITLE" -- src/pricing.js
+          git commit -q -m "$TITLE" -- src/usage/pricing.js
           git push --force origin "HEAD:refs/heads/$BRANCH"
           number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq '.[].number')
           if [ -n "$number" ]; then

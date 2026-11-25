@@ -850,7 +850,7 @@ input[type="range"] {
   display: none;
 }
 
-/* A summary written in Markdown (src/markdown.js), in the panel's compact text. */
+/* A summary written in Markdown (src/session/markdown.js), in the panel's compact text. */
 .markdown {
   display: grid;
   gap: var(--base-size-8);
