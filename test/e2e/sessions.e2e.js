@@ -140,3 +140,36 @@ test('a saved session still shows the language code of each line after a reload'
   assert.deepEqual(errors, []);
   await close();
 });
+
+test('a start pressed while the session on screen is being deleted records into a new session', async () => {
+  const { page, errors, close } = await openApp('', { apiKey: 'test-key' });
+  const gemini = await mockGemini(page, [[3, 'final', 'First meeting notes.']]);
+  await page.click('#toggle');
+  await translated(page, 1);
+  await page.click('#toggle');
+  await saved(page);
+  gemini.restart();
+  await page.unroute(/streamGenerateContent/);
+  await mockGemini(page, [[3, 'final', 'Second meeting.']]);
+
+  // Start is pressed right after the delete is confirmed, while the store is still deleting.
+  await page.evaluate(() => {
+    window.confirm = () => {
+      queueMicrotask(() => document.getElementById('toggle').click());
+      return true;
+    };
+  });
+  await page.locator('#sessionList .session').first().locator('.act').last().click();
+  await translated(page, 1);
+  assert.equal((await rows(page))[0].src, 'Second meeting.');
+  await page.click('#toggle');
+  await saved(page);
+  assert.deepEqual(await sessionNames(page), ['Second meeting.']);
+
+  await reload(page);
+  await page.waitForSelector('#sessionList .session');
+  assert.deepEqual(await sessionNames(page), ['Second meeting.']);
+  assert.equal((await rows(page))[0].src, 'Second meeting.');
+  assert.deepEqual(errors, []);
+  await close();
+});

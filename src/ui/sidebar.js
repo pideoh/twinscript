@@ -6,6 +6,7 @@
 // removeSession, since the app replaces the array rather than changing it.
 
 import { formatDateTime, formatElapsed } from '../session/exporter.js';
+import { isEmpty } from '../session/session-save.js';
 
 // els: the page's elements; t: i18n; octicon(name): an icon; store: the session store
 // (deleteSession); toast(message, ms, variant); getSessions(): the saved sessions, newest first;
@@ -88,10 +89,16 @@ export function createSidebar({
     if (!confirm(t('session.deleteConfirm', { title: sess.title }))) return;
     forgetSave(sess);
     removeSession(sess);
+    // The session on screen gives way to a blank one at once, so that a start while the store is
+    // deleting records into that one, not into the removed session.
+    const blank = sess === getCurrent() ? blankSession() : null;
+    if (blank) showSession(blank);
     await store
       .deleteSession(sess.id)
       .catch((err) => toast(t('toast.deleteFailed', { message: err.message }), 6000, 'critical'));
-    if (sess === getCurrent()) showSession(getSessions()[0] ?? blankSession());
+    const next = getSessions()[0];
+    // Then the newest saved session is shown, unless the blank one was used or left meanwhile.
+    if (blank && blank === getCurrent() && !getRun() && isEmpty(blank) && next) showSession(next);
     else renderSidebar();
   }
 

@@ -38,7 +38,8 @@ const OPEN_KEY = 'rt-summary-open';
 // id; templates: the template store (src/ui/template-editor.js); langLabel(code): a language's
 // name; getCurrent(), getRun(): the session on screen and the run in progress (or null);
 // getApiKey(): the API key now; openSettings(): opens the settings dialog; markDirty(sess): saves
-// it soon; recordUsage(sess, usage): counts what a request used; speakerName(sess, id): a
+// it soon; isDeleted(sess): the user deleted it (a summary that arrives after that is dropped
+// quietly); recordUsage(sess, usage): counts what a request used; speakerName(sess, id): a
 // speaker's name or ''; renderSpeakerTools(): redraws the speaker tools; mock: the demo mode.
 export function createSummaryPanel({
   els,
@@ -59,6 +60,7 @@ export function createSummaryPanel({
   getApiKey,
   openSettings,
   markDirty,
+  isDeleted,
   recordUsage,
   speakerName,
   renderSpeakerTools,
@@ -233,6 +235,7 @@ export function createSummaryPanel({
           renderStreamingSummary();
         },
       });
+      if (isDeleted(sess)) return;
       const summary = {
         id: uid(),
         templateId: template.id,
@@ -253,6 +256,7 @@ export function createSummaryPanel({
         .catch((err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'));
     } catch (err) {
       // The summaries made before stay as they were.
+      if (isDeleted(sess)) return;
       if (err instanceof RateLimitError) toast(errorText(err), 10000, 'warning');
       else toast(t('toast.summaryFailed', { message: errorText(err) }), 10000, 'critical');
     } finally {
