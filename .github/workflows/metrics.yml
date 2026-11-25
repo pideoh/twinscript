@@ -1,0 +1,61 @@
+# Once a week, records the repository's views, clones, referrers, stars and release downloads as CSV files
+# on the `metrics` branch (scripts/record-metrics.mjs). GitHub keeps views and clones for 14 days only.
+#
+# Needs the secret METRICS_TOKEN: a fine-grained token for this repository with "Administration: read"
+# (the traffic figures) and "Contents: write" (the push to `metrics`). The workflow's own token cannot
+# read traffic.
+name: metrics
+on:
+  schedule:
+    - cron: '41 2 * * 1' # 02:41 UTC every Monday
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: metrics
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      BRANCH: metrics
+      GH_TOKEN: ${{ secrets.METRICS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # The files live on their own branch, which has no history in common with main. gh reads the token
+      # from GH_TOKEN, and `gh auth setup-git` lets git use it, so it never appears on a command line.
+      - name: Fetch the figures recorded so far
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::The secret METRICS_TOKEN is not set."
+            exit 1
+          fi
+          gh auth setup-git
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
+            git clone --quiet --depth 1 --branch "$BRANCH" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$RUNNER_TEMP/metrics"
+          else
+            git init --quiet --initial-branch "$BRANCH" "$RUNNER_TEMP/metrics"
+            git -C "$RUNNER_TEMP/metrics" remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          fi
+      - name: Record this week's figures
+        run: node scripts/record-metrics.mjs "$RUNNER_TEMP/metrics"
+      - name: Push them
+        working-directory: ${{ runner.temp }}/metrics
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing new to record."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "chore: record metrics for $(date -u +%F)"
+          git push --quiet origin "HEAD:$BRANCH"
