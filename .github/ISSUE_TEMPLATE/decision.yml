@@ -1,0 +1,31 @@
+name: Decision
+description: Record a decision that shapes the product or is costly to reverse.
+title: 'Decision: '
+labels: [decision]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: The situation and the problem. What made a decision necessary?
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision
+      description: What was decided. If other ways were considered, why they were not taken.
+    validations:
+      required: true
+  - type: textarea
+    id: consequences
+    attributes:
+      label: Consequences
+      description: What follows from it, good and bad, and what is left for later.
+    validations:
+      required: true
+  - type: textarea
+    id: changes
+    attributes:
+      label: Changes
+      description: Pull requests and issues that carry it out. If it replaces an earlier decision, which one.

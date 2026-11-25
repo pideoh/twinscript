@@ -28,7 +28,31 @@ npm run test:app   # desktop smoke tests (opens windows)
 - Styling uses the Primer tokens defined at the top of `styles.css` and Octicons; no ad-hoc colors.
 - No new runtime dependencies.
 
-## Commit messages and releases
+## Issues, discussions and decisions
+
+- Questions and rough ideas go to [Discussions](https://github.com/pideoh/twinscript/discussions). Issues hold bugs
+  and the work that has been decided on, so the issue list reads as the plan.
+  The [project board](https://github.com/users/pideoh/projects/1) shows what is an idea, next, in progress and done.
+- A feature or a bug fix starts from an issue. The pull request says `Closes #N` in its summary, so the issue
+  closes on merge and can be found from the release notes. Small changes (typos, dependency updates, refactors,
+  tests) need no issue.
+- A decision that shapes the product or is costly to reverse (a storage format, an API, a release or signing
+  method) is recorded as an issue with the [`decision` label](https://github.com/pideoh/twinscript/issues?q=label%3Adecision): the context, what was decided and
+  what follows from it. The pull request that carries it out links to it. When a decision changes, a new issue
+  replaces the old one and says so; the old one is not rewritten.
+
+## Pull requests from a fork
+
+You do not need write access: fork the repository, work on a branch, and open a pull request against `main`.
+
+- For a feature, open an issue or a discussion first, so the idea can be agreed on before you write it. A bug fix
+  or a small improvement can come straight as a pull request; the maintainer creates the issue if one is needed.
+- The checks run on your pull request without the project's secrets. On your first contribution they start after
+  a maintainer approves the run.
+- Only the pull request title has to be right for the changelog; a maintainer may edit it, and may push small
+  fixes to your branch if you leave "Allow edits by maintainers" on.
+- The project board and preview builds are kept by the maintainer; you do not need to do anything for them.
+
 
 Pull requests are squash-merged, so the pull request title becomes the commit on `main` and its line in the changelog.
 Commit subjects and pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/):

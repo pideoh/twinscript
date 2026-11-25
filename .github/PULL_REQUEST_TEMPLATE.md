@@ -1,6 +1,6 @@
 ## Summary
 
-<!-- What changes and why. -->
+<!-- What changes and why. For a feature or a bug fix, end with `Closes #N`. -->
 
 ## Testing
 
