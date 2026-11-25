@@ -252,7 +252,7 @@ npm start          # http://localhost:5173
 
 `http://localhost:5173/?mock=1` is a demo mode that needs no API key. In a browser, PC audio comes from sharing a tab or
 screen with its audio, and the caption window is a picture-in-picture window (Chrome and Edge). The API key entered
-there is kept in memory only, until the page is closed.
+there is kept in memory only, until the page is closed. The demo has no speaker labels (they need the real service).
 
 ### Tests
 

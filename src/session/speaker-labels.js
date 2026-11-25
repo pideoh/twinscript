@@ -19,9 +19,10 @@ export function speakerName(sess, id, t) {
   return i === -1 ? '' : list[i].name || t('speakers.default', { n: i + 1 });
 }
 
-// A stopped session with speech and a recording can be labelled. running: whether a run is in progress.
-export const canLabel = (sess, running) =>
-  !running && sess.segments.some((seg) => seg.src) && sess.recordings.some((rec) => rec.durationMs > 0);
+// A stopped session with speech and a recording can be labelled, except in the demo, which has no
+// engine for it and must not call the real service. running: whether a run is in progress.
+export const canLabel = (sess, running, demo = false) =>
+  !demo && !running && sess.segments.some((seg) => seg.src) && sess.recordings.some((rec) => rec.durationMs > 0);
 
 // A name as typed in the editor, as it is kept: runs of white space made one space, trimmed, and
 // at most MAX_SPEAKER_NAME characters. An empty result means the default name.

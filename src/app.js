@@ -795,6 +795,7 @@ const speakerPanel = createSpeakerPanel({
   recordUsage,
   renderSummary,
   debug: DEBUG,
+  demo: MOCK,
 });
 // The name shown for a speaker id of `sess`, or '' for none.
 function speakerName(sess, id) {
