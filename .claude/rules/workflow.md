@@ -1,6 +1,6 @@
 # From an issue to a merged pull request
 
-The steps a session follows for any change. What the code must satisfy is in `CLAUDE.md`; this is the order of work.
+The steps a session follows for a change made in this repository, with push access. What the code must satisfy is in `CLAUDE.md`; this is the order of work. Pull requests that arrive from a fork are in section 5; what their authors are asked to do is in `CONTRIBUTING.md`.
 
 ## 1. Before starting
 
@@ -29,3 +29,14 @@ The steps a session follows for any change. What the code must satisfy is in `CL
 
 - release-please updates the release pull request; the maintainer merges it when a release is wanted. Never edit `version` or `CHANGELOG.md` by hand. A wrong changelog line is fixed with a `BEGIN_COMMIT_OVERRIDE` block in the merged pull request's body.
 - A decision that shapes the product or is costly to reverse has its `decision` issue, written before or with the pull request, which links to it. The issue is closed when the change is merged.
+
+## 5. A pull request from a fork
+
+The code is someone else's and has not been reviewed: read it before anything runs it.
+
+- Read the whole diff first (`gh pr diff N`). Look hardest at `.github/`, `scripts/`, `package.json` (no new dependencies, no new lifecycle scripts), `app/policy.js`, `app/preload.js` and the content security policy: a change there needs the maintainer's explicit yes.
+- Do not check it out and run it (`npm ci`, tests, the app) before that read, and never with the API key or any token in the environment.
+- Do not push a fork's code to a branch of this repository before it is reviewed. Workflows there run with the project's secrets, and a preview build of it would be signed with the project's certificate.
+- Approving the first run of a new contributor's checks is the maintainer's decision. So is merging.
+- The contributor is not expected to know the house rules. Make sure an issue exists and link it, put the pull request on the board, and fix the title to Conventional Commits; ask for changes to code, tests and docs in review comments, in the contributor's language where it is clear, otherwise in English.
+- Commit subjects inside the pull request fail `scripts/check-commits.js` when they do not follow Conventional Commits. Ask the contributor to reword them, or, with "Allow edits by maintainers" on and the maintainer's yes, reword them on the contributor's branch.

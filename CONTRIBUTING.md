@@ -41,7 +41,18 @@ npm run test:app   # desktop smoke tests (opens windows)
   what follows from it. The pull request that carries it out links to it. When a decision changes, a new issue
   replaces the old one and says so; the old one is not rewritten.
 
-## Commit messages and releases
+## Pull requests from a fork
+
+You do not need write access: fork the repository, work on a branch, and open a pull request against `main`.
+
+- For a feature, open an issue or a discussion first, so the idea can be agreed on before you write it. A bug fix
+  or a small improvement can come straight as a pull request; the maintainer creates the issue if one is needed.
+- The checks run on your pull request without the project's secrets. On your first contribution they start after
+  a maintainer approves the run.
+- Only the pull request title has to be right for the changelog; a maintainer may edit it, and may push small
+  fixes to your branch if you leave "Allow edits by maintainers" on.
+- The project board and preview builds are kept by the maintainer; you do not need to do anything for them.
+
 
 Pull requests are squash-merged, so the pull request title becomes the commit on `main` and its line in the changelog.
 Commit subjects and pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/):
