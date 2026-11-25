@@ -263,27 +263,49 @@ for (const [status, message] of [
   });
 }
 
-test('an answer with no text leaves the line empty, without an error, and the next sentence is translated', async () => {
+const STOPPED = { chunks: [{ candidates: [{ finishReason: 'SAFETY' }], usageMetadata: { promptTokenCount: 10 } }] };
+
+test('an answer with no text says on the line that no translation came back, is not asked again, and the next sentence is translated', async () => {
   const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
   const { say } = await mockSpeech(page);
-  const seen = await mockTranslation(page, ({ text }) =>
-    text.includes('silent')
-      ? { chunks: [{ candidates: [{ finishReason: 'SAFETY' }], usageMetadata: { promptTokenCount: 10 } }] }
-      : OK(text),
-  );
+  const seen = await mockTranslation(page, ({ text }) => (text.includes('silent') ? STOPPED : OK(text)));
   await page.click('#toggle');
   await listening(page);
 
   await say('final', 'The model stays silent.');
-  await page.waitForFunction(() => document.querySelectorAll('.seg:not(.live)').length === 1);
+  await settled(page, 1);
   await say('final', 'The model answers.');
-  await page.waitForFunction(() => document.querySelectorAll('.seg:not(.live) .tgt')[1]?.textContent.startsWith('訳:'));
+  await settled(page, 2);
   assert.deepEqual(await translationRows(page), [
-    { src: 'The model stays silent.', tgt: '', error: false },
+    { src: 'The model stays silent.', tgt: '翻訳が返ってきませんでした', error: true },
     { src: 'The model answers.', tgt: '訳:The model answers.', error: false },
   ]);
   assert.equal(seen.length, 2, 'an empty answer is not asked again');
   assert.equal(await page.textContent('#statusText'), '聞き取り中');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('an empty answer for the sentence in progress shows nothing, and the next one is shown', async () => {
+  const { page, errors, close } = await openApp('', { apiKey: 'test-key' });
+  await useClock(page);
+  const { say } = await mockSpeech(page);
+  const seen = await mockTranslation(page, ({ text }) => (seen.length === 1 ? STOPPED : OK(text)));
+  await page.click('#toggle');
+  await listening(page);
+
+  await say('interim', 'Hello there everyone');
+  await page.waitForFunction(() => window.__translationAt.length === 1);
+  // Well past the time its answer takes, the line in progress still shows nothing.
+  await page.clock.fastForward(3_000);
+  assert.equal(seen[0].text, 'Hello there everyone');
+  assert.equal(await page.locator('.seg.live .tgt').textContent(), '');
+  assert.equal(await page.locator('.seg.live .tgt.error').count(), 0, 'no error on the line in progress');
+  await say('interim', 'Hello there everyone and welcome');
+  await advanceUntil(page, async () =>
+    page.evaluate(() => document.querySelector('.seg.live .tgt')?.textContent.startsWith('訳:')),
+  );
+  assert.ok(await page.locator('#toast').isHidden(), 'no notice');
   assert.deepEqual(errors, []);
   await close();
 });
@@ -351,6 +373,28 @@ test('with English, French and Japanese, a Latin-script sentence is asked about,
     /one of "English", "French", "Japanese", "other"/,
     'the model chooses among the selected languages',
   );
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('with three languages only the line whose answer had no text says that no translation came back', async () => {
+  const { page, errors, close } = await openApp('', THREE);
+  const { say } = await mockSpeech(page);
+  const seen = await mockTranslation(page, (request) => {
+    if (request.identify) return identified('English');
+    return request.into === 'French' ? STOPPED : tagged(request);
+  });
+  await page.click('#toggle');
+  await listening(page);
+
+  await say('final', 'Welcome to the meeting.');
+  await linesDone(page, 1, 2);
+  await page.waitForFunction(() => document.querySelector('.seg:not(.live) .tgt-line.error'));
+  assert.deepEqual(flat((await lineStates(page))[0]), [
+    ['FR', '翻訳が返ってきませんでした', true],
+    ['JA', '[Japanese] Welcome to the meeting.', false],
+  ]);
+  assert.equal(seen.filter((r) => r.into === 'French').length, 1, 'the empty line is not asked again');
   assert.deepEqual(errors, []);
   await close();
 });

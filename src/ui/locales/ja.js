@@ -307,6 +307,7 @@ export default {
   'error.disconnectedCode': '接続が切れました（コード {code}）',
   'error.rateLimit': '翻訳APIのレート制限に達しました',
   'error.translate': '翻訳エラー ({status}): {message}',
+  'error.noTranslation': '翻訳が返ってきませんでした',
   'error.summarize': '要約エラー ({status}): {message}',
   'error.summaryRateLimit': 'APIのレート制限に達しました。1分ほど待ってから再度お試しください。',
   'error.summaryInvalid': '応答を要約として読み取れませんでした。再度お試しください。',

@@ -295,6 +295,7 @@ export default {
   'error.disconnectedCode': '连接已断开（代码 {code}）',
   'error.rateLimit': '已达到翻译 API 的速率限制',
   'error.translate': '翻译错误（{status}）：{message}',
+  'error.noTranslation': '未返回译文',
   'error.summarize': '摘要错误（{status}）：{message}',
   'error.summaryRateLimit': '已达到 API 的速率限制，请约 1 分钟后重试。',
   'error.summaryInvalid': '无法将响应读取为摘要，请重试。',

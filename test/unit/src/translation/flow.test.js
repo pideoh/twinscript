@@ -402,3 +402,30 @@ test('the pacer the flow builds runs on the clock and timers it is given', async
   assert.equal(translator.requests.length, 2);
   assert.equal(translator.requests[1].text, 'おはようございます、皆さん');
 });
+
+test('a finished sentence whose translation came back empty says so on its line and is not asked again', async () => {
+  const { run, view, translator, waits } = setup();
+  run.tracker.final('おはようございます、皆さん。');
+  const [seg] = run.session.segments;
+  translator.requests[0].reject(new MessageError('error.noTranslation'));
+  await settle();
+  assert.equal(translator.requests.length, 1);
+  assert.deepEqual(waits, []);
+  assert.equal(view.page.get(seg).text, 'failed: error.noTranslation');
+  assert.equal(view.page.get(seg).cls, 'error');
+  assert.equal(seg.tgt, '');
+});
+
+test('with three languages only the line whose translation came back empty says so', async () => {
+  const { run, view, translator } = setup({ langs: [JA, EN, KO] });
+  run.tracker.final('Good morning, everyone.');
+  await settle();
+  const [seg] = run.session.segments;
+  translator.requests[0].resolve('皆さん、おはようございます。');
+  translator.requests[1].reject(new MessageError('error.noTranslation'));
+  await settle();
+  assert.equal(translator.requests.length, 2);
+  assert.deepEqual(view.page.get(seg).lines.get('ja-JP'), { text: '皆さん、おはようございます。', cls: undefined });
+  assert.deepEqual(view.page.get(seg).lines.get('ko-KR'), { text: 'failed: error.noTranslation', cls: 'error' });
+  assert.equal(seg.tgt, '皆さん、おはようございます。');
+});
