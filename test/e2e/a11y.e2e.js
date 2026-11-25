@@ -13,6 +13,7 @@ import {
   seedRecordedSession,
   setup,
   translated,
+  updatesBridge,
 } from './helpers.js';
 
 const { openApp } = setup();
@@ -160,6 +161,17 @@ for (const colorScheme of ['light', 'dark']) {
     await page.click('#editSpeakers');
     await page.waitForSelector('#speakerDialog[open]');
     await assertAccessible(page, 'speaker editor');
+    assert.deepEqual(errors, []);
+    await close();
+  });
+
+  test(`the desktop app's notice of a newer version and its setting pass the accessibility checks in the ${colorScheme} theme`, async () => {
+    const { page, errors, close } = await openApp('', {}, updatesBridge(), { colorScheme });
+    await page.waitForSelector('#updateNotice:not([hidden])');
+    await assertAccessible(page, 'main screen with the notice of a newer version');
+    await page.click('#openSettings');
+    await assertAccessible(page, 'settings dialog in the desktop app');
+    await page.click('#settings button[value=ok]');
     assert.deepEqual(errors, []);
     await close();
   });

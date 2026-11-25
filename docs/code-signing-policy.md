@@ -26,5 +26,8 @@ the user or the person installing or operating it.
 
 - When you start a session, the audio you chose to capture and the recognized text are sent to Google's
   Gemini API, using the API key you entered, to be transcribed, translated and (on request) summarized.
+- The desktop app asks GitHub for the number of the latest release of this project, at most once a day, to say when
+  a newer version is available. The request carries nothing about you or your sessions. Turning off "Check for new
+  versions" in the settings stops it.
 - Nothing else is sent anywhere. There is no telemetry, no analytics and no server operated by this project.
 - Transcripts, recordings and settings stay on your computer.

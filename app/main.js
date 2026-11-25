@@ -1,7 +1,8 @@
 // Electron main process: serves the static web app from app://rt/ and adds what a browser tab
 // cannot do on its own: system audio without the share dialog, a caption overlay that floats
-// above full-screen apps and secrets encrypted by the operating system. The rules themselves live
-// in policy.js, secrets.js and shortcuts.js (unit-tested without Electron).
+// above full-screen apps, secrets encrypted by the operating system and the check for a newer
+// version. The rules themselves live in policy.js, secrets.js, shortcuts.js and updates.js
+// (unit-tested without Electron).
 
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -13,6 +14,7 @@ import {
   globalShortcut,
   ipcMain,
   nativeTheme,
+  net,
   protocol,
   safeStorage,
   screen,
@@ -33,6 +35,7 @@ import {
 } from './policy.js';
 import { createSecretStore } from './secrets.js';
 import { createShortcuts } from './shortcuts.js';
+import { checkForUpdate, releaseUrl } from './updates.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -180,6 +183,27 @@ function handleShortcuts() {
   app.on('will-quit', () => globalShortcut.unregisterAll());
 }
 
+// Newer versions: the page decides when to ask (its setting, once a day); the request is made here
+// so the page's content security policy stays limited to the Gemini API. The release page opened
+// is built from a version number (app/updates.js), never a URL from the page or from GitHub.
+// RT_NO_UPDATE_CHECK (the smoke test) answers every check as failed, without a request.
+function handleUpdates() {
+  ipcMain.handle('update:version', (event) => {
+    if (!allowed(event)) throw new Error('not allowed');
+    return app.getVersion();
+  });
+  ipcMain.handle('update:check', (event) => {
+    if (!allowed(event)) throw new Error('not allowed');
+    if (process.env.RT_NO_UPDATE_CHECK) return null;
+    return checkForUpdate({ fetch: net.fetch, current: app.getVersion(), warn: console.warn });
+  });
+  ipcMain.handle('update:open-release', (event, version) => {
+    if (!allowed(event)) throw new Error('not allowed');
+    const url = releaseUrl(version);
+    if (url) shell.openExternal(url);
+  });
+}
+
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1100,
@@ -251,6 +275,7 @@ app.whenReady().then(() => {
   handleSecrets();
   handleCaptionOverlay();
   handleShortcuts();
+  handleUpdates();
   createMainWindow();
   app.on('activate', () => {
     if (!mainWindow) createMainWindow();

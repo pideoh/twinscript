@@ -669,9 +669,19 @@ input[type="range"] {
 .banner[hidden] {
   display: none;
 }
-#toast {
+#toast,
+#updateNotice {
   flex: none;
   margin: var(--base-size-8) var(--base-size-16) 0;
+}
+/* Banner with actions: the message, then its action and the dismiss button on the same line. */
+.update-notice {
+  grid-template-columns: var(--base-size-16) minmax(0, 1fr) auto auto;
+  align-items: center;
+  padding-block: var(--base-size-4);
+}
+.update-notice::before {
+  margin-top: 0;
 }
 
 /* ---------- Label ---------- */
