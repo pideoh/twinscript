@@ -33,7 +33,7 @@ const SPEAKERS_CONSENT_KEY = 'rt-speakers-consent';
 // markDirty(sess): saves it soon; isDeleted(sess): the user deleted it (labels that arrive after
 // that are dropped quietly); recordUsage(sess, usage): counts what a request used;
 // renderSummary(): redraws the summary panel, which redraws the speaker tools too (renderTools);
-// debug: logs how the parts were matched.
+// debug: logs how the parts were matched; demo: the demo (?mock=1), where speakers are not labelled.
 export function createSpeakerPanel({
   els,
   t,
@@ -52,6 +52,7 @@ export function createSpeakerPanel({
   recordUsage,
   renderSummary,
   debug = false,
+  demo = false,
 }) {
   let labeling = null; // { session, controller, text } while speakers are being labelled
   let speakerEditing = null; // { session, seg } while the editor is open; seg null when opened from the bar
@@ -87,7 +88,7 @@ export function createSpeakerPanel({
   function renderSpeakerTools() {
     const sess = getCurrent();
     const busy = labeling?.session === sess;
-    const ready = canLabel(sess, !!getRun());
+    const ready = canLabel(sess, !!getRun(), demo);
     els.speakerTools.hidden = !busy && !ready && !hasLabels(sess);
     els.labelSpeakers.hidden = !busy && !ready;
     els.labelSpeakers.setAttribute('aria-busy', String(busy));
@@ -119,7 +120,7 @@ export function createSpeakerPanel({
 
   els.labelSpeakers.onclick = async () => {
     const sess = getCurrent();
-    if (labeling || !canLabel(sess, !!getRun())) return;
+    if (labeling || !canLabel(sess, !!getRun(), demo)) return;
     if (!getApiKey()) {
       toast(t('toast.apiKeyFirst'), 6000, 'warning');
       return openSettings();

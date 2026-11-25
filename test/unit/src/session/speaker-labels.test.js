@@ -50,7 +50,12 @@ test('speakers cannot be labelled while listening, without speech or without a r
   assert.equal(canLabel({ ...finished, recordings: [{ durationMs: 0 }] }, false), false);
 });
 
-test('a speaker name is kept on one line, trimmed and cut to the longest name allowed', () => {
+test('speakers are not labelled in the demo, which has no engine for it', () => {
+  assert.equal(canLabel(finished, false, true), false);
+  assert.equal(canLabel(finished, false, false), true);
+});
+
+test('a speaker name is kept on one line,trimmed and cut to the longest name allowed', () => {
   assert.equal(cleanSpeakerName('  Aiko \n Tanaka\t'), 'Aiko Tanaka');
   assert.equal(cleanSpeakerName('   '), '');
   assert.equal(cleanSpeakerName('x'.repeat(MAX_SPEAKER_NAME + 5)).length, MAX_SPEAKER_NAME);
