@@ -58,3 +58,35 @@ export function followPlace(choice, was, now, whenGone) {
     places.includes(choice) && was[choice] ? (places.find((p) => now[p] === was[choice]) ?? choice) : choice;
   return moved === 'C' && !now.C ? whenGone : moved;
 }
+
+// What the language selects show after one of the first two (`side`, 'A' or 'B') was changed:
+// `picked` is { A, B, C } as the selects show them now ('' for no third language) and `stored` the
+// languages saved before the change. The two never stay equal: the other one gets the stored
+// language of its own side, or else the first language offered that differs. The third language
+// never equals the first two: it takes the language the changed one had, or is turned off when that
+// is in use too.
+export function followLangChange(side, picked, stored) {
+  const other = side === 'A' ? 'B' : 'A';
+  const now = { ...picked };
+  if (now[side] === now[other]) now[other] = side === 'A' ? stored.B : stored.A;
+  if (now[side] === now[other]) now[other] = LANGS.find((l) => l.code !== now[side]).code;
+  if (now.C && (now.C === now.A || now.C === now.B)) {
+    const previous = stored[side];
+    now.C = [now.A, now.B, now.C].includes(previous) ? '' : previous;
+  }
+  return now;
+}
+
+// What the language selects show after the third one was changed (arguments as above). A third
+// language that equals one of the first two takes its place there; that one gets the third
+// language's stored value, or the first language not in use when there was none or it is in use.
+export function followThirdLangChange(picked, stored) {
+  const now = { ...picked };
+  const inUse = () => [now.A, now.B, now.C];
+  for (const side of ['A', 'B']) {
+    if (!now.C || now[side] !== now.C) continue;
+    const previous = stored.C;
+    now[side] = previous && !inUse().includes(previous) ? previous : LANGS.find((l) => !inUse().includes(l.code)).code;
+  }
+  return now;
+}

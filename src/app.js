@@ -1,35 +1,36 @@
 // The entry of the page: it wires the parts together. It reads the page (`els`), loads the settings and
 // the saved sessions, creates each part of the screen (src/ui/) and the engines (speech, translation,
-// session, storage, usage), and connects them with callbacks. Startup, start and stop of a run, the
-// settings dialog and opening a session are here.
+// session, storage, usage), and connects them with callbacks. Startup, start and stop of a run and
+// opening a session are here.
 // The order matters: everything between the first and the last top-level `await` runs in one pass, and
 // the handlers are attached in it. No module imports this file. New logic goes into a module; see
 // .claude/rules/structure.md.
 
-import { addFileSourceOption, FILE_TAIL_MS, pickAudioFile, traceDownloadButton } from './debug/debug-tools.js';
+import { FILE_TAIL_MS, pickAudioFile, traceDownloadButton } from './debug/debug-tools.js';
 import { MockTranscriber, MockTranslator } from './debug/mock.js';
 import { createTrace } from './debug/trace.js';
 import { MODEL as DIARIZE_MODEL } from './session/diarizer.js';
 import { formatElapsed } from './session/exporter.js';
 import { createSessionSaver, isEmpty, blankSession as newSession } from './session/session-save.js';
 import { hasLabels } from './session/speaker-labels.js';
-import { AudioCapture, canCaptureSystemAudio, inMacDesktopApp } from './speech/audio.js';
+import { AudioCapture, inMacDesktopApp } from './speech/audio.js';
 import { canRecord, Recorder } from './speech/recorder.js';
 import { GeminiLiveTranscriber } from './speech/transcriber.js';
 import { applyReplacements, parseVocabulary } from './speech/vocabulary.js';
 import { loadApiKey, saveApiKey } from './storage/secrets.js';
-import { DEFAULTS, loadSettings, normalizeSettings, saveSettings as writeSettings } from './storage/settings.js';
+import { DEFAULTS, loadSettings, selectedLangs, saveSettings as writeSettings } from './storage/settings.js';
 import { store } from './storage/store.js';
 import { createFlow } from './translation/flow.js';
 import { DEFAULT_STRATEGY, strategyNamed } from './translation/pacer.js';
-import { ReadAloud, readAloudLanguages } from './translation/read-aloud.js';
-import { scriptsDiffer } from './translation/script-hint.js';
+import { ReadAloud } from './translation/read-aloud.js';
 import { GeminiTranslator } from './translation/translator.js';
 import { createCaptionWindow } from './ui/caption-window.js';
+import { readElements } from './ui/elements.js';
 import { createExportDialog } from './ui/export-dialog.js';
-import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './ui/i18n.js';
+import { applyTranslations, getLocale, t } from './ui/i18n.js';
 import { octicon } from './ui/icons.js';
-import { followPlace, LANGS, langLabel as labelIn } from './ui/langs.js';
+import { LANGS } from './ui/langs.js';
+import { createSettingsDialog } from './ui/settings-dialog.js';
 import { createShortcutsPanel } from './ui/shortcuts-panel.js';
 import { createSidebar } from './ui/sidebar.js';
 import { createSpeakerPanel } from './ui/speaker-panel.js';
@@ -50,138 +51,7 @@ if (DEBUG) window.__twinscriptTrace = () => lastTrace;
 // Debug only: ?pacer=<name> picks the pacing strategy of src/translation/pacer.js for this page load.
 const PACER = DEBUG ? strategyNamed(new URLSearchParams(location.search).get('pacer')) : DEFAULT_STRATEGY;
 
-const $ = (id) => document.getElementById(id);
-const els = Object.fromEntries(
-  [
-    'langA',
-    'langB',
-    'langC',
-    'swap',
-    'source',
-    'export',
-    'openSettings',
-    'menu',
-    'backdrop',
-    'newSession',
-    'sessionList',
-    'clock',
-    'jump',
-    'now',
-    'nowList',
-    'pip',
-    'exportDialog',
-    'exportFormat',
-    'exportContent',
-    'exportTranscript',
-    'recordings',
-    'record',
-    'log',
-    'empty',
-    'anchor',
-    'toast',
-    'dot',
-    'statusText',
-    'level',
-    'toggle',
-    'settings',
-    'apiKey',
-    'apiKeyStorage',
-    'translateModel',
-    'interimTranslate',
-    'smart',
-    'glossary',
-    'vocabulary',
-    'fontSize',
-    'otherInto',
-    'otherIntoField',
-    'readAloud',
-    'readAloudField',
-    'readAloudUnavailable',
-    'captionItems',
-    'captionItemsOut',
-    'captionContent',
-    'captionFontSize',
-    'captionFontSizeOut',
-    'captionFontSizeField',
-    'captionOpacity',
-    'captionOpacityOut',
-    'captionOpacityField',
-    'clickThrough',
-    'clickThroughField',
-    'captionDesktopOnly',
-    'shortcutsGroup',
-    'shortcutList',
-    'globalShortcuts',
-    'updatesGroup',
-    'checkUpdates',
-    'updateNotice',
-    'updateText',
-    'updateOpen',
-    'updateDismiss',
-    'interimInterval',
-    'interimIntervalOut',
-    'settingsRunning',
-    'uiLang',
-    'summary',
-    'summaryToggle',
-    'summaryStale',
-    'summaryMeta',
-    'summaryStatus',
-    'summarize',
-    'summaryTemplate',
-    'summaryLength',
-    'summaryLanguage',
-    'summaryBody',
-    'summaryHistoryBar',
-    'summaryHistory',
-    'summaryCopy',
-    'summaryDownload',
-    'summaryDelete',
-    'summaryDetails',
-    'summaryTruncated',
-    'summaryContent',
-    'speakerTools',
-    'speakersStatus',
-    'labelSpeakers',
-    'editSpeakers',
-    'cancelSpeakers',
-    'speakerDialog',
-    'speakerLine',
-    'speakerLineText',
-    'speakerLineSelect',
-    'speakerNames',
-    'speakerUncertain',
-    'speakerNote',
-    'speakerSave',
-    'templateList',
-    'templateNew',
-    'templateImport',
-    'templateImportFile',
-    'templateExport',
-    'templateStatus',
-    'templateEditor',
-    'templateEditorTitle',
-    'templateName',
-    'templateDescription',
-    'templatePrompt',
-    'templateError',
-    'templateSave',
-    'templateCancel',
-    'openUsage',
-    'usageDialog',
-    'usageSessionNote',
-    'usageSessionWrap',
-    'usageSession',
-    'usageTotals',
-    'usageSessions',
-    'usageUnpriced',
-    'usageNote',
-    'pricesGroup',
-    'priceFields',
-    'pricesError',
-    'pricesReset',
-  ].map((id) => [id, $(id)]),
-);
+const els = readElements(document);
 
 // ---------- settings ----------
 // localStorage is reached only when something is read or written, so a page whose storage throws on
@@ -196,298 +66,69 @@ function saveSettings() {
 }
 // Earlier versions kept the key in the settings JSON: move it out and rewrite the JSON without it.
 const { settings, legacyKey } = loadSettings(browserStorage);
-let { key: apiKey, storage: keyStorage } = await loadApiKey(window.secretStore, legacyKey);
+const loadedKey = await loadApiKey(window.secretStore, legacyKey);
 if (legacyKey !== undefined) saveSettings();
 // The caption zone keeps its own settings while a third language is selected (see DEFAULTS in settings.js).
 const captionKey = (name) => (settings.langC ? `${name}3` : name);
 const reader = new ReadAloud(); // reads finished translations aloud
 let captionWindow = null; // the caption window part (src/ui/caption-window.js), made in its section below
-let languageNames = null; // Intl.DisplayNames for the UI language
 
-// ---------- UI language ----------
-function applyLocale() {
-  setLocale(resolveLocale(settings.uiLang, navigator.languages));
-  try {
-    languageNames = new Intl.DisplayNames([getLocale()], { type: 'language' });
-  } catch {
-    languageNames = null;
-  }
-  applyTranslations(document);
-  els.nowList.dataset.empty = t('now.empty');
-}
-const langLabel = (code) => labelIn(code, languageNames);
-// Re-renders everything on screen that is not static markup.
-function relocalize() {
-  applyLocale();
-  for (const sel of [els.langA, els.langB, els.langC])
-    for (const o of sel.options) o.text = o.value ? langLabel(o.value) : t('header.langC.none');
-  els.uiLang.options[0].text = t('settings.uiLang.auto');
-  fillOtherInto();
-  fillReadAloud();
-  showTuning();
-  showKeyStorage();
-  setStatus(statusState);
-  els.toggle.textContent = t(run ? 'toggle.stop' : 'toggle.start');
-  renderSidebar();
-  fillSummaryTemplates();
-  renderTemplateList();
-  renderSummary();
-  renderSpeakers();
-  renderShortcuts();
-  showUpdateNotice();
-  if (els.settings.open) renderPriceFields();
-  if (els.usageDialog.open) renderUsage();
-  captionWindow.relocalize();
-}
-applyLocale();
-els.uiLang.add(new Option(t('settings.uiLang.auto'), 'auto'));
-for (const l of availableLocales()) els.uiLang.add(new Option(l.name, l.id));
-if (!availableLocales().some((l) => l.id === settings.uiLang)) settings.uiLang = 'auto';
-els.uiLang.onchange = () => {
-  settings.uiLang = els.uiLang.value;
-  saveSettings();
-  relocalize();
-};
-window.addEventListener('languagechange', () => {
-  if (settings.uiLang === 'auto') relocalize();
+// The settings dialog, the display language and the language selects (src/ui/settings-dialog.js). The
+// parts it calls are made below, so it reaches them through arrows.
+const settingsDialog = createSettingsDialog({
+  els,
+  t,
+  settings,
+  saveSettings,
+  captionKey,
+  reader,
+  apiKey: loadedKey.key,
+  keyStorage: loadedKey.storage,
+  saveApiKey: (key) => saveApiKey(window.secretStore, key),
+  debug: DEBUG,
+  getRun: () => run,
+  onFontSize: () => captionWindow?.fontSize(),
+  onLangsChanged: () => {
+    captionWindow.applyOptions();
+    if (current) {
+      current.langA = settings.langA;
+      current.langB = settings.langB;
+      setSessionLangC(current);
+      saver.markDirty(current);
+    }
+  },
+  onRelocalize: () => {
+    setStatus(statusState);
+    els.toggle.textContent = t(run ? 'toggle.stop' : 'toggle.start');
+    sidebar.render();
+    summaryPanel.fillTemplates();
+    templateEditor.renderList();
+    summaryPanel.render();
+    speakerPanel.render();
+    shortcutsPanel.render();
+    updateNotice.show();
+    if (els.settings.open) usageDialog.renderPriceFields();
+    if (els.usageDialog.open) usageDialog.render();
+    captionWindow.relocalize();
+  },
+  trimCaptions: () => view.trimCaptions(),
+  applyCaptionOptions: () => captionWindow.applyOptions(),
+  applyClickThrough: () => captionWindow.applyClickThrough(),
+  showCaptionControls: () => captionWindow.showControls(),
+  showShortcuts: () => shortcutsPanel.show(),
+  applyGlobalShortcuts: () => shortcutsPanel.apply(),
+  closeTemplateEditor: () => templateEditor.close(),
+  renderTemplateList: () => templateEditor.renderList(),
+  openPriceFields: () => usageDialog.openPriceFields(),
+  pendingOverrides: () => usageDialog.pendingOverrides(),
+  checkForUpdates: () => updateNotice.check(),
 });
-
-for (const sel of [els.langA, els.langB]) {
-  for (const l of LANGS) sel.add(new Option(langLabel(l.code), l.code));
-}
-els.langC.add(new Option(t('header.langC.none'), ''));
-for (const l of LANGS) els.langC.add(new Option(langLabel(l.code), l.code));
-els.langA.value = settings.langA;
-els.langB.value = settings.langB;
-normalizeSettings(settings); // a stored third language or choice for other languages that no longer fits
-els.langC.value = settings.langC;
-if (!canCaptureSystemAudio()) {
-  for (const option of els.source.querySelectorAll('option:not([value=mic])')) option.remove();
-  settings.source = 'mic';
-}
-if (DEBUG) addFileSourceOption(els.source);
-else if (settings.source === 'file') settings.source = 'mic';
-els.source.value = settings.source;
-applyFontSize();
-
-// The caption window has its own text size; the main window's applies to everything else.
-function applyFontSize() {
-  document.documentElement.style.setProperty('--fs', `${settings.fontSize}px`);
-  captionWindow?.fontSize();
-}
-function onLangChange(changed, other) {
-  if (changed.value === other.value) other.value = changed === els.langA ? settings.langB : settings.langA;
-  if (changed.value === other.value) other.value = LANGS.find((l) => l.code !== changed.value).code;
-  // The third language never equals the first two: it takes the language the changed one had,
-  // or is turned off when that is taken too.
-  const third = els.langC;
-  if (third.value && (third.value === els.langA.value || third.value === els.langB.value)) {
-    const previous = settings[changed.id];
-    third.value = langsInUse().includes(previous) ? '' : previous;
-  }
-  langsChanged();
-}
-const langsInUse = () => [els.langA.value, els.langB.value, els.langC.value];
-// A third language that equals one of the first two takes its place there; that one gets the
-// third language's previous value, or the first language not in use when there was none.
-function onThirdLangChange() {
-  const third = els.langC;
-  for (const sel of [els.langA, els.langB]) {
-    if (!third.value || sel.value !== third.value) continue;
-    const previous = settings.langC;
-    sel.value =
-      previous && !langsInUse().includes(previous) ? previous : LANGS.find((l) => !langsInUse().includes(l.code)).code;
-  }
-  langsChanged();
-}
-// The choices for another language and for reading aloud are stored as a place (A / B / C) but
-// mean a language, so they follow that language when it changes places. A choice of the third
-// language that is turned off becomes 'all' for other languages and 'off' for reading aloud.
-function setLangs(a, b, c) {
-  const was = { A: settings.langA, B: settings.langB, C: settings.langC };
-  const now = { A: a, B: b, C: c };
-  settings.otherInto = followPlace(settings.otherInto, was, now, 'all');
-  settings.readAloud = followPlace(settings.readAloud, was, now, 'off');
-  Object.assign(settings, { langA: a, langB: b, langC: c });
-}
-function langsChanged() {
-  setLangs(els.langA.value, els.langB.value, els.langC.value);
-  saveSettings();
-  applyCaptionOptions();
-  if (current) {
-    current.langA = settings.langA;
-    current.langB = settings.langB;
-    setSessionLangC(current);
-    markDirty(current);
-  }
-}
+const langLabel = settingsDialog.langLabel;
 // A session with two languages keeps the shape it always had: no langC at all.
 function setSessionLangC(sess) {
   if (settings.langC) sess.langC = settings.langC;
   else delete sess.langC;
 }
-els.langA.onchange = () => onLangChange(els.langA, els.langB);
-els.langB.onchange = () => onLangChange(els.langB, els.langA);
-els.langC.onchange = onThirdLangChange;
-els.swap.onclick = () => {
-  [els.langA.value, els.langB.value] = [els.langB.value, els.langA.value];
-  langsChanged();
-};
-els.source.onchange = () => {
-  settings.source = els.source.value;
-  saveSettings();
-};
-
-els.openSettings.onclick = openSettings;
-function openSettings() {
-  els.apiKey.value = apiKey;
-  showKeyStorage();
-  els.translateModel.value = settings.translateModel;
-  els.interimTranslate.checked = settings.interimTranslate;
-  els.smart.checked = settings.smart;
-  els.record.checked = settings.record;
-  els.glossary.value = settings.glossary;
-  els.vocabulary.value = settings.vocabulary;
-  els.fontSize.value = settings.fontSize;
-  els.uiLang.value = settings.uiLang;
-  fillOtherInto();
-  els.otherInto.value = settings.otherInto;
-  fillReadAloud();
-  els.captionItems.value = settings[captionKey('captionItems')];
-  els.interimInterval.value = settings.interimInterval;
-  els.captionContent.value = settings[captionKey('captionContent')];
-  els.captionFontSize.value = settings.captionFontSize;
-  els.captionOpacity.value = settings.captionOpacity;
-  els.clickThrough.checked = settings.clickThrough;
-  els.checkUpdates.checked = settings.checkUpdates;
-  showCaptionControls();
-  showTuning();
-  showShortcuts();
-  closeTemplateEditor();
-  els.templateStatus.hidden = true;
-  renderTemplateList();
-  openPriceFields();
-  els.settingsRunning.hidden = !run;
-  els.settings.showModal();
-}
-function showKeyStorage() {
-  els.apiKeyStorage.textContent = t(`settings.apiKey.storage.${keyStorage}`);
-}
-// All selected languages, or one of them (the third only while there is one). A choice not yet
-// saved survives a change of display language.
-function fillOtherInto() {
-  const value = els.otherInto.value || settings.otherInto;
-  const sides = settings.langC ? ['A', 'B', 'C'] : ['A', 'B'];
-  els.otherInto.replaceChildren(
-    new Option(t('settings.otherInto.all'), 'all'),
-    ...sides.map((s) => new Option(t('settings.otherInto.only', { lang: langLabel(settings[`lang${s}`]) }), s)),
-  );
-  els.otherInto.value = value;
-  if (!els.otherInto.value) els.otherInto.value = 'all';
-}
-// With two languages, reading aloud needs the language of each translation, which only the writing
-// system tells. With three, each translation line is requested into a known language.
-const canReadAloudPair = () =>
-  scriptsDiffer(LANGS.find((l) => l.code === settings.langA).name, LANGS.find((l) => l.code === settings.langB).name);
-const selectedLangs = () => [settings.langA, settings.langB, settings.langC].filter(Boolean);
-// Off, one choice per selected language, and both directions with two languages only. A stored
-// choice that does not fit the languages selected shows as Off.
-function fillReadAloud() {
-  els.readAloudField.hidden = !reader.available;
-  const three = !!settings.langC;
-  const sides = three ? ['A', 'B', 'C'] : ['A', 'B'];
-  els.readAloud.replaceChildren(
-    new Option(t('settings.readAloud.off'), 'off'),
-    ...sides.map((s) => new Option(t('settings.readAloud.into', { lang: langLabel(settings[`lang${s}`]) }), s)),
-    ...(three ? [] : [new Option(t('settings.readAloud.both'), 'both')]),
-  );
-  els.readAloud.value = readAloudLanguages(settings.readAloud, selectedLangs()).length ? settings.readAloud : 'off';
-  const pair = three || canReadAloudPair();
-  els.readAloud.disabled = !pair;
-  els.readAloudUnavailable.hidden = pair;
-}
-// Applies at once, also while listening.
-els.readAloud.onchange = () => {
-  settings.readAloud = els.readAloud.value;
-  if (settings.readAloud === 'off') reader.stop();
-  saveSettings();
-};
-els.fontSize.oninput = () => {
-  settings.fontSize = Number(els.fontSize.value);
-  applyFontSize();
-};
-// These apply immediately, so they can be tuned while listening.
-function showTuning() {
-  const n = Number(els.captionItems.value);
-  const form = new Intl.PluralRules(getLocale()).select(n) === 'one' ? 'one' : 'other';
-  els.captionItemsOut.textContent = t(`settings.captionItems.${form}`, { n });
-  els.interimIntervalOut.textContent = t('settings.interimInterval.value', {
-    s: Number(els.interimInterval.value).toFixed(1),
-  });
-  els.captionFontSizeOut.textContent = t('settings.captionFontSize.value', { n: Number(els.captionFontSize.value) });
-  els.captionOpacityOut.textContent = t('settings.captionOpacity.value', { n: Number(els.captionOpacity.value) });
-}
-els.captionItems.oninput = () => {
-  settings[captionKey('captionItems')] = Number(els.captionItems.value);
-  showTuning();
-  trimCaptions();
-};
-els.interimInterval.oninput = () => {
-  settings.interimInterval = Number(els.interimInterval.value);
-  showTuning();
-};
-els.captionContent.onchange = () => {
-  settings[captionKey('captionContent')] = els.captionContent.value;
-  applyCaptionOptions();
-};
-els.captionFontSize.oninput = () => {
-  settings.captionFontSize = Number(els.captionFontSize.value);
-  showTuning();
-  applyFontSize();
-};
-els.captionOpacity.oninput = () => {
-  settings.captionOpacity = Number(els.captionOpacity.value);
-  showTuning();
-  applyCaptionOptions();
-};
-els.clickThrough.onchange = () => {
-  settings.clickThrough = els.clickThrough.checked;
-  applyClickThrough();
-};
-els.globalShortcuts.onchange = async () => {
-  settings.globalShortcuts = els.globalShortcuts.checked;
-  await applyGlobalShortcuts();
-};
-els.settings.addEventListener('close', () => {
-  const key = els.apiKey.value.trim();
-  if (key !== apiKey) {
-    apiKey = key;
-    saveApiKey(window.secretStore, key).then((storage) => {
-      keyStorage = storage;
-      showKeyStorage();
-    });
-  }
-  settings.translateModel = els.translateModel.value.trim() || DEFAULTS.translateModel;
-  settings.interimTranslate = els.interimTranslate.checked;
-  settings.smart = els.smart.checked;
-  settings.record = els.record.checked;
-  settings.glossary = els.glossary.value.trim();
-  settings.vocabulary = els.vocabulary.value.trim();
-  settings.fontSize = Number(els.fontSize.value);
-  settings.otherInto = els.otherInto.value;
-  // The caption zone's sentences and content are stored as they change (they belong to the
-  // number of languages the dialog was opened with, which may have changed by now).
-  settings.interimInterval = Number(els.interimInterval.value);
-  settings.captionFontSize = Number(els.captionFontSize.value);
-  settings.captionOpacity = Number(els.captionOpacity.value);
-  settings.clickThrough = els.clickThrough.checked;
-  if (window.appShortcuts) settings.globalShortcuts = els.globalShortcuts.checked;
-  if (window.appUpdates) settings.checkUpdates = els.checkUpdates.checked;
-  const prices = pendingOverrides();
-  if (prices) settings.priceOverrides = prices; // invalid prices keep the ones saved before
-  saveSettings();
-  checkForUpdates(); // turned on: asks if it is time; turned off: hides the notice
-});
 
 // ---------- sessions (saved conversations) ----------
 // { id, title, customTitle, createdAt, updatedAt, langA, langB, langC?, activeMs, segmentCount?,
@@ -545,16 +186,10 @@ const saver = createSessionSaver({
       if (run.recording) run.recording.durationMs = Date.now() - run.recording.startedAt;
     }
   },
-  onFlushed: renderSidebar,
+  onFlushed: () => sidebar.render(), // the sidebar is made below
   onSaveFailed: (err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'),
 });
-function markDirty(sess) {
-  saver.markDirty(sess);
-}
-function flushSaves() {
-  saver.flushSaves();
-}
-window.addEventListener('pagehide', flushSaves);
+window.addEventListener('pagehide', saver.flushSaves);
 
 let opening = null; // the session whose segments are being loaded to show it
 async function showSession(sess) {
@@ -589,24 +224,21 @@ async function showSession(sess) {
   for (const node of els.log.querySelectorAll('.seg')) node.remove();
   flow.forgetLive();
   els.log.classList.toggle('has-speakers', hasLabels(sess));
-  for (const seg of sess.segments) mountSegment(seg);
+  for (const seg of sess.segments) view.mount(seg);
   els.empty.hidden = sess.segments.length > 0;
   const [a, b] =
     LANGS.some((l) => l.code === sess.langA) && LANGS.some((l) => l.code === sess.langB) && sess.langA !== sess.langB
       ? [sess.langA, sess.langB]
       : [settings.langA, settings.langB];
   const langC = sess.langC;
-  setLangs(a, b, LANGS.some((l) => l.code === langC) && langC !== a && langC !== b ? langC : '');
-  els.langA.value = settings.langA;
-  els.langB.value = settings.langB;
-  els.langC.value = settings.langC;
+  settingsDialog.selectLangs(a, b, LANGS.some((l) => l.code === langC) && langC !== a && langC !== b ? langC : '');
   saveSettings();
-  applyCaptionOptions();
+  captionWindow.applyOptions();
   els.clock.textContent = formatElapsed(sess.activeMs);
   els.log.scrollTop = els.log.scrollHeight;
   document.body.classList.remove('drawer');
-  renderSidebar();
-  renderSummary();
+  sidebar.render();
+  summaryPanel.render();
 }
 
 // The list of saved sessions, the new session button and the drawer (src/ui/sidebar.js).
@@ -625,11 +257,8 @@ const sidebar = createSidebar({
   getRun: () => run,
   showSession,
   blankSession,
-  markDirty,
+  markDirty: saver.markDirty,
 });
-function renderSidebar() {
-  sidebar.render();
-}
 
 // ---------- transcript view ----------
 // The segments on the page and the code that leads each line (src/ui/transcript-view.js).
@@ -640,17 +269,10 @@ const view = createTranscriptView({
   getRun: () => run,
   captionKey,
   langLabel,
-  showSpeaker,
-  openSpeakerEditor,
+  // the speaker panel is made below
+  showSpeaker: (seg) => speakerPanel.showSpeaker(seg),
+  openSpeakerEditor: (seg) => speakerPanel.openEditor(seg),
 });
-// Builds the DOM for a segment (new or loaded from storage) and attaches it to the segment object.
-function mountSegment(seg, isLive = false) {
-  return view.mount(seg, isLive);
-}
-// Moves the oldest sentences out of the caption zone into the transcript.
-function trimCaptions(keep) {
-  view.trimCaptions(keep);
-}
 
 // ---------- caption window ----------
 // The caption zone in an always-on-top window, and the caption zone's settings that apply at once
@@ -664,17 +286,8 @@ captionWindow = createCaptionWindow({
   captionKey,
   toast,
   errorText,
-  applyFontSize,
+  applyFontSize: settingsDialog.applyFontSize,
 });
-function applyCaptionOptions() {
-  captionWindow.applyOptions();
-}
-function applyClickThrough() {
-  captionWindow.applyClickThrough();
-}
-function showCaptionControls() {
-  captionWindow.showControls();
-}
 
 // ---------- global shortcuts (desktop app) ----------
 // The settings' list of shortcuts and their switch (src/ui/shortcuts-panel.js); each shortcut does
@@ -689,28 +302,10 @@ const shortcutsPanel = createShortcutsPanel({
     else if (command === 'captions' && !els.pip.hidden) els.pip.click();
   },
 });
-function renderShortcuts() {
-  shortcutsPanel.render();
-}
-function showShortcuts() {
-  return shortcutsPanel.show();
-}
-function applyGlobalShortcuts() {
-  return shortcutsPanel.apply();
-}
 
 // ---------- newer versions (desktop app) ----------
 // The notice of a newer version, and when to ask for one (src/ui/update-notice.js).
 const updateNotice = createUpdateNotice({ els, t, settings, storage: browserStorage, bridge: () => window.appUpdates });
-function showUpdateNotice() {
-  updateNotice.show();
-}
-function checkForUpdates() {
-  return updateNotice.check();
-}
-function startUpdateChecks() {
-  return updateNotice.start();
-}
 
 // ---------- download ----------
 function download(blob, name) {
@@ -732,11 +327,12 @@ createExportDialog({
   getCurrent: () => current,
   getRun: () => run,
   isEmpty,
-  flushSaves,
+  flushSaves: saver.flushSaves,
   getTrace: () => (DEBUG ? lastTrace : null),
   traceButton: (trace) => traceDownloadButton(trace, download),
-  summariesOf,
-  speakerName,
+  // the summary and speaker panels are made below
+  summariesOf: (sess) => summaryPanel.summariesOf(sess),
+  speakerName: (sess, id) => speakerPanel.speakerName(sess, id),
   langLabel,
 });
 
@@ -763,25 +359,16 @@ const summaryPanel = createSummaryPanel({
   langLabel,
   getCurrent: () => current,
   getRun: () => run,
-  getApiKey: () => apiKey,
-  openSettings,
-  markDirty,
+  getApiKey: settingsDialog.apiKey,
+  openSettings: settingsDialog.open,
+  markDirty: saver.markDirty,
   isDeleted: (sess) => saver.isForgotten(sess),
-  recordUsage,
-  speakerName,
-  renderSpeakerTools,
+  // the usage log and the speaker panel are made below
+  recordUsage: (sess, usage) => usageLog.recordUsage(sess, usage),
+  speakerName: (sess, id) => speakerPanel.speakerName(sess, id),
+  renderSpeakerTools: () => speakerPanel.renderTools(),
   mock: MOCK,
 });
-// The session's summaries, oldest first.
-function summariesOf(sess) {
-  return summaryPanel.summariesOf(sess);
-}
-function renderSummary() {
-  summaryPanel.render();
-}
-function fillSummaryTemplates() {
-  summaryPanel.fillTemplates();
-}
 
 // ---------- speaker labels ----------
 // After a session, who spoke when is told from its recording (src/ui/speaker-panel.js); the rules
@@ -797,32 +384,16 @@ const speakerPanel = createSpeakerPanel({
   errorText,
   getCurrent: () => current,
   getRun: () => run,
-  getApiKey: () => apiKey,
-  openSettings,
-  flushSaves,
-  markDirty,
+  getApiKey: settingsDialog.apiKey,
+  openSettings: settingsDialog.open,
+  flushSaves: saver.flushSaves,
+  markDirty: saver.markDirty,
   isDeleted: (sess) => saver.isForgotten(sess),
-  recordUsage,
-  renderSummary,
+  recordUsage: (sess, usage) => usageLog.recordUsage(sess, usage), // the usage log is made below
+  renderSummary: summaryPanel.render,
   debug: DEBUG,
   demo: MOCK,
 });
-// The name shown for a speaker id of `sess`, or '' for none.
-function speakerName(sess, id) {
-  return speakerPanel.speakerName(sess, id);
-}
-function showSpeaker(seg) {
-  speakerPanel.showSpeaker(seg);
-}
-function renderSpeakers() {
-  speakerPanel.render();
-}
-function renderSpeakerTools() {
-  speakerPanel.renderTools();
-}
-function openSpeakerEditor(seg) {
-  speakerPanel.openEditor(seg);
-}
 
 // ---------- summary templates (settings dialog) ----------
 const templateEditor = createTemplateEditor({
@@ -833,14 +404,8 @@ const templateEditor = createTemplateEditor({
   uid,
   errorText,
   download,
-  onTemplatesChanged: () => fillSummaryTemplates(),
+  onTemplatesChanged: () => summaryPanel.fillTemplates(),
 });
-function renderTemplateList() {
-  templateEditor.renderList();
-}
-function closeTemplateEditor() {
-  templateEditor.close();
-}
 
 // ---------- usage and cost estimates ----------
 // What each session used and the daily totals (src/usage/usage-log.js), the usage dialog and the price
@@ -851,7 +416,7 @@ const usageLog = createUsageLog({
   storage: browserStorage,
   demo: MOCK,
   isEmpty,
-  markDirty,
+  markDirty: saver.markDirty,
   onRecorded: () => usageDialog.refresh(),
 });
 const usageDialog = createUsageDialog({
@@ -866,27 +431,6 @@ const usageDialog = createUsageDialog({
   defaultTranslateModel: DEFAULTS.translateModel,
   diarizeModel: DIARIZE_MODEL,
 });
-// Adds `usage`, what one request or a stretch of listening used, to `sess` and to the totals.
-function recordUsage(sess, usage) {
-  usageLog.recordUsage(sess, usage);
-}
-// Listening time counts while the recognizer is connected (state 'listening').
-function accrueListening(r) {
-  usageLog.accrueListening(r);
-}
-function renderUsage() {
-  usageDialog.render();
-}
-function openPriceFields() {
-  usageDialog.openPriceFields();
-}
-function renderPriceFields() {
-  usageDialog.renderPriceFields();
-}
-// The overrides the price fields describe, or null while any of them is not a price.
-function pendingOverrides() {
-  return usageDialog.pendingOverrides();
-}
 
 // ---------- live run ----------
 let wakeLock = null;
@@ -914,16 +458,17 @@ function setRunning(running) {
     setStatus('idle');
     els.level.style.width = '0';
   }
-  renderSummary();
+  summaryPanel.render();
 }
 
 els.toggle.onclick = () => (run ? stop() : start());
 
 async function start() {
+  const apiKey = settingsDialog.apiKey();
   if (!MOCK && !apiKey) {
     window.appShortcuts?.focusApp().catch(() => {}); // when started by a shortcut from another app
     toast(t('toast.apiKeyFirst'), 6000, 'warning');
-    return openSettings();
+    return settingsDialog.open();
   }
   const langA = LANGS.find((l) => l.code === settings.langA);
   const langB = LANGS.find((l) => l.code === settings.langB);
@@ -960,7 +505,7 @@ async function start() {
     },
     onState: (state) => {
       if (run !== r) return;
-      accrueListening(r);
+      usageLog.accrueListening(r);
       r.listeningSince = state === 'listening' ? Date.now() : 0;
       setStatus(state);
     },
@@ -973,7 +518,7 @@ async function start() {
   };
   // Every translation request of the run (in progress, final, per-target lines, identify) is counted.
   const onUsage = (usageMetadata, model) =>
-    recordUsage(sess, addTokens(emptyUsage(), 'translation', model, usageMetadata));
+    usageLog.recordUsage(sess, addTokens(emptyUsage(), 'translation', model, usageMetadata));
   if (MOCK) {
     r.translator = new MockTranslator({ model: settings.translateModel, onUsage });
     r.transcriber = new MockTranscriber(handlers);
@@ -1037,8 +582,8 @@ async function start() {
     if (r.capture && r.capture.systemLevel() !== null) watchSystemAudio(r);
     // Keeps elapsed time, listening time and recording length current.
     r.autosave = setInterval(() => {
-      accrueListening(r);
-      markDirty(sess);
+      usageLog.accrueListening(r);
+      saver.markDirty(sess);
     }, 5000);
     requestWakeLock();
   } catch (err) {
@@ -1075,7 +620,7 @@ function startRecording(r) {
     r.recorder.start();
     r.recording = rec;
     sess.recordings.push(rec);
-    markDirty(sess);
+    saver.markDirty(sess);
   } catch {
     toast(t('toast.recordUnsupported'), 6000, 'warning');
   }
@@ -1084,13 +629,13 @@ function startRecording(r) {
 function stop() {
   const r = run;
   if (!r) return;
-  accrueListening(r);
+  usageLog.accrueListening(r);
   r.listeningSince = 0;
   r.transcriber?.stop();
   reader.stop();
   r.tracker.flush(); // keep whatever was heard so far instead of dropping it
   flow.dropLive();
-  trimCaptions(0);
+  view.trimCaptions(0);
   r.pacer.cancel();
   clearInterval(r.ticker);
   clearInterval(r.systemWatch);
@@ -1110,7 +655,7 @@ function stop() {
   wakeLock = null;
   setRunning(false);
   els.clock.textContent = formatElapsed(r.session.activeMs);
-  markDirty(r.session);
+  saver.markDirty(r.session);
 }
 
 async function requestWakeLock() {
@@ -1131,8 +676,8 @@ const flow = createFlow({
   reader,
   settings,
   getRun: () => run,
-  selectedLangs,
-  markDirty,
+  selectedLangs: () => selectedLangs(settings),
+  markDirty: saver.markDirty,
   errorText,
   onRateLimit: () => toast(t('toast.rateLimited'), 6000, 'warning'),
   uid,
@@ -1179,4 +724,4 @@ try {
     el.disabled = false;
 }
 if (MOCK) toast(t('toast.demo'), 4000);
-startUpdateChecks(); // not awaited: the app does not wait for GitHub
+updateNotice.start(); // not awaited: the app does not wait for GitHub

@@ -11,7 +11,7 @@ The folder says what a file is; the first comment of a file says what it is for 
 
 ## Source (`src/`)
 
-- `app.js` is the entry and the place that wires the parts together: startup, start and stop, the settings dialog, opening a session. It does not grow (the limit is in `test/unit/rules/structure.test.js`, and is lowered, never raised). New logic and new parts of the screen go into modules.
+- `app.js` is the entry and the place that wires the parts together: startup, start and stop, opening a session. It does not grow (the limit is in `test/unit/rules/structure.test.js`, and is lowered, never raised). New logic and new parts of the screen go into modules.
 - Every other module lives in a folder by what it does: `speech/` (capture, recognition, segmentation, vocabulary), `translation/` (translation, pacing, script hints, reading aloud, the translation flow), `session/` (summaries, speaker labels, Markdown, export, saving), `storage/` (IndexedDB, settings, the API key), `usage/` (usage records, prices, totals), `ui/` (parts of the screen, i18n and locales, icons), `debug/` (trace, debug tools, demo engines).
 - A new folder is rare. It needs the folder added to the files the desktop app serves (`app/policy.js`), with cases in `test/unit/app/desktop-policy.test.js` that a nested path and a traversal path under it are refused, and a row in the map of `CLAUDE.md`.
 - Every source file starts with a comment that says what the module is for and what is not obvious about it (its storage layout, the assumption it rests on, what must stay in step with it). That comment is the module's description; there is no separate list of files to keep up to date.
