@@ -13,8 +13,8 @@
 // - With the settle strategy, an in-progress translation of the same text as the finished one is
 //   the final translation (the pacer's handover); a finished translation is read aloud once.
 // - With a third language, or two and a sentence in neither, a sentence has one line per target.
-// - scripts/tuning/replay.mjs repeats parts of this flow to replay traces outside the app; keep the
-//   two in step.
+// - scripts/tuning/replay.mjs runs this flow, with a view that records what would be shown and a
+//   simulated clock, to score pacing strategies outside the app: the clock and timers stay injected.
 
 import { UtteranceTracker } from '../speech/segmenter.js';
 import { langName } from '../ui/langs.js';
@@ -33,7 +33,8 @@ const HISTORY_LINES = 3;
 // selectedLangs(): the codes of the languages selected; markDirty(sess): saves it soon;
 // errorText(err): an error's message; onRateLimit(): told when an in-progress request was refused
 // for the rate limit; uid(): a new id; elapsedNow(): the session's active time now; strategy: the
-// pacer's strategy; now(), wait(ms): the clock, and a promise that resolves after ms.
+// pacer's strategy; now(), wait(ms), setTimer(fn, ms), clearTimer(id): the clock, a promise that
+// resolves after ms, and the timers the pacer schedules its in-progress requests with.
 export function createFlow({
   view,
   reader,
@@ -48,6 +49,8 @@ export function createFlow({
   strategy,
   now = Date.now,
   wait = (ms) => new Promise((res) => setTimeout(res, ms)),
+  setTimer = setTimeout,
+  clearTimer = clearTimeout,
 }) {
   let live = null; // segment currently being spoken
 
@@ -99,6 +102,9 @@ export function createFlow({
         view.setText(live, 'tgt', out, 'pending');
       },
       onRateLimit,
+      now,
+      setTimer,
+      clearTimer,
     });
   }
 
