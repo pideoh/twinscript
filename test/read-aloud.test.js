@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { pickVoice, ReadAloud, speechLang } from '../src/read-aloud.js';
+import { pickVoice, ReadAloud, readAloudLanguages, speechLang } from '../src/read-aloud.js';
 
 // A synthesizer that reads nothing: it keeps what it was given and finishes on request.
 function fakeSynth(voices = []) {
@@ -136,4 +136,27 @@ test('empty translations are not read', () => {
   reader.speak('  ', 'en-US');
   reader.speak('', 'en-US');
   assert.equal(synth.spoken.length, 0);
+});
+
+test('with two languages, translations into one of them or into both are read', () => {
+  const langs = ['ja-JP', 'en-US'];
+  assert.deepEqual(readAloudLanguages('A', langs), ['ja-JP']);
+  assert.deepEqual(readAloudLanguages('B', langs), ['en-US']);
+  assert.deepEqual(readAloudLanguages('both', langs), ['ja-JP', 'en-US']);
+  assert.deepEqual(readAloudLanguages('off', langs), []);
+});
+
+test('with three languages, translations into the chosen one only are read', () => {
+  const langs = ['ja-JP', 'en-US', 'cmn-Hans-CN'];
+  assert.deepEqual(readAloudLanguages('A', langs), ['ja-JP']);
+  assert.deepEqual(readAloudLanguages('B', langs), ['en-US']);
+  assert.deepEqual(readAloudLanguages('C', langs), ['cmn-Hans-CN']);
+  assert.deepEqual(readAloudLanguages('off', langs), []);
+});
+
+test('a choice that does not fit the languages selected reads nothing', () => {
+  assert.deepEqual(readAloudLanguages('both', ['ja-JP', 'en-US', 'cmn-Hans-CN']), [], 'both, with three languages');
+  assert.deepEqual(readAloudLanguages('C', ['ja-JP', 'en-US']), [], 'the third, with two languages');
+  assert.deepEqual(readAloudLanguages('X', ['ja-JP', 'en-US']), []);
+  assert.deepEqual(readAloudLanguages(undefined, ['ja-JP', 'en-US']), []);
 });
