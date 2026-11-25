@@ -2,11 +2,20 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_TEMPLATE } from '../../../../src/session/summary-templates.js';
 import {
+  canReadAloud,
   DEFAULTS,
+  knownUiLang,
   loadSettings,
   normalizeSettings,
+  otherIntoChoices,
+  readAloudChoices,
   SETTINGS_KEY,
   saveSettings,
+  selectedLangs,
+  shownOtherInto,
+  shownReadAloud,
+  translateModelOr,
+  usableSource,
 } from '../../../../src/storage/settings.js';
 
 // A Storage-like object over a Map, as localStorage would be.
@@ -122,4 +131,79 @@ test('settings that fit are left as they are, in the same object', () => {
   const copy = { ...settings };
   assert.equal(normalizeSettings(settings), settings);
   assert.deepEqual(settings, copy);
+});
+
+const two = { ...DEFAULTS, langA: 'ja-JP', langB: 'en-US', langC: '' };
+const three = { ...two, langC: 'ko-KR' };
+
+test('the languages in use are the first two, and the third while there is one', () => {
+  assert.deepEqual(selectedLangs(two), ['ja-JP', 'en-US']);
+  assert.deepEqual(selectedLangs(three), ['ja-JP', 'en-US', 'ko-KR']);
+});
+
+test('a display language the app does not have falls back to following the system', () => {
+  assert.equal(knownUiLang('ja', ['en', 'ja']), 'ja');
+  assert.equal(knownUiLang('auto', ['en', 'ja']), 'auto');
+  assert.equal(knownUiLang('xx', ['en', 'ja']), 'auto');
+});
+
+test('the audio source falls back to the microphone where PC audio or an audio file cannot be used', () => {
+  assert.equal(usableSource('system', { systemAudio: true, debug: false }), 'system');
+  assert.equal(usableSource('system', { systemAudio: false, debug: false }), 'mic');
+  assert.equal(usableSource('file', { systemAudio: false, debug: true }), 'mic');
+  assert.equal(usableSource('file', { systemAudio: true, debug: false }), 'mic');
+  assert.equal(usableSource('file', { systemAudio: true, debug: true }), 'file');
+});
+
+test('an empty translation model field means the default model; a typed one is kept without spaces', () => {
+  assert.equal(translateModelOr(''), DEFAULTS.translateModel);
+  assert.equal(translateModelOr('   '), DEFAULTS.translateModel);
+  assert.equal(translateModelOr(' my-model \n'), 'my-model');
+});
+
+test('speech in other languages can go into all of them or one, the third only while there is one', () => {
+  assert.deepEqual(otherIntoChoices(two), [
+    { value: 'all' },
+    { value: 'A', lang: 'ja-JP' },
+    { value: 'B', lang: 'en-US' },
+  ]);
+  assert.deepEqual(
+    otherIntoChoices(three).map((c) => c.value),
+    ['all', 'A', 'B', 'C'],
+  );
+  assert.equal(otherIntoChoices(three).at(-1).lang, 'ko-KR');
+});
+
+test('a choice for other languages that is not offered shows as all of them', () => {
+  assert.equal(shownOtherInto('B', otherIntoChoices(two)), 'B');
+  assert.equal(shownOtherInto('C', otherIntoChoices(two)), 'all');
+  assert.equal(shownOtherInto('', otherIntoChoices(two)), 'all');
+  assert.equal(shownOtherInto('C', otherIntoChoices(three)), 'C');
+});
+
+test('reading aloud offers each language, and both directions with two languages only', () => {
+  assert.deepEqual(readAloudChoices(two), [
+    { value: 'off' },
+    { value: 'A', lang: 'ja-JP' },
+    { value: 'B', lang: 'en-US' },
+    { value: 'both' },
+  ]);
+  assert.deepEqual(
+    readAloudChoices(three).map((c) => c.value),
+    ['off', 'A', 'B', 'C'],
+  );
+});
+
+test('a reading-aloud choice that does not fit the languages selected shows as off', () => {
+  assert.equal(shownReadAloud({ ...two, readAloud: 'both' }), 'both');
+  assert.equal(shownReadAloud({ ...two, readAloud: 'C' }), 'off');
+  assert.equal(shownReadAloud({ ...three, readAloud: 'both' }), 'off');
+  assert.equal(shownReadAloud({ ...three, readAloud: 'C' }), 'C');
+  assert.equal(shownReadAloud({ ...two, readAloud: 'off' }), 'off');
+});
+
+test('reading aloud can be chosen for two languages written differently, and always with three', () => {
+  assert.equal(canReadAloud(two), true);
+  assert.equal(canReadAloud({ ...two, langA: 'es-ES', langB: 'fr-FR' }), false);
+  assert.equal(canReadAloud({ ...two, langA: 'es-ES', langB: 'fr-FR', langC: 'ja-JP' }), true);
 });

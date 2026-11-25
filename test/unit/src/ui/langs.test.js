@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { followPlace, LANGS, langLabel, langName, langTag } from '../../../../src/ui/langs.js';
+import {
+  followLangChange,
+  followPlace,
+  followThirdLangChange,
+  LANGS,
+  langLabel,
+  langName,
+  langTag,
+} from '../../../../src/ui/langs.js';
 
 const places = (A, B, C = '') => ({ A, B, C });
 
@@ -108,4 +116,40 @@ test('a choice of the third place with no third language before or after falls b
   const none = places('ja-JP', 'en-US');
   assert.equal(followPlace('C', none, none, 'all'), 'all');
   assert.equal(followPlace('C', none, places('en-US', 'ja-JP'), 'off'), 'off');
+});
+
+test('choosing another first or second language leaves the others as they are', () => {
+  const stored = places('ja-JP', 'en-US', 'ko-KR');
+  assert.deepEqual(followLangChange('A', places('fr-FR', 'en-US', 'ko-KR'), stored), places('fr-FR', 'en-US', 'ko-KR'));
+  assert.deepEqual(followLangChange('B', places('ja-JP', 'de-DE'), places('ja-JP', 'en-US')), places('ja-JP', 'de-DE'));
+});
+
+test('choosing for one side the language of the other never leaves the two the same', () => {
+  const stored = places('ja-JP', 'en-US');
+  assert.deepEqual(followLangChange('A', places('en-US', 'en-US'), stored), places('en-US', 'ja-JP'));
+  assert.deepEqual(followLangChange('B', places('ja-JP', 'ja-JP'), stored), places('en-US', 'ja-JP'));
+});
+
+test('choosing the third language for the first or second moves the third to the language that was there', () => {
+  const stored = places('ja-JP', 'en-US', 'ko-KR');
+  assert.deepEqual(followLangChange('A', places('ko-KR', 'en-US', 'ko-KR'), stored), places('ko-KR', 'en-US', 'ja-JP'));
+  assert.deepEqual(followLangChange('B', places('ja-JP', 'ko-KR', 'ko-KR'), stored), places('ja-JP', 'ko-KR', 'en-US'));
+});
+
+test('a third language chosen from the first two swaps places with the third language it replaces', () => {
+  const stored = places('ja-JP', 'en-US', 'ko-KR');
+  assert.deepEqual(followThirdLangChange(places('ja-JP', 'en-US', 'ja-JP'), stored), places('ko-KR', 'en-US', 'ja-JP'));
+  assert.deepEqual(followThirdLangChange(places('ja-JP', 'en-US', 'en-US'), stored), places('ja-JP', 'ko-KR', 'en-US'));
+});
+
+test('a third language chosen from the first two, when there was none, leaves there the first language not in use', () => {
+  const free = LANGS.find((l) => !['ja-JP', 'en-US'].includes(l.code)).code;
+  const stored = places('ja-JP', 'en-US');
+  assert.deepEqual(followThirdLangChange(places('ja-JP', 'en-US', 'ja-JP'), stored), places(free, 'en-US', 'ja-JP'));
+});
+
+test('turning the third language off or choosing a new one changes nothing else', () => {
+  const stored = places('ja-JP', 'en-US', 'ko-KR');
+  assert.deepEqual(followThirdLangChange(places('ja-JP', 'en-US', ''), stored), places('ja-JP', 'en-US', ''));
+  assert.deepEqual(followThirdLangChange(places('ja-JP', 'en-US', 'fr-FR'), stored), places('ja-JP', 'en-US', 'fr-FR'));
 });

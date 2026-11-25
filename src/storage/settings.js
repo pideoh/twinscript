@@ -1,8 +1,12 @@
-// The user's settings: their defaults, and how they are kept as JSON in localStorage under
-// SETTINGS_KEY. DOM-free: the storage (a Storage-like object with getItem / setItem) is passed in.
+// The user's settings: their defaults, how they are kept as JSON in localStorage under SETTINGS_KEY,
+// and the rules the settings dialog follows (which choices it offers for the languages selected, what
+// a field falls back to; src/ui/settings-dialog.js shows them). DOM-free: the storage (a Storage-like
+// object with getItem / setItem) is passed in.
 // The API key is not part of the settings and is never written here (see secrets.js).
 
 import { DEFAULT_TEMPLATE } from '../session/summary-templates.js';
+import { readAloudLanguages } from '../translation/read-aloud.js';
+import { scriptsDiffer } from '../translation/script-hint.js';
 import { LANGS } from '../ui/langs.js';
 
 export const SETTINGS_KEY = 'rt-settings';
@@ -78,3 +82,53 @@ export function normalizeSettings(settings) {
     settings.otherInto = 'all';
   return settings;
 }
+
+// The codes of the languages selected: the first two, and the third when there is one.
+export const selectedLangs = (settings) => [settings.langA, settings.langB, settings.langC].filter(Boolean);
+
+// The display language setting, or 'auto' when it names none of `localeIds` (the display languages
+// the app has).
+export const knownUiLang = (uiLang, localeIds) => (localeIds.includes(uiLang) ? uiLang : 'auto');
+
+// Where the audio comes from: the microphone when PC audio cannot be captured here, and when an
+// audio file is stored but the file input (debug only) is not offered.
+export function usableSource(source, { systemAudio, debug }) {
+  if (!systemAudio) return 'mic';
+  return !debug && source === 'file' ? 'mic' : source;
+}
+
+// The translation model typed in the settings, or the default when the field is left empty.
+export const translateModelOr = (text) => text.trim() || DEFAULTS.translateModel;
+
+// The choices for speech in none of the selected languages: all of them, or one of them (the third
+// only while there is one). Each is { value } or { value, lang } with the code of that language.
+export function otherIntoChoices(settings) {
+  const sides = settings.langC ? ['A', 'B', 'C'] : ['A', 'B'];
+  return [{ value: 'all' }, ...sides.map((s) => ({ value: s, lang: settings[`lang${s}`] }))];
+}
+
+// The choice shown for `value` among `choices`: itself when it is offered, otherwise all languages.
+export const shownOtherInto = (value, choices) => (choices.some((c) => c.value === value) ? value : 'all');
+
+// The choices for reading aloud: off, one per selected language, and both directions with two
+// languages only. Each is { value } or { value, lang } as above.
+export function readAloudChoices(settings) {
+  const three = !!settings.langC;
+  const sides = three ? ['A', 'B', 'C'] : ['A', 'B'];
+  return [
+    { value: 'off' },
+    ...sides.map((s) => ({ value: s, lang: settings[`lang${s}`] })),
+    ...(three ? [] : [{ value: 'both' }]),
+  ];
+}
+
+// The reading-aloud choice shown: the stored one, or off when it does not fit the languages selected.
+export const shownReadAloud = (settings) =>
+  readAloudLanguages(settings.readAloud, selectedLangs(settings)).length ? settings.readAloud : 'off';
+
+// Whether reading aloud can be chosen. With two languages it needs the language of each translation,
+// which only the writing system tells, so the two must be written differently. With three, each
+// translation line is requested into a known language.
+export const canReadAloud = (settings) =>
+  !!settings.langC ||
+  scriptsDiffer(LANGS.find((l) => l.code === settings.langA).name, LANGS.find((l) => l.code === settings.langB).name);
