@@ -1,13 +1,9 @@
 import { addFileSourceOption, FILE_TAIL_MS, pickAudioFile, traceDownloadButton } from './debug/debug-tools.js';
-import { MockSummarizer, MockTranscriber, MockTranslator } from './debug/mock.js';
+import { MockTranscriber, MockTranslator } from './debug/mock.js';
 import { createTrace } from './debug/trace.js';
-import { MODEL as DIARIZE_MODEL, GeminiDiarizer, labelSpeakers } from './session/diarizer.js';
-import { formatDateTime, formatElapsed, safeFileName } from './session/exporter.js';
-import { markdownToHtml } from './session/markdown.js';
-import { decodeRecording } from './session/speaker-audio.js';
-import { assignSpeakers, recordingTimeline } from './session/speakers.js';
-import { GeminiSummarizer, legacySummaryToMarkdown } from './session/summarizer.js';
-import { DEFAULT_TEMPLATE, LENGTHS, PRESETS, presetById } from './session/summary-templates.js';
+import { MODEL as DIARIZE_MODEL } from './session/diarizer.js';
+import { formatDateTime, formatElapsed } from './session/exporter.js';
+import { hasLabels } from './session/speaker-labels.js';
 import { AudioCapture, canCaptureSystemAudio, inMacDesktopApp } from './speech/audio.js';
 import { canRecord, Recorder } from './speech/recorder.js';
 import { UtteranceTracker } from './speech/segmenter.js';
@@ -32,6 +28,8 @@ import { octicon } from './ui/icons.js';
 import { followPlace, LANGS, langLabel as labelIn, langName, langTag as tagAmong } from './ui/langs.js';
 import { MessageError } from './ui/message-error.js';
 import { createShortcutsPanel } from './ui/shortcuts-panel.js';
+import { createSpeakerPanel } from './ui/speaker-panel.js';
+import { createSummaryPanel } from './ui/summary-panel.js';
 import { createTemplateEditor, createTemplateStore } from './ui/template-editor.js';
 import { createUpdateNotice } from './ui/update-notice.js';
 import { createUsageDialog } from './ui/usage-dialog.js';
@@ -1026,504 +1024,85 @@ createExportDialog({
 });
 
 // ---------- summary ----------
-// One summary request at a time; every summary made is kept with its session, newest last. The
-// panel is hidden while capturing, so it never moves the caption zone; whether it is expanded is
-// remembered for the user, not per session.
-let summarizing = null; // { session, text } while a request is in flight; text: the answer so far
-let summaryOpen = true;
-try {
-  summaryOpen = localStorage.getItem('rt-summary-open') !== 'false';
-} catch {
-  /* private mode */
-}
-const shownSummaryId = new WeakMap(); // session -> id of the summary on screen (default: the latest)
-const hasFinished = (sess) => sess.segments.some((seg) => seg.src);
-const displayLangCode = () => LANGS.find((l) => l.display === getLocale())?.code;
+// The summary panel (src/ui/summary-panel.js); which summaries a session has and which one is
+// shown are in src/session/summaries.js.
 
 // The user's own templates (src/ui/template-editor.js), read from localStorage here.
 const templates = createTemplateStore({ storage: browserStorage, t });
-const templateById = (id) => templates.byId(id);
-const templateName = (tpl) => templates.name(tpl);
 
-// A summary made by an earlier version, shown as the session's oldest summary. It stays on disk
-// as it was until it is deleted; its Markdown is made here, in the display language.
-function legacySummary(sum) {
-  const labels = Object.fromEntries(
-    ['overview', 'keyPoints', 'decisions', 'actionItems', 'owner', 'due'].map((k) => [k, t(`summary.${k}`)]),
-  );
-  return {
-    id: 'legacy',
-    legacy: true,
-    templateId: DEFAULT_TEMPLATE,
-    templateName: templateName(presetById(DEFAULT_TEMPLATE)),
-    length: 'standard',
-    language: null,
-    createdAt: sum.generatedAt ?? 0,
-    markdown: legacySummaryToMarkdown(sum, labels),
-    model: sum.model ?? '',
-    truncated: !!sum.truncated,
-    segmentCount: sum.segmentCount ?? 0,
-  };
-}
+const summaryPanel = createSummaryPanel({
+  els,
+  t,
+  getLocale,
+  settings,
+  saveSettings,
+  storage: browserStorage,
+  store,
+  toast,
+  errorText,
+  download,
+  uid,
+  templates,
+  langLabel,
+  getCurrent: () => current,
+  getRun: () => run,
+  getApiKey: () => apiKey,
+  openSettings,
+  markDirty,
+  recordUsage,
+  speakerName,
+  renderSpeakerTools,
+  mock: MOCK,
+});
 // The session's summaries, oldest first.
 function summariesOf(sess) {
-  const old = sess.summary && typeof sess.summary === 'object' ? [legacySummary(sess.summary)] : [];
-  return [...old, ...(sess.summaries ?? [])];
+  return summaryPanel.summariesOf(sess);
 }
-const shownSummary = (sess, list = summariesOf(sess)) =>
-  list.find((s) => s.id === shownSummaryId.get(sess)) ?? list.at(-1) ?? null;
-
-// The template select: the presets, then the user's own.
-function fillSummaryTemplates() {
-  const group = (label, templates) => {
-    const box = document.createElement('optgroup');
-    box.label = label;
-    for (const tpl of templates) box.append(new Option(templateName(tpl), tpl.id));
-    return box;
-  };
-  els.summaryTemplate.replaceChildren(
-    group(t('summary.presets'), PRESETS),
-    ...(templates.custom().length ? [group(t('summary.custom'), templates.custom())] : []),
-  );
-  if (!templateById(settings.summaryTemplate)) settings.summaryTemplate = DEFAULT_TEMPLATE;
-  els.summaryTemplate.value = settings.summaryTemplate;
-}
-
-// The languages a summary can be written in: the session's, then the display language.
-function summaryLanguages(sess) {
-  const codes = [sess.langA, sess.langB, sess.langC, displayLangCode()].filter((c) => LANGS.some((l) => l.code === c));
-  return [...new Set(codes)];
-}
-function fillSummaryLanguages(sess) {
-  const codes = summaryLanguages(sess);
-  const key = `${getLocale()}|${codes.join()}`;
-  if (els.summaryLanguage.dataset.key !== key) {
-    els.summaryLanguage.replaceChildren(...codes.map((c) => new Option(langLabel(c), c)));
-    els.summaryLanguage.dataset.key = key;
-  }
-  els.summaryLanguage.value = codes.includes(settings.summaryLanguage)
-    ? settings.summaryLanguage
-    : (displayLangCode() ?? codes[0]);
-}
-
-let shownMarkdown = null; // what #summaryContent was last rendered from
-function showMarkdown(markdown) {
-  if (markdown === shownMarkdown) return;
-  shownMarkdown = markdown;
-  // Every piece of the text is escaped by markdown.js; only its own tags are produced.
-  els.summaryContent.innerHTML = markdown ? markdownToHtml(markdown, { headingLevel: 3 }) : '';
-}
-
 function renderSummary() {
-  const sess = current;
-  if (!sess) return;
-  const list = summariesOf(sess);
-  const busy = summarizing?.session === sess;
-  const shown = busy ? null : shownSummary(sess, list);
-  els.summary.hidden = !!run || !hasFinished(sess);
-  fillSummaryLanguages(sess);
-  els.summarize.setAttribute('aria-busy', String(busy));
-  els.summarize.setAttribute('aria-disabled', String(!!summarizing));
-  els.summaryStatus.textContent = busy ? t('summary.working') : '';
-  els.summaryMeta.textContent = busy || list.length ? '' : t('summary.none');
-  els.summaryToggle.hidden = !busy && !list.length;
-  els.summaryToggle.setAttribute('aria-expanded', String(summaryOpen));
-  // Outdated: speech was added after the summary, or the speakers were labelled after it.
-  const relabeled = !!shown && hasLabels(sess) && sess.speakerLabels.madeAt > shown.createdAt;
-  els.summaryStale.hidden = !shown || (sess.segments.length <= shown.segmentCount && !relabeled);
-  els.summaryStale.title = t(
-    relabeled && sess.segments.length <= (shown?.segmentCount ?? 0) ? 'summary.staleSpeakersHelp' : 'summary.staleHelp',
-  );
-  els.summaryBody.hidden = (!busy && !shown) || !summaryOpen;
-  els.summaryHistoryBar.hidden = !shown;
-  if (shown) {
-    els.summaryHistory.replaceChildren(
-      ...list
-        .slice()
-        .reverse()
-        .map(
-          (s) => new Option(t('summary.entry', { date: formatDateTime(s.createdAt), template: s.templateName }), s.id),
-        ),
-    );
-    els.summaryHistory.value = shown.id;
-    els.summaryDetails.textContent = shown.legacy
-      ? t('summary.legacy', { template: shown.templateName })
-      : t('summary.details', {
-          template: shown.templateName,
-          length: t(`summary.length.${LENGTHS.includes(shown.length) ? shown.length : 'standard'}`),
-          language: langLabel(shown.language),
-        });
-  }
-  els.summaryDetails.hidden = !shown;
-  els.summaryTruncated.hidden = !shown?.truncated;
-  showMarkdown(busy ? summarizing.text : (shown?.markdown ?? ''));
-  renderSpeakerTools();
+  summaryPanel.render();
 }
-
-// While the answer streams in, the panel follows it at most once a frame.
-let contentFrame = 0;
-function renderStreamingSummary() {
-  if (contentFrame) return;
-  contentFrame = requestAnimationFrame(() => {
-    contentFrame = 0;
-    if (summarizing?.session === current) showMarkdown(summarizing.text);
-  });
+function fillSummaryTemplates() {
+  summaryPanel.fillTemplates();
 }
-
-els.summaryToggle.onclick = () => {
-  summaryOpen = !summaryOpen;
-  try {
-    localStorage.setItem('rt-summary-open', String(summaryOpen));
-  } catch {
-    /* private mode */
-  }
-  renderSummary();
-};
-els.summaryTemplate.onchange = () => {
-  settings.summaryTemplate = els.summaryTemplate.value;
-  saveSettings();
-};
-els.summaryLength.onchange = () => {
-  settings.summaryLength = els.summaryLength.value;
-  saveSettings();
-};
-els.summaryLanguage.onchange = () => {
-  settings.summaryLanguage = els.summaryLanguage.value;
-  saveSettings();
-};
-if (!LENGTHS.includes(settings.summaryLength)) settings.summaryLength = 'standard';
-els.summaryLength.value = settings.summaryLength;
-fillSummaryTemplates();
-
-els.summarize.onclick = async () => {
-  const sess = current;
-  if (run || summarizing || !hasFinished(sess)) return;
-  if (!MOCK && !apiKey) {
-    toast(t('toast.apiKeyFirst'), 6000, 'warning');
-    return openSettings();
-  }
-  const template = templateById(els.summaryTemplate.value) ?? presetById(DEFAULT_TEMPLATE);
-  const length = LENGTHS.includes(els.summaryLength.value) ? els.summaryLength.value : 'standard';
-  const language = els.summaryLanguage.value || displayLangCode() || 'en-US';
-  // With speaker labels each line carries its speaker's name.
-  const segments = sess.segments.map(({ elapsed, src, tgt, speaker }) => ({
-    elapsed,
-    src,
-    tgt,
-    ...(speakerName(sess, speaker) && { speaker: speakerName(sess, speaker) }),
-  }));
-  const model = MOCK ? 'demo' : settings.translateModel;
-  const onUsage = (usageMetadata, used) => recordUsage(sess, addTokens(emptyUsage(), 'summary', used, usageMetadata));
-  const summarizer = MOCK
-    ? new MockSummarizer({ model: settings.translateModel, onUsage })
-    : new GeminiSummarizer({ apiKey, model, onUsage });
-  summarizing = { session: sess, text: '' };
-  summaryOpen = true; // the answer is shown as it arrives
-  renderSummary();
-  try {
-    const { markdown, truncated } = await summarizer.summarize(segments, {
-      template,
-      length,
-      language: langName(language) ?? 'English',
-      langs: [sess.langA, sess.langB, sess.langC].map(langName).filter(Boolean),
-      onDelta: (text) => {
-        summarizing.text = text;
-        renderStreamingSummary();
-      },
-    });
-    const summary = {
-      id: uid(),
-      templateId: template.id,
-      templateName: templateName(template), // as it was, even if the template is renamed later
-      length,
-      language,
-      createdAt: Date.now(),
-      markdown,
-      model,
-      truncated,
-      segmentCount: segments.length,
-    };
-    sess.summaries = [...(sess.summaries ?? []), summary];
-    shownSummaryId.set(sess, summary.id);
-    markDirty(sess); // the session record comes first in the list and is surely on disk
-    store
-      .putSummary(sess.id, summary)
-      .catch((err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'));
-  } catch (err) {
-    // The summaries made before stay as they were.
-    if (err instanceof RateLimitError) toast(errorText(err), 10000, 'warning');
-    else toast(t('toast.summaryFailed', { message: errorText(err) }), 10000, 'critical');
-  } finally {
-    summarizing = null;
-    renderSummary();
-  }
-};
-
-els.summaryHistory.onchange = () => {
-  shownSummaryId.set(current, els.summaryHistory.value);
-  renderSummary();
-};
-
-els.summaryCopy.onclick = async () => {
-  const shown = shownSummary(current);
-  if (!shown) return;
-  try {
-    await navigator.clipboard.writeText(shown.markdown);
-    toast(t('summary.copied'));
-  } catch (err) {
-    toast(t('summary.copyFailed', { message: err?.message ?? String(err) }), 6000, 'critical');
-  }
-};
-
-els.summaryDownload.onclick = () => {
-  const shown = shownSummary(current);
-  if (!shown) return;
-  download(
-    new Blob([`${shown.markdown}\n`], { type: 'text/markdown;charset=utf-8' }),
-    `${safeFileName(current.title)} - ${safeFileName(shown.templateName)}.md`,
-  );
-};
-
-els.summaryDelete.onclick = () => {
-  const sess = current;
-  const shown = shownSummary(sess);
-  if (!shown) return;
-  const date = formatDateTime(shown.createdAt);
-  if (!confirm(t('summary.deleteConfirm', { template: shown.templateName, date }))) return;
-  if (shown.legacy) {
-    delete sess.summary; // the session record is rewritten without it
-  } else {
-    sess.summaries = sess.summaries.filter((s) => s !== shown);
-    store
-      .deleteSummary(sess.id, shown.id)
-      .catch((err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'));
-  }
-  shownSummaryId.delete(sess);
-  markDirty(sess);
-  renderSummary();
-  (els.summaryHistoryBar.hidden || els.summaryBody.hidden ? els.summarize : els.summaryHistory).focus();
-};
 
 // ---------- speaker labels ----------
-// After a session, who spoke when is told from its recording by the transcription model (src/session/speakers.js,
-// src/session/diarizer.js). The session keeps `speakerLabels` (its speakers, numbered by their first line, when
-// they were labelled, and whether any part of the recording could not be matched with certainty) and each
-// segment the id of its `speaker`. An empty name is the default one, "Speaker n" in the display language.
-// Labelling again replaces all of it. One labelling at a time; it goes on if another session is opened.
-const SPEAKERS_CONSENT_KEY = 'rt-speakers-consent';
-const MAX_SPEAKER_NAME = 40;
-let labeling = null; // { session, controller, text } while speakers are being labelled
-let speakerEditing = null; // { session, seg } while the editor is open; seg null when opened from the bar
-
-function hasLabels(sess) {
-  return Array.isArray(sess?.speakerLabels?.speakers);
-}
+// After a session, who spoke when is told from its recording (src/ui/speaker-panel.js); the rules
+// about a session's labels are in src/session/speaker-labels.js. Speaker names and the speaker
+// control of each line are also used by the transcript, the summary and the export.
+const speakerPanel = createSpeakerPanel({
+  els,
+  t,
+  octicon,
+  store,
+  storage: browserStorage,
+  toast,
+  errorText,
+  getCurrent: () => current,
+  getRun: () => run,
+  getApiKey: () => apiKey,
+  openSettings,
+  flushSaves,
+  markDirty,
+  recordUsage,
+  renderSummary,
+  debug: DEBUG,
+});
 // The name shown for a speaker id of `sess`, or '' for none.
 function speakerName(sess, id) {
-  const list = hasLabels(sess) && id ? sess.speakerLabels.speakers : [];
-  const i = list.findIndex((s) => s.id === id);
-  return i === -1 ? '' : list[i].name || t('speakers.default', { n: i + 1 });
+  return speakerPanel.speakerName(sess, id);
 }
-// A stopped session with speech and a recording can be labelled.
-const canLabel = (sess) => !run && hasFinished(sess) && sess.recordings.some((rec) => rec.durationMs > 0);
-
-// A line's speaker: its name, quiet, in a column of its own; an empty slot (an icon on hover) without one.
 function showSpeaker(seg) {
-  const button = seg.speakerEl;
-  if (!button || !hasLabels(current)) return;
-  const name = speakerName(current, seg.speaker);
-  button.classList.toggle('none', !name);
-  if (name) {
-    const text = document.createElement('span');
-    text.className = 'speaker-name';
-    text.textContent = name;
-    button.replaceChildren(text);
-    button.title = name;
-  } else {
-    button.replaceChildren(octicon('person'));
-    button.removeAttribute('title');
-  }
-  button.setAttribute('aria-label', name ? t('speakers.lineButton', { name }) : t('speakers.lineButtonNone'));
+  speakerPanel.showSpeaker(seg);
 }
 function renderSpeakers() {
-  if (!current) return;
-  els.log.classList.toggle('has-speakers', hasLabels(current));
-  for (const seg of current.segments ?? []) showSpeaker(seg);
-  renderSpeakerTools();
+  speakerPanel.render();
 }
 function renderSpeakerTools() {
-  const sess = current;
-  const busy = labeling?.session === sess;
-  const ready = canLabel(sess);
-  els.speakerTools.hidden = !busy && !ready && !hasLabels(sess);
-  els.labelSpeakers.hidden = !busy && !ready;
-  els.labelSpeakers.setAttribute('aria-busy', String(busy));
-  els.labelSpeakers.setAttribute('aria-disabled', String(!!labeling));
-  els.cancelSpeakers.hidden = !busy;
-  els.editSpeakers.hidden = busy || !hasLabels(sess);
-  els.speakersStatus.textContent = busy ? labeling.text : '';
+  speakerPanel.renderTools();
 }
-function setLabelingText(text) {
-  labeling.text = text;
-  if (labeling.session === current) els.speakersStatus.textContent = text;
+function openSpeakerEditor(seg) {
+  speakerPanel.openEditor(seg);
 }
-
-// Whether the user agreed that recordings are uploaded for this; asked once.
-function speakersConsented() {
-  try {
-    if (localStorage.getItem(SPEAKERS_CONSENT_KEY) === '1') return true;
-  } catch {
-    /* private mode: ask every time */
-  }
-  if (!confirm(t('speakers.consent'))) return false;
-  try {
-    localStorage.setItem(SPEAKERS_CONSENT_KEY, '1');
-  } catch {
-    /* private mode */
-  }
-  return true;
-}
-
-els.labelSpeakers.onclick = async () => {
-  const sess = current;
-  if (labeling || !canLabel(sess)) return;
-  if (!apiKey) {
-    toast(t('toast.apiKeyFirst'), 6000, 'warning');
-    return openSettings();
-  }
-  if (!speakersConsented()) return;
-  if (hasLabels(sess) && !confirm(t('speakers.replaceConfirm'))) return;
-  const controller = new AbortController();
-  labeling = { session: sess, controller, text: t('speakers.preparing') };
-  renderSpeakerTools();
-  flushSaves(); // so the lengths of the recordings are on disk
-  try {
-    // Each recording is decoded on its own and kept as 16 kHz mono samples (about 115 MB an hour).
-    const decoded = [];
-    for (const rec of sess.recordings) {
-      const chunks = await store.getAudioChunks(sess.id, rec.id).catch(() => []);
-      controller.signal.throwIfAborted();
-      if (!chunks.length) continue;
-      try {
-        const audio = await decodeRecording(new Blob(chunks, { type: rec.mime }));
-        if (audio.samples.length) decoded.push({ elapsedStart: rec.elapsedStart ?? 0, ...audio });
-      } catch {
-        /* a recording that cannot be decoded: its lines get no speaker */
-      }
-      controller.signal.throwIfAborted();
-    }
-    if (!decoded.length) throw new MessageError('error.speakersNoAudio');
-    const timeline = recordingTimeline(decoded);
-    const result = await labelSpeakers({
-      pieces: decoded,
-      diarizer: new GeminiDiarizer({ apiKey }),
-      signal: controller.signal,
-      onProgress: ({ step, part, parts }) =>
-        setLabelingText(t(step === 'upload' ? 'speakers.uploading' : 'speakers.analyzing', { part, parts })),
-      onUsage: (usageMetadata, model) =>
-        recordUsage(sess, addTokens(emptyUsage(), 'diarization', model, usageMetadata)),
-      // How the parts were matched, to judge it on real meetings: numbers only, no speech.
-      onPart: DEBUG ? (report) => console.log('[speakers]', JSON.stringify(report)) : undefined,
-    });
-    decoded.length = 0;
-    // Speakers are numbered by their first line; one who got no line is not listed.
-    const ids = assignSpeakers(sess.segments, result.words, timeline);
-    const order = [...new Set(ids.filter(Boolean))];
-    const renumber = new Map(order.map((id, i) => [id, `s${i + 1}`]));
-    sess.segments.forEach((seg, i) => {
-      if (ids[i]) seg.speaker = renumber.get(ids[i]);
-      else delete seg.speaker;
-    });
-    sess.speakerLabels = {
-      speakers: order.map((_, i) => ({ id: `s${i + 1}`, name: '' })),
-      madeAt: Date.now(),
-      uncertain: result.uncertain,
-      model: DIARIZE_MODEL,
-    };
-    markDirty(sess);
-    if (sess === current) renderSpeakers();
-    toast(
-      t(result.uncertain ? 'speakers.doneUncertain' : 'speakers.done', { count: order.length }),
-      result.uncertain ? 10000 : 6000,
-      result.uncertain ? 'warning' : 'info',
-    );
-  } catch (err) {
-    // The labels made before, if any, stay as they were.
-    if (err?.name === 'AbortError') toast(t('speakers.cancelled'));
-    else if (err instanceof RateLimitError) toast(errorText(err), 10000, 'warning');
-    else toast(t('toast.speakersFailed', { message: errorText(err) }), 10000, 'critical');
-  } finally {
-    labeling = null;
-    renderSummary();
-  }
-};
-els.cancelSpeakers.onclick = () => labeling?.controller.abort();
-
-// The editor: the names of the session's speakers and, when opened from a line, that line's speaker.
-function openSpeakerEditor(seg = null) {
-  const sess = current;
-  if (!hasLabels(sess) || labeling?.session === sess || run) return;
-  const list = sess.speakerLabels.speakers;
-  speakerEditing = { session: sess, seg };
-  els.speakerLine.hidden = !seg;
-  if (seg) {
-    els.speakerLineSelect.replaceChildren(
-      new Option(t('speakers.none'), ''),
-      ...list.map((s) => new Option(speakerName(sess, s.id), s.id)),
-    );
-    els.speakerLineSelect.value = list.some((s) => s.id === seg.speaker) ? seg.speaker : '';
-    els.speakerLineText.textContent = `${formatElapsed(seg.elapsed)}  ${seg.src}`;
-  }
-  els.speakerNames.replaceChildren(
-    ...list.map((s, i) => {
-      const label = document.createElement('label');
-      label.className = 'form-control';
-      const name = document.createElement('span');
-      name.className = 'form-label';
-      name.textContent = t('speakers.default', { n: i + 1 });
-      const input = document.createElement('input');
-      input.className = 'text-input';
-      input.type = 'text';
-      input.maxLength = MAX_SPEAKER_NAME;
-      input.autocomplete = 'off';
-      input.dataset.id = s.id;
-      input.value = s.name;
-      input.placeholder = t('speakers.default', { n: i + 1 });
-      // Enter saves (in a dialog form it would close the dialog without saving).
-      input.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter') return;
-        e.preventDefault();
-        els.speakerSave.click();
-      });
-      label.append(name, input);
-      return label;
-    }),
-  );
-  els.speakerUncertain.hidden = !sess.speakerLabels.uncertain;
-  els.speakerNote.textContent = t('speakers.madeAt', { date: formatDateTime(sess.speakerLabels.madeAt) });
-  els.speakerDialog.showModal();
-  (seg ? els.speakerLineSelect : els.speakerNames.querySelector('input'))?.focus();
-}
-els.editSpeakers.onclick = () => openSpeakerEditor();
-els.speakerSave.onclick = () => {
-  const { session: sess, seg } = speakerEditing ?? {};
-  if (!sess || !hasLabels(sess)) return els.speakerDialog.close();
-  for (const input of els.speakerNames.querySelectorAll('input')) {
-    const speaker = sess.speakerLabels.speakers.find((s) => s.id === input.dataset.id);
-    if (speaker) speaker.name = input.value.replace(/\s+/g, ' ').trim().slice(0, MAX_SPEAKER_NAME);
-  }
-  if (seg) {
-    const id = els.speakerLineSelect.value;
-    if (id) seg.speaker = id;
-    else delete seg.speaker;
-  }
-  markDirty(sess);
-  if (sess === current) renderSpeakers();
-  els.speakerDialog.close();
-};
-els.speakerDialog.addEventListener('close', () => {
-  speakerEditing = null;
-});
 
 // ---------- summary templates (settings dialog) ----------
 const templateEditor = createTemplateEditor({
