@@ -5,6 +5,8 @@
   "include-v-in-tag": true,
   "bump-minor-pre-major": false,
   "bump-patch-for-minor-pre-major": false,
+  "pull-request-header": "Merging this pull request publishes the next Twinscript release: it tags the version, creates the GitHub release with the notes below, and builds and uploads the macOS and Windows zips.",
+  "pull-request-footer": "Kept up to date by [release-please](https://github.com/googleapis/release-please) from the commits on `main`. Do not edit the version or the notes here; see \"Commit messages and releases\" in CONTRIBUTING.md.",
   "changelog-sections": [
     { "type": "feat", "section": "Features" },
     { "type": "fix", "section": "Bug Fixes" },
