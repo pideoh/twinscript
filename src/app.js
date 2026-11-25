@@ -2,7 +2,8 @@ import { addFileSourceOption, FILE_TAIL_MS, pickAudioFile, traceDownloadButton }
 import { MockTranscriber, MockTranslator } from './debug/mock.js';
 import { createTrace } from './debug/trace.js';
 import { MODEL as DIARIZE_MODEL } from './session/diarizer.js';
-import { formatDateTime, formatElapsed } from './session/exporter.js';
+import { formatElapsed } from './session/exporter.js';
+import { createSessionSaver, isEmpty, blankSession as newSession } from './session/session-save.js';
 import { hasLabels } from './session/speaker-labels.js';
 import { AudioCapture, canCaptureSystemAudio, inMacDesktopApp } from './speech/audio.js';
 import { canRecord, Recorder } from './speech/recorder.js';
@@ -28,6 +29,7 @@ import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocal
 import { octicon } from './ui/icons.js';
 import { followPlace, LANGS, langLabel as labelIn, langName } from './ui/langs.js';
 import { createShortcutsPanel } from './ui/shortcuts-panel.js';
+import { createSidebar } from './ui/sidebar.js';
 import { createSpeakerPanel } from './ui/speaker-panel.js';
 import { createSummaryPanel } from './ui/summary-panel.js';
 import { createTemplateEditor, createTemplateStore } from './ui/template-editor.js';
@@ -508,14 +510,11 @@ let current = null; // the session on screen
 let run = null; // the live capture/translation in progress, if any
 let live = null; // segment currently being spoken
 let toastTimer;
-const dirty = new Set();
-let saveTimer;
 
 // randomUUID needs a secure context; the fallback takes 128 bits from the same CSPRNG.
 const uid = () =>
   crypto.randomUUID?.() ??
   [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
-const isEmpty = (sess) => !(sess.segments?.length ?? sess.segmentCount) && !sess.recordings.length;
 // Errors from audio.js, transcriber.js and translator.js carry a message key.
 const errorText = (err) => (err?.key ? t(err.key, err.params) : (err?.message ?? String(err)));
 
@@ -530,50 +529,30 @@ function toast(message, ms = 6000, variant = 'info') {
   }, ms);
 }
 
+// A new, empty session in the languages selected (src/session/session-save.js).
 function blankSession() {
-  const now = Date.now();
-  return {
-    id: uid(),
-    title: '',
-    customTitle: false,
-    createdAt: now,
-    updatedAt: now,
-    langA: settings.langA,
-    langB: settings.langB,
-    ...(settings.langC && { langC: settings.langC }),
-    activeMs: 0,
-    usage: emptyUsage(), // what it used of the API (src/usage/usage.js); absent in sessions made before it was counted
-    segments: [],
-    summaries: [],
-    recordings: [],
-  };
+  return newSession(settings, { id: uid(), now: Date.now() });
 }
 
-function markDirty(sess) {
-  dirty.add(sess);
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(flushSaves, 250);
-}
-
-function flushSaves() {
-  clearTimeout(saveTimer);
-  for (const sess of dirty) {
-    if (isEmpty(sess)) continue; // don't litter the list with untouched sessions
+// Changed sessions are written a moment after the last change, and when the page is closed
+// (src/session/session-save.js). The session being recorded gets its figures brought up to date first.
+const saver = createSessionSaver({
+  store,
+  getSessions: () => sessions,
+  beforeSave: (sess) => {
     if (run?.session === sess) {
       sess.activeMs = elapsedNow();
       if (run.recording) run.recording.durationMs = Date.now() - run.recording.startedAt;
     }
-    sess.updatedAt = Date.now();
-    if (!sess.customTitle && sess.segments)
-      sess.title = sess.segments[0]?.src.slice(0, 30) || formatDateTime(sess.createdAt);
-    if (!sessions.includes(sess)) {
-      sessions.unshift(sess);
-      store.requestPersistence();
-    }
-    store.saveSession(sess).catch((err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'));
-  }
-  dirty.clear();
-  renderSidebar();
+  },
+  onFlushed: renderSidebar,
+  onSaveFailed: (err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'),
+});
+function markDirty(sess) {
+  saver.markDirty(sess);
+}
+function flushSaves() {
+  saver.flushSaves();
 }
 window.addEventListener('pagehide', flushSaves);
 
@@ -630,76 +609,27 @@ async function showSession(sess) {
   renderSummary();
 }
 
+// The list of saved sessions, the new session button and the drawer (src/ui/sidebar.js).
+const sidebar = createSidebar({
+  els,
+  t,
+  octicon,
+  store,
+  toast,
+  getSessions: () => sessions,
+  removeSession: (sess) => {
+    sessions = sessions.filter((x) => x !== sess);
+  },
+  forgetSave: (sess) => saver.forget(sess),
+  getCurrent: () => current,
+  getRun: () => run,
+  showSession,
+  blankSession,
+  markDirty,
+});
 function renderSidebar() {
-  els.sessionList.replaceChildren(
-    ...sessions.map((sess) => {
-      const row = document.createElement('div');
-      row.className = `session${sess === current ? ' current' : ''}`;
-      const open = document.createElement('button');
-      open.className = 'open';
-      if (sess === current) open.setAttribute('aria-current', 'true');
-      const name = document.createElement('span');
-      name.className = 'name';
-      name.textContent = sess.title;
-      const when = document.createElement('span');
-      when.className = 'when';
-      when.textContent = t('session.when', {
-        date: formatDateTime(sess.createdAt),
-        duration: formatElapsed(sess.activeMs),
-      });
-      open.append(name, when);
-      open.onclick = () => {
-        if (canSwitch()) showSession(sess);
-      };
-      const action = (icon, title, fn) => {
-        const b = document.createElement('button');
-        b.className = 'act icon-btn';
-        b.append(octicon(icon));
-        b.title = title;
-        b.setAttribute('aria-label', title);
-        b.onclick = fn;
-        return b;
-      };
-      row.append(
-        open,
-        action('pencil', t('session.rename'), () => renameSession(sess)),
-        action('trash', t('session.delete'), () => deleteSession(sess)),
-      );
-      return row;
-    }),
-  );
+  sidebar.render();
 }
-
-function canSwitch() {
-  if (run) toast(t('toast.stopToSwitch'), 6000, 'warning');
-  return !run;
-}
-
-function renameSession(sess) {
-  const title = prompt(t('session.renamePrompt'), sess.title)?.trim();
-  if (!title) return;
-  sess.title = title;
-  sess.customTitle = true;
-  markDirty(sess);
-}
-
-async function deleteSession(sess) {
-  if (run?.session === sess) return toast(t('toast.stopToDelete'), 6000, 'warning');
-  if (!confirm(t('session.deleteConfirm', { title: sess.title }))) return;
-  dirty.delete(sess);
-  sessions = sessions.filter((x) => x !== sess);
-  await store
-    .deleteSession(sess.id)
-    .catch((err) => toast(t('toast.deleteFailed', { message: err.message }), 6000, 'critical'));
-  if (sess === current) showSession(sessions[0] ?? blankSession());
-  else renderSidebar();
-}
-
-els.newSession.onclick = () => {
-  if (canSwitch()) showSession(blankSession());
-};
-els.menu.onclick = () => document.body.classList.toggle('drawer');
-els.backdrop.onclick = () => document.body.classList.remove('drawer');
 
 // ---------- transcript view ----------
 // The segments on the page and the code that leads each line (src/ui/transcript-view.js).
