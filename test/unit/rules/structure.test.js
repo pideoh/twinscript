@@ -181,12 +181,7 @@ test('logic folders stay off the page', async () => {
 // Modules in the logic folders that have no unit test today (they use browser APIs through
 // injection or need a real browser). The list can only shrink: when a test is added the check below
 // fails until the name is removed. Never add a name: write the test.
-const UNTESTED_LOGIC = new Set([
-  'src/session/speaker-audio.js',
-  'src/speech/pcm-worklet.js',
-  'src/speech/recorder.js',
-  'src/storage/secrets.js',
-]);
+const UNTESTED_LOGIC = new Set([]);
 
 // Tests whose name is not their subject's name, with the subject(s). A test file belongs here only
 // when it covers a module under another name or several modules together.
