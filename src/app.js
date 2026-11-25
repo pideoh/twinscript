@@ -228,15 +228,15 @@ function relocalize() {
   showKeyStorage();
   setStatus(statusState);
   els.toggle.textContent = t(run ? 'toggle.stop' : 'toggle.start');
-  renderSidebar();
-  fillSummaryTemplates();
-  renderTemplateList();
-  renderSummary();
-  renderSpeakers();
-  renderShortcuts();
-  showUpdateNotice();
-  if (els.settings.open) renderPriceFields();
-  if (els.usageDialog.open) renderUsage();
+  sidebar.render();
+  summaryPanel.fillTemplates();
+  templateEditor.renderList();
+  summaryPanel.render();
+  speakerPanel.render();
+  shortcutsPanel.render();
+  updateNotice.show();
+  if (els.settings.open) usageDialog.renderPriceFields();
+  if (els.usageDialog.open) usageDialog.render();
   captionWindow.relocalize();
 }
 applyLocale();
@@ -313,12 +313,12 @@ function setLangs(a, b, c) {
 function langsChanged() {
   setLangs(els.langA.value, els.langB.value, els.langC.value);
   saveSettings();
-  applyCaptionOptions();
+  captionWindow.applyOptions();
   if (current) {
     current.langA = settings.langA;
     current.langB = settings.langB;
     setSessionLangC(current);
-    markDirty(current);
+    saver.markDirty(current);
   }
 }
 // A session with two languages keeps the shape it always had: no langC at all.
@@ -360,13 +360,13 @@ function openSettings() {
   els.captionOpacity.value = settings.captionOpacity;
   els.clickThrough.checked = settings.clickThrough;
   els.checkUpdates.checked = settings.checkUpdates;
-  showCaptionControls();
+  captionWindow.showControls();
   showTuning();
-  showShortcuts();
-  closeTemplateEditor();
+  shortcutsPanel.show();
+  templateEditor.close();
   els.templateStatus.hidden = true;
-  renderTemplateList();
-  openPriceFields();
+  templateEditor.renderList();
+  usageDialog.openPriceFields();
   els.settingsRunning.hidden = !run;
   els.settings.showModal();
 }
@@ -430,7 +430,7 @@ function showTuning() {
 els.captionItems.oninput = () => {
   settings[captionKey('captionItems')] = Number(els.captionItems.value);
   showTuning();
-  trimCaptions();
+  view.trimCaptions();
 };
 els.interimInterval.oninput = () => {
   settings.interimInterval = Number(els.interimInterval.value);
@@ -438,7 +438,7 @@ els.interimInterval.oninput = () => {
 };
 els.captionContent.onchange = () => {
   settings[captionKey('captionContent')] = els.captionContent.value;
-  applyCaptionOptions();
+  captionWindow.applyOptions();
 };
 els.captionFontSize.oninput = () => {
   settings.captionFontSize = Number(els.captionFontSize.value);
@@ -448,15 +448,15 @@ els.captionFontSize.oninput = () => {
 els.captionOpacity.oninput = () => {
   settings.captionOpacity = Number(els.captionOpacity.value);
   showTuning();
-  applyCaptionOptions();
+  captionWindow.applyOptions();
 };
 els.clickThrough.onchange = () => {
   settings.clickThrough = els.clickThrough.checked;
-  applyClickThrough();
+  captionWindow.applyClickThrough();
 };
 els.globalShortcuts.onchange = async () => {
   settings.globalShortcuts = els.globalShortcuts.checked;
-  await applyGlobalShortcuts();
+  await shortcutsPanel.apply();
 };
 els.settings.addEventListener('close', () => {
   const key = els.apiKey.value.trim();
@@ -483,10 +483,10 @@ els.settings.addEventListener('close', () => {
   settings.clickThrough = els.clickThrough.checked;
   if (window.appShortcuts) settings.globalShortcuts = els.globalShortcuts.checked;
   if (window.appUpdates) settings.checkUpdates = els.checkUpdates.checked;
-  const prices = pendingOverrides();
+  const prices = usageDialog.pendingOverrides();
   if (prices) settings.priceOverrides = prices; // invalid prices keep the ones saved before
   saveSettings();
-  checkForUpdates(); // turned on: asks if it is time; turned off: hides the notice
+  updateNotice.check(); // turned on: asks if it is time; turned off: hides the notice
 });
 
 // ---------- sessions (saved conversations) ----------
@@ -545,16 +545,10 @@ const saver = createSessionSaver({
       if (run.recording) run.recording.durationMs = Date.now() - run.recording.startedAt;
     }
   },
-  onFlushed: renderSidebar,
+  onFlushed: () => sidebar.render(), // the sidebar is made below
   onSaveFailed: (err) => toast(t('toast.saveFailed', { message: err.message }), 6000, 'critical'),
 });
-function markDirty(sess) {
-  saver.markDirty(sess);
-}
-function flushSaves() {
-  saver.flushSaves();
-}
-window.addEventListener('pagehide', flushSaves);
+window.addEventListener('pagehide', saver.flushSaves);
 
 let opening = null; // the session whose segments are being loaded to show it
 async function showSession(sess) {
@@ -589,7 +583,7 @@ async function showSession(sess) {
   for (const node of els.log.querySelectorAll('.seg')) node.remove();
   flow.forgetLive();
   els.log.classList.toggle('has-speakers', hasLabels(sess));
-  for (const seg of sess.segments) mountSegment(seg);
+  for (const seg of sess.segments) view.mount(seg);
   els.empty.hidden = sess.segments.length > 0;
   const [a, b] =
     LANGS.some((l) => l.code === sess.langA) && LANGS.some((l) => l.code === sess.langB) && sess.langA !== sess.langB
@@ -601,12 +595,12 @@ async function showSession(sess) {
   els.langB.value = settings.langB;
   els.langC.value = settings.langC;
   saveSettings();
-  applyCaptionOptions();
+  captionWindow.applyOptions();
   els.clock.textContent = formatElapsed(sess.activeMs);
   els.log.scrollTop = els.log.scrollHeight;
   document.body.classList.remove('drawer');
-  renderSidebar();
-  renderSummary();
+  sidebar.render();
+  summaryPanel.render();
 }
 
 // The list of saved sessions, the new session button and the drawer (src/ui/sidebar.js).
@@ -625,11 +619,8 @@ const sidebar = createSidebar({
   getRun: () => run,
   showSession,
   blankSession,
-  markDirty,
+  markDirty: saver.markDirty,
 });
-function renderSidebar() {
-  sidebar.render();
-}
 
 // ---------- transcript view ----------
 // The segments on the page and the code that leads each line (src/ui/transcript-view.js).
@@ -640,17 +631,10 @@ const view = createTranscriptView({
   getRun: () => run,
   captionKey,
   langLabel,
-  showSpeaker,
-  openSpeakerEditor,
+  // the speaker panel is made below
+  showSpeaker: (seg) => speakerPanel.showSpeaker(seg),
+  openSpeakerEditor: (seg) => speakerPanel.openEditor(seg),
 });
-// Builds the DOM for a segment (new or loaded from storage) and attaches it to the segment object.
-function mountSegment(seg, isLive = false) {
-  return view.mount(seg, isLive);
-}
-// Moves the oldest sentences out of the caption zone into the transcript.
-function trimCaptions(keep) {
-  view.trimCaptions(keep);
-}
 
 // ---------- caption window ----------
 // The caption zone in an always-on-top window, and the caption zone's settings that apply at once
@@ -666,15 +650,6 @@ captionWindow = createCaptionWindow({
   errorText,
   applyFontSize,
 });
-function applyCaptionOptions() {
-  captionWindow.applyOptions();
-}
-function applyClickThrough() {
-  captionWindow.applyClickThrough();
-}
-function showCaptionControls() {
-  captionWindow.showControls();
-}
 
 // ---------- global shortcuts (desktop app) ----------
 // The settings' list of shortcuts and their switch (src/ui/shortcuts-panel.js); each shortcut does
@@ -689,28 +664,10 @@ const shortcutsPanel = createShortcutsPanel({
     else if (command === 'captions' && !els.pip.hidden) els.pip.click();
   },
 });
-function renderShortcuts() {
-  shortcutsPanel.render();
-}
-function showShortcuts() {
-  return shortcutsPanel.show();
-}
-function applyGlobalShortcuts() {
-  return shortcutsPanel.apply();
-}
 
 // ---------- newer versions (desktop app) ----------
 // The notice of a newer version, and when to ask for one (src/ui/update-notice.js).
 const updateNotice = createUpdateNotice({ els, t, settings, storage: browserStorage, bridge: () => window.appUpdates });
-function showUpdateNotice() {
-  updateNotice.show();
-}
-function checkForUpdates() {
-  return updateNotice.check();
-}
-function startUpdateChecks() {
-  return updateNotice.start();
-}
 
 // ---------- download ----------
 function download(blob, name) {
@@ -732,11 +689,12 @@ createExportDialog({
   getCurrent: () => current,
   getRun: () => run,
   isEmpty,
-  flushSaves,
+  flushSaves: saver.flushSaves,
   getTrace: () => (DEBUG ? lastTrace : null),
   traceButton: (trace) => traceDownloadButton(trace, download),
-  summariesOf,
-  speakerName,
+  // the summary and speaker panels are made below
+  summariesOf: (sess) => summaryPanel.summariesOf(sess),
+  speakerName: (sess, id) => speakerPanel.speakerName(sess, id),
   langLabel,
 });
 
@@ -765,23 +723,14 @@ const summaryPanel = createSummaryPanel({
   getRun: () => run,
   getApiKey: () => apiKey,
   openSettings,
-  markDirty,
+  markDirty: saver.markDirty,
   isDeleted: (sess) => saver.isForgotten(sess),
-  recordUsage,
-  speakerName,
-  renderSpeakerTools,
+  // the usage log and the speaker panel are made below
+  recordUsage: (sess, usage) => usageLog.recordUsage(sess, usage),
+  speakerName: (sess, id) => speakerPanel.speakerName(sess, id),
+  renderSpeakerTools: () => speakerPanel.renderTools(),
   mock: MOCK,
 });
-// The session's summaries, oldest first.
-function summariesOf(sess) {
-  return summaryPanel.summariesOf(sess);
-}
-function renderSummary() {
-  summaryPanel.render();
-}
-function fillSummaryTemplates() {
-  summaryPanel.fillTemplates();
-}
 
 // ---------- speaker labels ----------
 // After a session, who spoke when is told from its recording (src/ui/speaker-panel.js); the rules
@@ -799,30 +748,14 @@ const speakerPanel = createSpeakerPanel({
   getRun: () => run,
   getApiKey: () => apiKey,
   openSettings,
-  flushSaves,
-  markDirty,
+  flushSaves: saver.flushSaves,
+  markDirty: saver.markDirty,
   isDeleted: (sess) => saver.isForgotten(sess),
-  recordUsage,
-  renderSummary,
+  recordUsage: (sess, usage) => usageLog.recordUsage(sess, usage), // the usage log is made below
+  renderSummary: summaryPanel.render,
   debug: DEBUG,
   demo: MOCK,
 });
-// The name shown for a speaker id of `sess`, or '' for none.
-function speakerName(sess, id) {
-  return speakerPanel.speakerName(sess, id);
-}
-function showSpeaker(seg) {
-  speakerPanel.showSpeaker(seg);
-}
-function renderSpeakers() {
-  speakerPanel.render();
-}
-function renderSpeakerTools() {
-  speakerPanel.renderTools();
-}
-function openSpeakerEditor(seg) {
-  speakerPanel.openEditor(seg);
-}
 
 // ---------- summary templates (settings dialog) ----------
 const templateEditor = createTemplateEditor({
@@ -833,14 +766,8 @@ const templateEditor = createTemplateEditor({
   uid,
   errorText,
   download,
-  onTemplatesChanged: () => fillSummaryTemplates(),
+  onTemplatesChanged: () => summaryPanel.fillTemplates(),
 });
-function renderTemplateList() {
-  templateEditor.renderList();
-}
-function closeTemplateEditor() {
-  templateEditor.close();
-}
 
 // ---------- usage and cost estimates ----------
 // What each session used and the daily totals (src/usage/usage-log.js), the usage dialog and the price
@@ -851,7 +778,7 @@ const usageLog = createUsageLog({
   storage: browserStorage,
   demo: MOCK,
   isEmpty,
-  markDirty,
+  markDirty: saver.markDirty,
   onRecorded: () => usageDialog.refresh(),
 });
 const usageDialog = createUsageDialog({
@@ -866,27 +793,6 @@ const usageDialog = createUsageDialog({
   defaultTranslateModel: DEFAULTS.translateModel,
   diarizeModel: DIARIZE_MODEL,
 });
-// Adds `usage`, what one request or a stretch of listening used, to `sess` and to the totals.
-function recordUsage(sess, usage) {
-  usageLog.recordUsage(sess, usage);
-}
-// Listening time counts while the recognizer is connected (state 'listening').
-function accrueListening(r) {
-  usageLog.accrueListening(r);
-}
-function renderUsage() {
-  usageDialog.render();
-}
-function openPriceFields() {
-  usageDialog.openPriceFields();
-}
-function renderPriceFields() {
-  usageDialog.renderPriceFields();
-}
-// The overrides the price fields describe, or null while any of them is not a price.
-function pendingOverrides() {
-  return usageDialog.pendingOverrides();
-}
 
 // ---------- live run ----------
 let wakeLock = null;
@@ -914,7 +820,7 @@ function setRunning(running) {
     setStatus('idle');
     els.level.style.width = '0';
   }
-  renderSummary();
+  summaryPanel.render();
 }
 
 els.toggle.onclick = () => (run ? stop() : start());
@@ -960,7 +866,7 @@ async function start() {
     },
     onState: (state) => {
       if (run !== r) return;
-      accrueListening(r);
+      usageLog.accrueListening(r);
       r.listeningSince = state === 'listening' ? Date.now() : 0;
       setStatus(state);
     },
@@ -973,7 +879,7 @@ async function start() {
   };
   // Every translation request of the run (in progress, final, per-target lines, identify) is counted.
   const onUsage = (usageMetadata, model) =>
-    recordUsage(sess, addTokens(emptyUsage(), 'translation', model, usageMetadata));
+    usageLog.recordUsage(sess, addTokens(emptyUsage(), 'translation', model, usageMetadata));
   if (MOCK) {
     r.translator = new MockTranslator({ model: settings.translateModel, onUsage });
     r.transcriber = new MockTranscriber(handlers);
@@ -1037,8 +943,8 @@ async function start() {
     if (r.capture && r.capture.systemLevel() !== null) watchSystemAudio(r);
     // Keeps elapsed time, listening time and recording length current.
     r.autosave = setInterval(() => {
-      accrueListening(r);
-      markDirty(sess);
+      usageLog.accrueListening(r);
+      saver.markDirty(sess);
     }, 5000);
     requestWakeLock();
   } catch (err) {
@@ -1075,7 +981,7 @@ function startRecording(r) {
     r.recorder.start();
     r.recording = rec;
     sess.recordings.push(rec);
-    markDirty(sess);
+    saver.markDirty(sess);
   } catch {
     toast(t('toast.recordUnsupported'), 6000, 'warning');
   }
@@ -1084,13 +990,13 @@ function startRecording(r) {
 function stop() {
   const r = run;
   if (!r) return;
-  accrueListening(r);
+  usageLog.accrueListening(r);
   r.listeningSince = 0;
   r.transcriber?.stop();
   reader.stop();
   r.tracker.flush(); // keep whatever was heard so far instead of dropping it
   flow.dropLive();
-  trimCaptions(0);
+  view.trimCaptions(0);
   r.pacer.cancel();
   clearInterval(r.ticker);
   clearInterval(r.systemWatch);
@@ -1110,7 +1016,7 @@ function stop() {
   wakeLock = null;
   setRunning(false);
   els.clock.textContent = formatElapsed(r.session.activeMs);
-  markDirty(r.session);
+  saver.markDirty(r.session);
 }
 
 async function requestWakeLock() {
@@ -1132,7 +1038,7 @@ const flow = createFlow({
   settings,
   getRun: () => run,
   selectedLangs,
-  markDirty,
+  markDirty: saver.markDirty,
   errorText,
   onRateLimit: () => toast(t('toast.rateLimited'), 6000, 'warning'),
   uid,
@@ -1179,4 +1085,4 @@ try {
     el.disabled = false;
 }
 if (MOCK) toast(t('toast.demo'), 4000);
-startUpdateChecks(); // not awaited: the app does not wait for GitHub
+updateNotice.start(); // not awaited: the app does not wait for GitHub
