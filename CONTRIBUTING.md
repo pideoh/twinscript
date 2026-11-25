@@ -27,6 +27,8 @@ npm run test:app   # desktop smoke tests (opens windows)
 - User-visible text goes through `src/ui/i18n.js`; add each new key to every file in `src/ui/locales/`.
 - Styling uses the Primer tokens defined at the top of `styles.css` and Octicons; no ad-hoc colors.
 - No new runtime dependencies.
+- New code goes into a module under the folder of `src/` that fits what it does, not into `src/app.js`, with unit tests in the
+  matching folder under `test/unit/` ([`test/README.md`](test/README.md) lists the kinds of tests).
 
 ## Issues, discussions and decisions
 
