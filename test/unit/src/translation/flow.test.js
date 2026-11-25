@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { createFlow } from '../../../../src/translation/flow.js';
 import { RateLimitError } from '../../../../src/translation/translator.js';
 import { LANGS } from '../../../../src/ui/langs.js';
+import { MessageError } from '../../../../src/ui/message-error.js';
 import { sameTargets } from '../../../../src/ui/transcript-view.js';
 
 const lang = (code) => LANGS.find((l) => l.code === code);
@@ -157,15 +158,89 @@ test('a request refused for the rate limit is tried again after 1.5, 3 and 6 sec
   assert.equal(seg.tgt, '');
 });
 
-test('a request that fails for another reason is not tried again', async () => {
+const serverError = (status) => new MessageError('error.translate', { status, message: 'The model is overloaded.' });
+
+for (const [name, failure] of [
+  ['a server error (503)', () => serverError(503)],
+  ['a network error', () => new TypeError('Failed to fetch')],
+]) {
+  test(`a request that fails with ${name} is tried again after 1.5, 3 and 6 seconds, then the error is shown`, async () => {
+    const { run, view, translator, waits } = setup();
+    run.tracker.final('おはようございます、皆さん。');
+    const [seg] = run.session.segments;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await settle();
+      translator.requests[attempt].reject(failure());
+    }
+    await settle();
+    assert.equal(translator.requests.length, 4);
+    assert.deepEqual(waits, [1500, 3000, 6000]);
+    assert.equal(view.page.get(seg).cls, 'error');
+    assert.equal(seg.tgt, '');
+  });
+}
+
+test('a sentence whose first request fails with a server error is translated by the next one', async () => {
   const { run, view, translator, waits } = setup();
   run.tracker.final('おはようございます、皆さん。');
   const [seg] = run.session.segments;
-  translator.requests[0].reject(new Error('offline'));
+  translator.requests[0].reject(serverError(500));
   await settle();
-  assert.equal(translator.requests.length, 1);
-  assert.deepEqual(waits, []);
-  assert.equal(view.page.get(seg).text, 'failed: offline');
+  translator.requests[1].resolve('Good morning, everyone.');
+  await settle();
+  assert.deepEqual(waits, [1500]);
+  assert.equal(seg.tgt, 'Good morning, everyone.');
+  assert.equal(view.page.get(seg).text, 'Good morning, everyone.');
+  assert.notEqual(view.page.get(seg).cls, 'error');
+});
+
+test('a request that fails for a reason that will not pass is not tried again', async () => {
+  for (const failure of [serverError(400), serverError(403), new Error('offline')]) {
+    const { run, view, translator, waits } = setup();
+    run.tracker.final('おはようございます、皆さん。');
+    const [seg] = run.session.segments;
+    translator.requests[0].reject(failure);
+    await settle();
+    assert.equal(translator.requests.length, 1, failure.message);
+    assert.deepEqual(waits, []);
+    assert.equal(view.page.get(seg).text, `failed: ${failure.key ?? failure.message}`);
+    assert.equal(view.page.get(seg).cls, 'error');
+  }
+});
+
+test('a request for a text corrected since is not tried again after a failure that would pass', async () => {
+  for (const failure of [serverError(503), new RateLimitError('error.rateLimit')]) {
+    const { run, translator, waits } = setup();
+    run.tracker.interim('Good morning every');
+    run.tracker.interim('今日の議題');
+    run.tracker.final('Good morning everyone.');
+    const [old, corrected] = translator.requests.filter((x) => x.text.startsWith('Good morning'));
+    assert.equal(old.text, 'Good morning every');
+    old.reject(failure);
+    await settle();
+    corrected.resolve('皆さん、おはようございます。');
+    await settle();
+    assert.deepEqual(waits, [], failure.message);
+    assert.equal(translator.requests.filter((x) => x.text.startsWith('Good morning')).length, 2);
+    assert.equal(run.session.segments[0].tgt, '皆さん、おはようございます。');
+  }
+});
+
+test('with three languages a line whose request fails with a server error is tried again', async () => {
+  const { run, view, translator, waits } = setup({ langs: [JA, EN, KO] });
+  run.tracker.final('Good morning, everyone.');
+  await settle();
+  const [seg] = run.session.segments;
+  translator.requests[1].reject(serverError(502));
+  translator.requests[0].resolve('皆さん、おはようございます。');
+  await settle();
+  assert.deepEqual(waits, [1500]);
+  assert.equal(translator.requests.length, 3);
+  assert.equal(translator.requests[2].options.into, 'Korean');
+  translator.requests[2].resolve('여러분, 안녕하세요.');
+  await settle();
+  assert.equal(view.page.get(seg).lines.get('ko-KR').text, '여러분, 안녕하세요.');
+  assert.notEqual(view.page.get(seg).lines.get('ko-KR').cls, 'error');
 });
 
 test('a finished sentence keeps the translation shown when the pacer says it already covers it', async () => {

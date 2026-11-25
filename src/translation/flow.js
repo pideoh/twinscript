@@ -8,8 +8,10 @@
 // - The sentence in progress (`live`) is one for the whole app, not per run: stop() drops it
 //   (dropLive) and opening a session forgets it (forgetLive).
 // - A segment can be translated again when its text is corrected; `seg.rev` counts its texts, and an
-//   answer for an older text is dropped. A request refused for the rate limit is tried again after
-//   1.5, 3 and 6 seconds, then the error is shown.
+//   answer for an older text is dropped. A final request that failed in a way that may pass (the rate
+//   limit, a server error, the network: `passes` in translator.js) is tried again after 1.5, 3 and 6
+//   seconds, then the error is shown; any other failure is shown at once. A request for a text
+//   corrected since is not tried again. In-progress requests are not retried: the next one follows.
 // - With the settle strategy, an in-progress translation of the same text as the finished one is
 //   the final translation (the pacer's handover); a finished translation is read aloud once.
 // - With a third language, or two and a sentence in neither, a sentence has one line per target.
@@ -21,7 +23,7 @@ import { langName } from '../ui/langs.js';
 import { createPacer } from './pacer.js';
 import { readAloudLanguages } from './read-aloud.js';
 import { languageByScript, scriptsDiffer, sourceByScript, targetByScript, targetLanguages } from './script-hint.js';
-import { RateLimitError } from './translator.js';
+import { passes, RateLimitError } from './translator.js';
 
 const HISTORY_LINES = 3;
 
@@ -239,8 +241,10 @@ export function createFlow({
         if (seg.rev !== rev) return;
         return finishFinal(r, seg, out, target);
       } catch (err) {
-        if (err instanceof RateLimitError && attempt < 3) {
+        if (seg.rev !== rev) return;
+        if (passes(err) && attempt < 3) {
           await wait(1500 * 2 ** attempt);
+          if (seg.rev !== rev) return;
           continue;
         }
         if (shown()) view.setText(seg, 'tgt', errorText(err), 'error');
@@ -301,8 +305,10 @@ export function createFlow({
         if (seg.rev !== rev) return;
         return finishLine(r, seg, code, out);
       } catch (err) {
-        if (err instanceof RateLimitError && attempt < 3) {
+        if (seg.rev !== rev) return;
+        if (passes(err) && attempt < 3) {
           await wait(1500 * 2 ** attempt);
+          if (seg.rev !== rev) return;
           continue;
         }
         if (shown()) view.setLine(seg, code, errorText(err), 'error');

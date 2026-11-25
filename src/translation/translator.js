@@ -6,6 +6,18 @@ const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 export class RateLimitError extends MessageError {}
 
+// Server errors that usually pass within seconds; any other status (a bad request, a rejected or
+// blocked key, an unknown model) will fail the same way when asked again.
+const PASSING_STATUS = new Set([500, 502, 503, 504]);
+
+// Whether a failed translate() is worth asking again: a rate limit, a server error that passes, or a
+// network failure (fetch itself rejects with a TypeError; an aborted request rejects with an
+// AbortError, which is not one).
+export const passes = (err) =>
+  err instanceof RateLimitError ||
+  err instanceof TypeError ||
+  (err instanceof MessageError && err.key === 'error.translate' && PASSING_STATUS.has(err.params?.status));
+
 // Models whose default thinking level is already the lowest.
 const MINIMAL_BY_DEFAULT = /flash-lite/i;
 

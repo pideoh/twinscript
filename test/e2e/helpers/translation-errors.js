@@ -11,6 +11,7 @@ const sse = (data) => `data: ${JSON.stringify(data)}\n\n`;
 //   a string                      the translation (streamed as one chunk)
 //   { status, body }              an HTTP error with `body` (an object, sent as JSON)
 //   { chunks }                    a 200 whose streamed chunks are given as they come
+//   { network: true }             no answer: the request fails on the network (fetch rejects)
 // Returns the requests seen, in order.
 export async function mockTranslation(page, answer) {
   const seen = [];
@@ -26,6 +27,7 @@ export async function mockTranslation(page, answer) {
     const request = { text, into, identify, count, body };
     seen.push(request);
     const result = answer(request);
+    if (result?.network) return route.abort('failed');
     if (typeof result === 'string') {
       const chunk = { candidates: [{ content: { parts: [{ text: result }] } }] };
       return route.fulfill({ status: 200, contentType: 'text/event-stream', body: sse(chunk) });
@@ -114,10 +116,12 @@ export async function useClock(page) {
 export const requestTimes = (page) => page.evaluate(() => window.__translationAt);
 
 // Moves the clock in steps of `step` ms until `done()` is true (a timer the page sets only after an
-// answer arrives cannot be fired by a single jump made too early). Returns the time moved.
-export async function advanceUntil(page, done, step = 500) {
+// answer arrives cannot be fired by a single jump made too early). Returns the time moved. Gives up
+// after `limit` ms of page time, so a condition that never comes fails the test instead of hanging it.
+export async function advanceUntil(page, done, step = 500, limit = 60_000) {
   let moved = 0;
   while (!(await done())) {
+    if (moved >= limit) throw new Error(`still not done after moving the clock ${moved} ms`);
     await page.clock.fastForward(step);
     moved += step;
     await page.waitForTimeout(20);

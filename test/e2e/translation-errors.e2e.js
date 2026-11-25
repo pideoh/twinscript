@@ -1,5 +1,6 @@
-// Browser tests: what the page shows when translation goes wrong (a failed or refused request, a rate
-// limit, an API key the service rejects, an empty answer, and a language that could not be identified).
+// Browser tests: what the page shows when translation goes wrong (a server error or a network failure
+// that may pass, a rate limit, an API key the service rejects, an empty answer, and a language that
+// could not be identified).
 // The retry delays and the one-minute pause are driven with Playwright's page clock, not waited for.
 
 import assert from 'node:assert/strict';
@@ -20,6 +21,8 @@ const { openApp } = setup();
 
 const SERVER_ERROR = { status: 500, body: { error: { code: 500, message: 'The model is overloaded.' } } };
 const RATE_LIMITED = { status: 429, body: { error: { code: 429, message: 'Resource exhausted.' } } };
+const KEY_BLOCKED = { status: 403, body: { error: { code: 403, message: 'Requests from this API key are blocked.' } } };
+const NETWORK_DOWN = { network: true };
 const OK = (text) => `訳:${text}`;
 // Waits until `count` rows are finished and each has text (a translation or an error) in it.
 const settled = (page, count) =>
@@ -30,7 +33,33 @@ const settled = (page, count) =>
 const requestsMade = (seen, n) => () => seen.length >= n;
 const flat = (row) => row.lines.map((l) => [l.tag, l.text, l.error]);
 
-test('a server error is shown on the line at once, is not retried, and the next sentence is translated', async () => {
+for (const [what, failure] of [
+  ['a server error (HTTP 500)', SERVER_ERROR],
+  ['a network failure', NETWORK_DOWN],
+]) {
+  test(`a sentence whose request fails once with ${what} is tried again after 1.5 seconds and translated, with no error left on the line`, async () => {
+    const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
+    await useClock(page);
+    const { say } = await mockSpeech(page);
+    const seen = await mockTranslation(page, ({ text, count }) => (count === 1 ? failure : OK(text)));
+    await page.click('#toggle');
+    await listening(page);
+
+    await say('final', 'The model is busy for a moment.');
+    await advanceUntil(page, requestsMade(seen, 2));
+    await settled(page, 1);
+    assert.deepEqual(await translationRows(page), [
+      { src: 'The model is busy for a moment.', tgt: '訳:The model is busy for a moment.', error: false },
+    ]);
+    const [first, second] = await requestTimes(page);
+    assert.ok(second - first >= 1500, `retried after ${second - first} ms`);
+    assert.ok(await page.locator('#toast').isHidden(), 'a final sentence being retried raises no notice');
+    assert.deepEqual(errors, []);
+    await close();
+  });
+}
+
+test('a sentence that keeps failing with a server error is tried again after 1.5, 3 and 6 seconds, then the line shows the error and the next sentence is translated', async () => {
   const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
   await useClock(page);
   const { say } = await mockSpeech(page);
@@ -39,12 +68,24 @@ test('a server error is shown on the line at once, is not retried, and the next 
   await listening(page);
 
   await say('final', 'The first sentence fails.');
+  for (const n of [2, 3, 4]) {
+    await advanceUntil(page, requestsMade(seen, n));
+    assert.equal(seen.length, n, 'one retry per delay');
+  }
   await settled(page, 1);
   assert.deepEqual(await translationRows(page), [
     { src: 'The first sentence fails.', tgt: '翻訳エラー (500): The model is overloaded.', error: true },
   ]);
-  // Past every retry delay of the rate limit (1.5 + 3 + 6 s): nothing is requested again.
-  await page.clock.fastForward(20_000);
+  const times = await requestTimes(page);
+  const gaps = times.slice(1).map((t, i) => t - times[i]);
+  const delays = [1500, 3000, 6000];
+  assert.deepEqual(
+    gaps.map((gap, i) => gap >= delays[i] && gap < delays[i] + 2000),
+    [true, true, true],
+    `delays between the requests: ${gaps}`,
+  );
+  // Past the last delay the request is not made a fifth time, and the next sentence is translated.
+  await page.clock.fastForward(30_000);
   await say('final', 'The second one works.');
   await settled(page, 2);
   assert.deepEqual(await translationRows(page), [
@@ -55,10 +96,37 @@ test('a server error is shown on the line at once, is not retried, and the next 
     seen.map((r) => [r.text, r.count]),
     [
       ['The first sentence fails.', 1],
+      ['The first sentence fails.', 2],
+      ['The first sentence fails.', 3],
+      ['The first sentence fails.', 4],
       ['The second one works.', 1],
     ],
   );
+  assert.ok(await page.locator('#toast').isHidden(), 'a server error raises no notice');
   assert.equal(await page.textContent('#statusText'), '聞き取り中');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('a server error on the sentence in progress raises no notice and does not pause its translation', async () => {
+  const { page, errors, close } = await openApp('', { apiKey: 'test-key' });
+  await useClock(page);
+  const { say } = await mockSpeech(page);
+  const seen = await mockTranslation(page, ({ text }) => (seen.length === 1 ? SERVER_ERROR : OK(text)));
+  await page.click('#toggle');
+  await listening(page);
+
+  await say('interim', 'Hello there everyone');
+  await page.waitForFunction(() => window.__translationAt.length === 1);
+  // The next update, a few seconds later rather than a minute, is translated.
+  await page.clock.fastForward(3_000);
+  await say('interim', 'Hello there everyone and welcome');
+  await advanceUntil(page, async () =>
+    page.evaluate(() => document.querySelector('.seg.live .tgt')?.textContent.startsWith('訳:')),
+  );
+  assert.equal(seen.length, 2, 'the failed in-progress request is not tried again; the next update is asked');
+  assert.equal(seen[1].text, 'Hello there everyone and welcome');
+  assert.ok(await page.locator('#toast').isHidden(), 'no rate-limit notice');
   assert.deepEqual(errors, []);
   await close();
 });
@@ -163,7 +231,7 @@ for (const [status, message] of [
   [400, 'API key not valid. Please pass a valid API key.'],
   [403, 'Requests from this API key are blocked.'],
 ]) {
-  test(`an API key the service rejects (HTTP ${status}) shows the service's message on the line and is not retried`, async () => {
+  test(`an API key the service rejects (HTTP ${status}) shows the service's message on the line at once and is not retried`, async () => {
     const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
     await useClock(page);
     const { say } = await mockSpeech(page);
@@ -176,7 +244,7 @@ for (const [status, message] of [
     assert.deepEqual(await translationRows(page), [
       { src: 'Is this working?', tgt: `翻訳エラー (${status}): ${message}`, error: true },
     ]);
-    // Past the retry delays of the rate limit: no second request for it. The next sentence is asked
+    // Past the retry delays: no second request for it. The next sentence is asked
     // once and fails the same way, so the requests are one per sentence, not an endless loop.
     await page.clock.fastForward(20_000);
     await say('final', 'And this one?');
@@ -322,7 +390,7 @@ test('with three languages a line whose translation fails shows the error while 
   const { say } = await mockSpeech(page);
   await mockTranslation(page, (request) => {
     if (request.identify) return identified('English');
-    return request.into === 'French' ? SERVER_ERROR : tagged(request);
+    return request.into === 'French' ? KEY_BLOCKED : tagged(request);
   });
   await page.click('#toggle');
   await listening(page);
@@ -330,7 +398,7 @@ test('with three languages a line whose translation fails shows the error while 
   await say('final', 'Welcome to the meeting.');
   await linesDone(page, 1, 2);
   assert.deepEqual(flat((await lineStates(page))[0]), [
-    ['FR', '翻訳エラー (500): The model is overloaded.', true],
+    ['FR', '翻訳エラー (403): Requests from this API key are blocked.', true],
     ['JA', '[Japanese] Welcome to the meeting.', false],
   ]);
   assert.deepEqual(errors, []);
