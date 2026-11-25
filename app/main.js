@@ -39,7 +39,7 @@ import { checkForUpdate, releaseUrl } from './updates.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// Lets the smoke test (test/app/) run against a throwaway profile instead of the user's data.
+// Lets the smoke test (test/desktop/) run against a throwaway profile instead of the user's data.
 if (process.env.RT_USER_DATA) app.setPath('userData', process.env.RT_USER_DATA);
 
 // A standard, secure scheme gives the app a stable origin (so localStorage and IndexedDB persist)

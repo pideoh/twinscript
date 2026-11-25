@@ -19,7 +19,7 @@ import { GeminiTranslator, RateLimitError } from '../../src/translator.js';
 import { createVirtualClock } from './clock.mjs';
 import { aggregate, formatHealth, formatTable, health, sentenceMetrics } from './metrics.mjs';
 
-// Codes and English names as in LANGS in src/app.js (test/tuning-replay.test.js keeps them equal).
+// Codes and English names as in LANGS in src/app.js (test/unit/scripts/tuning-replay.test.js keeps them equal).
 export const LANGS = [
   ['ja-JP', 'Japanese'],
   ['en-US', 'English'],

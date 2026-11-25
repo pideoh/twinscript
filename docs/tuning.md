@@ -193,7 +193,7 @@ To try one in the app, open it with `?debug=1&pacer=<name>`, for example
 http://localhost:5173/?debug=1&pacer=chunk. It applies to that page load only; without `?debug=1` the parameter is
 ignored, and an unknown name falls back to `interval` with a warning in the console.
 
-Add a strategy, cover it in `test/pacer.test.js`, and compare:
+Add a strategy, cover it in `test/unit/src/pacer.test.js`, and compare:
 
 ```sh
 GEMINI_API_KEY=... node scripts/tuning/replay.mjs trace.json --strategy interval,steady,carry,chunk,settle
