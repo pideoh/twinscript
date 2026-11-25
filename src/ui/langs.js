@@ -61,14 +61,14 @@ export function followPlace(choice, was, now, whenGone) {
 
 // What the language selects show after one of the first two (`side`, 'A' or 'B') was changed:
 // `picked` is { A, B, C } as the selects show them now ('' for no third language) and `stored` the
-// languages saved before the change. The two never stay equal: the other one gets the stored
-// language of its own side, or else the first language offered that differs. The third language
+// languages saved before the change. The two never stay equal: the other one takes the language
+// the changed one had (a swap), or else the first language offered that differs. The third language
 // never equals the first two: it takes the language the changed one had, or is turned off when that
 // is in use too.
 export function followLangChange(side, picked, stored) {
   const other = side === 'A' ? 'B' : 'A';
   const now = { ...picked };
-  if (now[side] === now[other]) now[other] = side === 'A' ? stored.B : stored.A;
+  if (now[side] === now[other]) now[other] = stored[side];
   if (now[side] === now[other]) now[other] = LANGS.find((l) => l.code !== now[side]).code;
   if (now.C && (now.C === now.A || now.C === now.B)) {
     const previous = stored[side];

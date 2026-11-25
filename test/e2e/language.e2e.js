@@ -95,3 +95,35 @@ test('a third language keeps going to the same language after the two are swappe
   assert.deepEqual(errors, []);
   await close();
 });
+
+const langs = (page) => Promise.all(['#langA', '#langB', '#langC'].map((id) => page.inputValue(id)));
+const shown = (page) => page.locator('#langA option:checked, #langB option:checked').allTextContents();
+const storedLangs = (page) =>
+  page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('rt-settings'));
+    return [s.langA, s.langB, s.langC ?? ''];
+  });
+
+test("choosing the other side's language swaps the two and is kept", async () => {
+  const { page, errors, close } = await openApp('', { langA: 'ko-KR', langB: 'en-US' });
+  await page.selectOption('#langA', 'en-US');
+  assert.deepEqual(await langs(page), ['en-US', 'ko-KR', '']);
+  assert.deepEqual(await shown(page), ['英語', '韓国語'], 'the header shows the swapped languages');
+  assert.deepEqual(await storedLangs(page), ['en-US', 'ko-KR', '']);
+
+  await page.selectOption('#langB', 'en-US');
+  assert.deepEqual(await langs(page), ['ko-KR', 'en-US', ''], 'the mirror case');
+  assert.deepEqual(await shown(page), ['韓国語', '英語']);
+  assert.deepEqual(await storedLangs(page), ['ko-KR', 'en-US', '']);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test("choosing the other side's language with a third language selected swaps the two and keeps the third", async () => {
+  const { page, errors, close } = await openApp('', { langA: 'fr-FR', langB: 'en-US', langC: 'ko-KR' });
+  await page.selectOption('#langA', 'en-US');
+  assert.deepEqual(await langs(page), ['en-US', 'fr-FR', 'ko-KR']);
+  assert.deepEqual(await storedLangs(page), ['en-US', 'fr-FR', 'ko-KR']);
+  assert.deepEqual(errors, []);
+  await close();
+});
