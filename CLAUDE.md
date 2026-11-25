@@ -75,7 +75,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 - User-visible text goes through i18n (`t()` or `data-i18n*`; modules without UI throw `MessageError` with a message key). Add every new key to all files in `src/locales/` with the same placeholders; `test/i18n.test.js` checks this.
 - Code, comments and commit messages are in English.
 - A feature or a bug fix starts from a GitHub issue, and its pull request says `Closes #N`. Typos, dependency updates, refactors and tests need no issue.
-- A decision that shapes the product or is costly to reverse is recorded as a GitHub issue with the `decision` label (context, decision, consequences; `.github/ISSUE_TEMPLATE/decision.yml`), linked from the pull request that carries it out. Before changing what one covers, read it: `gh issue list --label decision --state all`.
+- A decision that shapes the product or is costly to reverse is recorded as a GitHub issue with the `decision` label (context, decision, consequences; `.github/ISSUE_TEMPLATE/decision.yml`). Before changing what one covers, read it: `gh issue list --repo pideoh/twinscript --label decision --state all`. The order of work, and what only the maintainer does, is in `.claude/rules/workflow.md`.
 - Commit subjects and pull request titles follow Conventional Commits, `type(scope)!: description`, with the types feat, fix, perf, revert, docs, test, build, ci, chore, refactor, style; `scripts/check-commits.js` enforces this on pull requests.
 
 ## Design
