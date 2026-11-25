@@ -40,6 +40,10 @@ The app is not notarized by Apple or signed with a Windows publisher certificate
 
 Each release also has a `SHA256SUMS.txt` to check the download against. See the [code signing policy](docs/code-signing-policy.md) for the state of signing.
 
+When a newer version is released, the app says so in a notice above the transcript, with a button that opens its
+release page. To update, download the new zip and replace the app with it. Close the notice to hear no more about that
+version; the next one is announced again. "Check for new versions" in the settings turns this off.
+
 ## Get started
 
 1. Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/apikey) ([step by step](docs/api-key.md)).
@@ -172,6 +176,8 @@ On macOS the encryption key lives in the Keychain, in an item named "Twinscript 
 Twinscript may use it, choose "Always Allow"; the app uses it only to read and save your API key.
 
 - Speaker labels upload the session's recording to the Gemini API (Files API) and delete it after the analysis.
+- The desktop app asks GitHub for the number of the latest version, at most once a day. Nothing about
+  you or your sessions is sent. Turn off "Check for new versions" in the settings and no request is made.
 - On Gemini's free tier, what you send is used to improve Google's products. Use a paid key for confidential meetings.
 - Recording or transcribing other people may require their consent.
 

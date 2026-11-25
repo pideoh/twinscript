@@ -35,6 +35,14 @@ import {
 import { createTrace } from './trace.js';
 import { GeminiLiveTranscriber } from './transcriber.js';
 import { GeminiTranslator, RateLimitError } from './translator.js';
+import {
+  afterCheck,
+  checkDue,
+  dismissVersion,
+  readUpdateState,
+  UPDATE_KEY,
+  versionToAnnounce,
+} from './update-check.js';
 import { addListening, addTokens, addUsage, emptyUsage } from './usage.js';
 import {
   addToDaily,
@@ -97,6 +105,7 @@ const DEFAULTS = {
   captionOpacity: 90, // background of the desktop caption overlay, in percent
   clickThrough: false, // desktop caption overlay: mouse events go to the app underneath
   globalShortcuts: true, // desktop app: start / stop and the caption window from any app
+  checkUpdates: true, // desktop app: ask GitHub once a day whether a newer version is out
   interimInterval: 1.5, // seconds between re-translations of the sentence being spoken
   summaryTemplate: DEFAULT_TEMPLATE, // the template, length and language last used for a summary
   summaryLength: 'standard',
@@ -176,6 +185,12 @@ const els = Object.fromEntries(
     'shortcutsGroup',
     'shortcutList',
     'globalShortcuts',
+    'updatesGroup',
+    'checkUpdates',
+    'updateNotice',
+    'updateText',
+    'updateOpen',
+    'updateDismiss',
     'interimInterval',
     'interimIntervalOut',
     'settingsRunning',
@@ -309,6 +324,7 @@ function relocalize() {
   renderSummary();
   renderSpeakers();
   renderShortcuts();
+  showUpdateNotice();
   if (els.settings.open) renderPriceFields();
   if (els.usageDialog.open) renderUsage();
   if (captionWindow) {
@@ -448,6 +464,7 @@ function openSettings() {
   els.captionFontSize.value = settings.captionFontSize;
   els.captionOpacity.value = settings.captionOpacity;
   els.clickThrough.checked = settings.clickThrough;
+  els.checkUpdates.checked = settings.checkUpdates;
   showCaptionControls();
   showTuning();
   showShortcuts();
@@ -570,9 +587,11 @@ els.settings.addEventListener('close', () => {
   settings.captionOpacity = Number(els.captionOpacity.value);
   settings.clickThrough = els.clickThrough.checked;
   if (window.appShortcuts) settings.globalShortcuts = els.globalShortcuts.checked;
+  if (window.appUpdates) settings.checkUpdates = els.checkUpdates.checked;
   const prices = pendingOverrides();
   if (prices) settings.priceOverrides = prices; // invalid prices keep the ones saved before
   saveSettings();
+  checkForUpdates(); // turned on: asks if it is time; turned off: hides the notice
 });
 
 // ---------- sessions (saved conversations) ----------
@@ -1049,6 +1068,73 @@ window.appShortcuts?.onCommand((command) => {
   else if (command === 'captions' && !els.pip.hidden) els.pip.click();
 });
 if (window.appShortcuts && !settings.globalShortcuts) applyGlobalShortcuts();
+
+// ---------- newer versions (desktop app) ----------
+// The main process asks GitHub (app/updates.js); this page decides when (src/update-check.js): at
+// start and then at most once every 24 hours, only while the setting is on. The last answer is
+// kept, so the notice comes back at the next start without a request until it is dismissed or
+// the app is updated. Failures say nothing.
+const UPDATE_LOOK_MS = 60 * 60 * 1000; // how often a long-running app looks whether a check is due
+let updateState = readUpdateState(null);
+let runningVersion = null;
+let updateChecking = false;
+els.updatesGroup.hidden = !window.appUpdates;
+
+function saveUpdateState() {
+  try {
+    localStorage.setItem(UPDATE_KEY, JSON.stringify(updateState));
+  } catch {
+    /* private mode */
+  }
+}
+function showUpdateNotice() {
+  const version = window.appUpdates && settings.checkUpdates ? versionToAnnounce(updateState, runningVersion) : null;
+  els.updateNotice.hidden = !version;
+  if (version) {
+    els.updateNotice.dataset.version = version;
+    els.updateText.textContent = t('update.available', { version });
+  }
+}
+async function checkForUpdates() {
+  if (!window.appUpdates || !runningVersion || updateChecking) return showUpdateNotice();
+  if (settings.checkUpdates && checkDue(updateState, Date.now())) {
+    updateChecking = true;
+    let result = null;
+    try {
+      result = await window.appUpdates.check();
+    } catch (err) {
+      console.warn('update check failed', err);
+    }
+    updateChecking = false;
+    updateState = afterCheck(updateState, result, Date.now());
+    saveUpdateState();
+  }
+  showUpdateNotice();
+}
+async function startUpdateChecks() {
+  if (!window.appUpdates) return;
+  try {
+    updateState = readUpdateState(localStorage.getItem(UPDATE_KEY));
+  } catch {
+    /* private mode: start empty */
+  }
+  try {
+    runningVersion = await window.appUpdates.version();
+  } catch (err) {
+    console.warn('running version unknown', err);
+    return;
+  }
+  await checkForUpdates();
+  setInterval(checkForUpdates, UPDATE_LOOK_MS);
+}
+els.updateOpen.onclick = () => {
+  window.appUpdates?.openReleasePage(els.updateNotice.dataset.version).catch(() => {});
+};
+els.updateDismiss.onclick = () => {
+  updateState = dismissVersion(updateState, els.updateNotice.dataset.version);
+  saveUpdateState();
+  showUpdateNotice();
+};
 
 async function openCaptionWindow() {
   // Electron exposes documentPictureInPicture but requestWindow fails there, so check it first.
@@ -2738,3 +2824,4 @@ try {
 }
 await showSession(sessions.find((x) => x.id === lastId) ?? blankSession());
 if (MOCK) toast(t('toast.demo'), 4000);
+startUpdateChecks(); // not awaited: the app does not wait for GitHub

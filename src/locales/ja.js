@@ -258,6 +258,13 @@ export default {
   'settings.shortcuts.unavailable': '他のアプリが使用中',
   'settings.shortcuts.enabled': 'どのアプリからでもこのショートカットを使う',
   'settings.shortcuts.help': 'Twinscript が背面にあっても使えます。',
+  'settings.updates': 'アップデート',
+  'settings.checkUpdates': '新しいバージョンを確認する',
+  'settings.checkUpdates.help':
+    '1 日に 1 回、最新バージョンの番号を GitHub に問い合わせます。あなたやセッションの情報は送信しません。',
+  'update.available': 'バージョン {version} が利用できます',
+  'update.open': 'リリースを見る',
+  'update.dismiss': '閉じる',
   'settings.save': '保存',
 
   // notifications

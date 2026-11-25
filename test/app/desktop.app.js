@@ -14,7 +14,11 @@ let app, profile;
 
 before(async () => {
   profile = await mkdtemp(join(tmpdir(), 'rt-app-'));
-  app = await electron.launch({ args: [ROOT], env: { ...process.env, RT_USER_DATA: profile } });
+  // RT_NO_UPDATE_CHECK: the app does not ask GitHub for a newer version during the test.
+  app = await electron.launch({
+    args: [ROOT],
+    env: { ...process.env, RT_USER_DATA: profile, RT_NO_UPDATE_CHECK: '1' },
+  });
 });
 after(async () => {
   await app?.close();
@@ -33,7 +37,7 @@ test('serves only the app files from app://rt/', async () => {
   assert.equal(await status('app/main.js'), 404);
 });
 
-test('the preload gives the page the secret store, caption overlay click-through and global shortcuts, nothing else', async () => {
+test('the preload gives the page the secret store, caption overlay click-through, global shortcuts and the update check, nothing else', async () => {
   const page = await app.firstWindow();
   const surface = await page.evaluate(() => {
     const keys = (o) => (o ? Object.keys(o).sort() : null);
@@ -41,6 +45,7 @@ test('the preload gives the page the secret store, caption overlay click-through
       secretStore: keys(window.secretStore),
       captionOverlay: keys(window.captionOverlay),
       appShortcuts: keys(window.appShortcuts),
+      appUpdates: keys(window.appUpdates),
       // What the context bridge exposes arrives as frozen plain objects on window; anything
       // added later would show up here.
       bridged: Object.getOwnPropertyNames(window)
@@ -54,9 +59,21 @@ test('the preload gives the page the secret store, caption overlay click-through
   assert.deepEqual(surface.secretStore, ['get', 'set']);
   assert.deepEqual(surface.captionOverlay, ['setClickThrough']);
   assert.deepEqual(surface.appShortcuts, ['focusApp', 'onCommand', 'setEnabled', 'status']);
-  assert.deepEqual(surface.bridged, ['appShortcuts', 'captionOverlay', 'secretStore']);
+  assert.deepEqual(surface.appUpdates, ['check', 'openReleasePage', 'version']);
+  assert.deepEqual(surface.bridged, ['appShortcuts', 'appUpdates', 'captionOverlay', 'secretStore']);
   assert.equal(await page.evaluate(() => typeof require), 'undefined');
   assert.equal(await page.evaluate(() => typeof window.electron), 'undefined');
+});
+
+test('the page learns the running version; the update check is answered by the main process', async () => {
+  const page = await app.firstWindow();
+  const { version } = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
+  assert.equal(await page.evaluate(() => window.appUpdates.version()), version);
+  // RT_NO_UPDATE_CHECK answers as a failed check would, without a request to GitHub.
+  assert.equal(await page.evaluate(() => window.appUpdates.check()), null);
+  // Not a version: nothing is opened, nothing fails.
+  assert.equal(await page.evaluate(() => window.appUpdates.openReleasePage('https://example.com')), undefined);
+  assert.ok(await page.locator('#updateNotice').isHidden());
 });
 
 test('the API key is stored encrypted on disk, never in plain text, and reads back', async () => {
@@ -217,5 +234,6 @@ test('starting from the shortcut without an API key asks for the key, as the but
   assert.ok(await page.locator('#captionOpacity').isVisible());
   assert.ok(await page.locator('#clickThrough').isVisible());
   assert.ok(await page.locator('#captionDesktopOnly').isHidden());
+  assert.ok(await page.locator('#checkUpdates').isChecked(), 'checking for new versions is on by default');
   await page.keyboard.press('Escape');
 });

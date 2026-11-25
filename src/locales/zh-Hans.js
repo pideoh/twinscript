@@ -251,6 +251,12 @@ export default {
   'settings.shortcuts.unavailable': '已被其他应用占用',
   'settings.shortcuts.enabled': '在任何应用中都可使用这些快捷键',
   'settings.shortcuts.help': '即使 Twinscript 在后台也能使用。',
+  'settings.updates': '更新',
+  'settings.checkUpdates': '检查新版本',
+  'settings.checkUpdates.help': 'Twinscript 每天向 GitHub 查询一次最新版本号，不会发送任何关于你或会话的信息。',
+  'update.available': '版本 {version} 现已推出',
+  'update.open': '查看发布',
+  'update.dismiss': '关闭',
   'settings.save': '保存',
 
   // notifications

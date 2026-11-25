@@ -264,6 +264,13 @@ export default {
   'settings.shortcuts.unavailable': 'In use by another app',
   'settings.shortcuts.enabled': 'Use these shortcuts from any app',
   'settings.shortcuts.help': 'They work even when Twinscript is in the background.',
+  'settings.updates': 'Updates',
+  'settings.checkUpdates': 'Check for new versions',
+  'settings.checkUpdates.help':
+    'Once a day, Twinscript asks GitHub for the number of the latest version. Nothing about you or your sessions is sent.',
+  'update.available': 'Version {version} is available',
+  'update.open': 'View release',
+  'update.dismiss': 'Dismiss',
   'settings.save': 'Save',
 
   // notifications
