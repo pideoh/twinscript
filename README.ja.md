@@ -245,6 +245,12 @@ npm run test:app  # デスクトップアプリの起動確認。実際にウィ
 
 どれも Gemini の API は模擬しているので、API キーは不要です。
 
+## 質問・要望・予定
+
+- 質問と要望: [Discussions](https://github.com/pideoh/twinscript/discussions)
+- 不具合: [Issues](https://github.com/pideoh/twinscript/issues)
+- 予定しているもの、進行中のもの、済んだもの: [プロジェクトボード](https://github.com/users/pideoh/projects/1)
+
 ## 開発に参加する
 
 [CONTRIBUTING.md](CONTRIBUTING.md) を見てください。セキュリティ上の問題の報告は [SECURITY.md](SECURITY.md) にあります。
