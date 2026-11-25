@@ -22,15 +22,16 @@ import {
   targetLanguages,
 } from './translation/script-hint.js';
 import { GeminiTranslator, RateLimitError } from './translation/translator.js';
+import { createCaptionWindow } from './ui/caption-window.js';
 import { createExportDialog } from './ui/export-dialog.js';
 import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './ui/i18n.js';
 import { octicon } from './ui/icons.js';
-import { followPlace, LANGS, langLabel as labelIn, langName, langTag as tagAmong } from './ui/langs.js';
-import { MessageError } from './ui/message-error.js';
+import { followPlace, LANGS, langLabel as labelIn, langName } from './ui/langs.js';
 import { createShortcutsPanel } from './ui/shortcuts-panel.js';
 import { createSpeakerPanel } from './ui/speaker-panel.js';
 import { createSummaryPanel } from './ui/summary-panel.js';
 import { createTemplateEditor, createTemplateStore } from './ui/template-editor.js';
+import { createTranscriptView } from './ui/transcript-view.js';
 import { createUpdateNotice } from './ui/update-notice.js';
 import { createUsageDialog } from './ui/usage-dialog.js';
 import { addTokens, emptyUsage } from './usage/usage.js';
@@ -197,7 +198,7 @@ if (legacyKey !== undefined) saveSettings();
 // The caption zone keeps its own settings while a third language is selected (see DEFAULTS in settings.js).
 const captionKey = (name) => (settings.langC ? `${name}3` : name);
 const reader = new ReadAloud(); // reads finished translations aloud
-let captionWindow = null; // always-on-top caption window, when open
+let captionWindow = null; // the caption window part (src/ui/caption-window.js), made in its section below
 let languageNames = null; // Intl.DisplayNames for the UI language
 
 // ---------- UI language ----------
@@ -233,15 +234,7 @@ function relocalize() {
   showUpdateNotice();
   if (els.settings.open) renderPriceFields();
   if (els.usageDialog.open) renderUsage();
-  if (captionWindow) {
-    applyTranslations(captionWindow.document); // the caption zone lives there while it is open
-    captionWindow.document.title = t('caption.title');
-    const close = captionWindow.document.querySelector('.overlay-close');
-    if (close) {
-      close.title = t('caption.close');
-      close.setAttribute('aria-label', close.title);
-    }
-  }
+  captionWindow.relocalize();
 }
 applyLocale();
 els.uiLang.add(new Option(t('settings.uiLang.auto'), 'auto'));
@@ -277,7 +270,7 @@ applyFontSize();
 // The caption window has its own text size; the main window's applies to everything else.
 function applyFontSize() {
   document.documentElement.style.setProperty('--fs', `${settings.fontSize}px`);
-  captionWindow?.document.documentElement.style.setProperty('--fs', `${settings.captionFontSize}px`);
+  captionWindow?.fontSize();
 }
 function onLangChange(changed, other) {
   if (changed.value === other.value) other.value = changed === els.langA ? settings.langB : settings.langA;
@@ -709,194 +702,53 @@ els.menu.onclick = () => document.body.classList.toggle('drawer');
 els.backdrop.onclick = () => document.body.classList.remove('drawer');
 
 // ---------- transcript view ----------
-function nearBottom() {
-  return els.log.scrollHeight - els.log.scrollTop - els.log.clientHeight < 120;
-}
-function keepBottom(wasNear) {
-  if (wasNear) els.log.scrollTop = els.log.scrollHeight;
-}
-
+// The segments on the page and the code that leads each line (src/ui/transcript-view.js).
+const view = createTranscriptView({
+  els,
+  settings,
+  getCurrent: () => current,
+  getRun: () => run,
+  captionKey,
+  langLabel,
+  showSpeaker,
+  openSpeakerEditor,
+});
 // Builds the DOM for a segment (new or loaded from storage) and attaches it to the segment object.
 function mountSegment(seg, isLive = false) {
-  const el = document.createElement('div');
-  el.className = `seg${isLive ? ' live' : ''}`;
-  const timeEl = document.createElement('div');
-  timeEl.className = 'time';
-  timeEl.textContent = formatElapsed(seg.elapsed);
-  // Who said it, once the speakers are labelled; shown only in the transcript (not the caption zone).
-  const speakerEl = document.createElement('button');
-  speakerEl.type = 'button';
-  speakerEl.className = 'speaker';
-  speakerEl.onclick = () => openSpeakerEditor(seg);
-  const srcEl = document.createElement('div');
-  srcEl.className = 'src';
-  srcEl.textContent = seg.src;
-  const tgtEl = document.createElement('div');
-  tgtEl.className = `tgt${isLive ? ' pending' : ''}`;
-  el.append(timeEl, speakerEl, srcEl, tgtEl);
-  els.empty.hidden = true;
-  Object.assign(seg, { el, speakerEl, srcEl, tgtEl });
-  showSpeaker(seg);
-  if (seg.tgts) {
-    showTargets(seg);
-    for (const { lang, text } of seg.tgts) if (text) setLine(seg, lang, text);
-  } else {
-    tgtEl.textContent = seg.tgt;
-    tgtEl.dataset.lang = seg.tgt ? singleTag(seg, seg.tgt) : '';
-  }
-  tagSource(seg); // also for a segment loaded from storage, which does not go through setText
-  if (run) {
-    els.nowList.append(el);
-    trimCaptions();
-  } else {
-    els.log.insertBefore(el, els.anchor);
-  }
-  return seg;
+  return view.mount(seg, isLive);
 }
-
 // Moves the oldest sentences out of the caption zone into the transcript.
-function trimCaptions(keep = settings[captionKey('captionItems')]) {
-  const wasNear = nearBottom();
-  while (els.nowList.children.length > keep) els.log.insertBefore(els.nowList.firstElementChild, els.anchor);
-  keepBottom(wasNear);
-  updateJump();
+function trimCaptions(keep) {
+  view.trimCaptions(keep);
 }
 
 function createSegment() {
   return mountSegment({ id: uid(), at: Date.now(), elapsed: elapsedNow(), src: '', tgt: '' }, true);
 }
 
-function setText(seg, part, text, cls) {
-  const wasNear = nearBottom();
-  const node = part === 'src' ? seg.srcEl : seg.tgtEl;
-  node.textContent = text;
-  if (part === 'tgt') {
-    node.className = `tgt${cls ? ` ${cls}` : ''}`;
-    node.dataset.lang = cls === 'error' ? '' : singleTag(seg, text);
-  }
-  tagSource(seg);
-  keepBottom(wasNear);
-  updateJump();
-}
-
-// With a third language a segment has one line per target language, each led by a tag. A line
-// appears with its first text, in the order of seg.tgts.
-function showTargets(seg) {
-  seg.tgtEl.className = 'tgt multi';
-  seg.tgtEl.replaceChildren();
-  seg.lines = new Map();
-}
-// Sets the languages a segment is translated into; returns false when they were already those.
-function setTargets(seg, codes) {
-  if (seg.tgts && seg.lines && seg.tgts.map((x) => x.lang).join() === codes.join()) return false;
-  seg.tgts = codes.map((lang) => ({ lang, text: '' }));
-  showTargets(seg);
-  return true;
-}
-// The code for a segment's single translation, told from the writing system of the translation or,
-// failing that, of the source (the translation is then in the other language). Empty when the two
-// languages share a writing system; the space for the code is kept, so the text stays aligned.
-function singleTag(seg, text) {
-  const a = LANGS.find((l) => l.code === (current?.langA ?? settings.langA));
-  const b = LANGS.find((l) => l.code === (current?.langB ?? settings.langB));
-  if (!a || !b || !text) return '';
-  const other = (name) => (name === a.name ? b.name : name === b.name ? a.name : null);
-  const name = languageByScript(text, a.name, b.name) ?? other(languageByScript(seg.srcEl.textContent, a.name, b.name));
-  const lang = name === a.name ? a : name === b.name ? b : null;
-  return lang ? langTag(lang.code) : '';
-}
-// The code of the language a segment was spoken in, shown before its source text: the language
-// found when it was translated, else what the writing system of the source tells, else the other
-// one than a single translation's. Empty for a language that is none of the selected ones.
-function tagSource(seg) {
-  const langs = [current?.langA ?? settings.langA, current?.langB ?? settings.langB, current?.langC ?? '']
-    .map((code) => LANGS.find((l) => l.code === code))
-    .filter(Boolean);
-  const byName = (name) => langs.find((l) => l.name === name);
-  const text = seg.srcEl.textContent;
-  let lang = seg.lang ? langs.find((l) => l.code === seg.lang) : null;
-  if (!lang && !seg.lang && text) {
-    lang = byName(
-      sourceByScript(
-        text,
-        langs.map((l) => l.name),
-      ),
-    );
-    if (!lang && langs.length === 2 && !seg.lines) {
-      const tgt = languageByScript(seg.tgtEl.textContent, langs[0].name, langs[1].name);
-      if (tgt) lang = langs.find((l) => l.name !== tgt);
-    }
-  }
-  seg.srcEl.dataset.lang = lang ? langTag(lang.code) : '';
-}
-// The short code that leads a translation line, told apart among the selected languages (src/ui/langs.js).
-function langTag(code) {
-  return tagAmong(code, [settings.langA, settings.langB, settings.langC]);
-}
-function setLine(seg, code, text, cls) {
-  const wasNear = nearBottom();
-  let line = seg.lines.get(code);
-  if (!line) {
-    const lang = LANGS.find((l) => l.code === code);
-    line = document.createElement('div');
-    const tag = document.createElement('span');
-    tag.className = 'lang-tag';
-    tag.textContent = langTag(code);
-    if (lang) tag.title = langLabel(code);
-    const body = document.createElement('span');
-    body.className = 'tgt-text';
-    if (lang) body.lang = lang.display;
-    line.append(tag, body);
-    const order = (c) => seg.tgts.findIndex((x) => x.lang === c);
-    const next = [...seg.lines].find(([c]) => order(c) > order(code))?.[1];
-    seg.tgtEl.insertBefore(line, next ?? null);
-    seg.lines.set(code, line);
-  }
-  line.className = `tgt-line${cls ? ` ${cls}` : ''}`;
-  line.lastChild.textContent = text;
-  keepBottom(wasNear);
-  updateJump();
-}
-
-// Offer a way back to the latest sentence while the user has scrolled up to re-read.
-function updateJump() {
-  els.jump.hidden = nearBottom();
-}
-els.log.addEventListener('scroll', updateJump, { passive: true });
-els.jump.onclick = () => {
-  els.log.scrollTop = els.log.scrollHeight;
-};
-
 // ---------- caption window ----------
-// Shows the caption zone in an always-on-top window, so it can sit over a video call or slides:
-// Document Picture-in-Picture in desktop Chrome and Edge, or a transparent overlay window opened
-// by the desktop app (app/main.js makes the 'captions' window frameless and always on top).
-const IN_DESKTOP_APP = /\bElectron\//.test(navigator.userAgent);
-const CAPTION_WINDOW_NAME = 'captions'; // must match CAPTION_WINDOW in app/policy.js
-els.pip.hidden = !('documentPictureInPicture' in window) && !IN_DESKTOP_APP;
-
-// Settings of the caption zone that apply wherever it is, at once (also while listening).
+// The caption zone in an always-on-top window, and the caption zone's settings that apply at once
+// (src/ui/caption-window.js).
+captionWindow = createCaptionWindow({
+  els,
+  t,
+  applyTranslations,
+  octicon,
+  settings,
+  captionKey,
+  toast,
+  errorText,
+  applyFontSize,
+});
 function applyCaptionOptions() {
-  els.now.classList.toggle('tgt-only', settings[captionKey('captionContent')] === 'tgt');
-  // The desktop overlay's backdrop; a picture-in-picture window is opaque by nature.
-  if (captionWindow?.document.body.classList.contains('overlay'))
-    captionWindow.document.body.style.setProperty('--caption-bg-alpha', String(settings.captionOpacity / 100));
+  captionWindow.applyOptions();
 }
-// The main process keeps the state and applies it to the overlay whenever it is open.
 function applyClickThrough() {
-  window.captionOverlay?.setClickThrough(settings.clickThrough).catch(() => {});
+  captionWindow.applyClickThrough();
 }
-// Opacity and click-through exist only for the desktop overlay; without any caption window,
-// its options are left out altogether.
 function showCaptionControls() {
-  const anyWindow = !els.pip.hidden;
-  els.captionFontSizeField.hidden = !anyWindow;
-  els.captionOpacityField.hidden = !IN_DESKTOP_APP;
-  els.clickThroughField.hidden = !IN_DESKTOP_APP;
-  els.captionDesktopOnly.hidden = IN_DESKTOP_APP || !anyWindow;
+  captionWindow.showControls();
 }
-applyCaptionOptions();
-if (settings.clickThrough) applyClickThrough();
 
 // ---------- global shortcuts (desktop app) ----------
 // The settings' list of shortcuts and their switch (src/ui/shortcuts-panel.js); each shortcut does
@@ -933,67 +785,6 @@ function checkForUpdates() {
 function startUpdateChecks() {
   return updateNotice.start();
 }
-
-async function openCaptionWindow() {
-  // Electron exposes documentPictureInPicture but requestWindow fails there, so check it first.
-  if (IN_DESKTOP_APP) {
-    const win = window.open('', CAPTION_WINDOW_NAME, 'width=720,height=220');
-    if (!win) throw new MessageError('error.windowBlocked');
-    return { win, overlay: true };
-  }
-  return { win: await window.documentPictureInPicture.requestWindow({ width: 640, height: 220 }), overlay: false };
-}
-
-els.pip.onclick = async () => {
-  if (captionWindow) return captionWindow.close();
-  let win, overlay;
-  try {
-    ({ win, overlay } = await openCaptionWindow());
-  } catch (err) {
-    return toast(t('toast.captionWindowFailed', { message: errorText(err) }), 6000, 'critical');
-  }
-  captionWindow = win;
-  const css = win.document.createElement('link');
-  css.rel = 'stylesheet';
-  css.href = new URL('styles.css', location.href).href;
-  win.document.head.append(css);
-  win.document.title = t('caption.title');
-  win.document.body.className = overlay ? 'pip overlay' : 'pip';
-  // The layout that makes the zone fill the window is set inline, so it holds even if the
-  // stylesheet in the new window is slow to load or an older cached copy.
-  win.document.body.style.cssText = overlay
-    ? 'margin:0;display:block;height:100vh;background:transparent;overflow:hidden'
-    : 'margin:0;display:block;height:100vh;background:var(--bgColor-default, Canvas)';
-  els.now.style.cssText = 'display:flex;width:100%;height:100vh;min-height:0;max-height:none;border-top:0';
-  applyFontSize();
-  applyCaptionOptions();
-  const home = document.createComment('caption zone');
-  els.now.before(home);
-  win.document.body.append(els.now);
-  let closeBtn = null;
-  if (overlay) {
-    // The overlay has no title bar, so it needs its own way to close.
-    closeBtn = win.document.createElement('button');
-    closeBtn.className = 'overlay-close icon-btn';
-    closeBtn.title = t('caption.close');
-    closeBtn.setAttribute('aria-label', closeBtn.title);
-    closeBtn.append(octicon('x', win.document));
-    closeBtn.onclick = () => win.close();
-    win.document.body.append(closeBtn);
-  }
-  els.pip.setAttribute('aria-pressed', 'true');
-  win.addEventListener(
-    'pagehide',
-    () => {
-      closeBtn?.remove();
-      els.now.style.cssText = '';
-      home.replaceWith(els.now); // back to its place under the transcript
-      captionWindow = null;
-      els.pip.setAttribute('aria-pressed', 'false');
-    },
-    { once: true },
-  );
-};
 
 // ---------- download ----------
 function download(blob, name) {
@@ -1370,7 +1161,7 @@ function stop() {
   reader.stop();
   r.tracker.flush(); // keep whatever was heard so far instead of dropping it
   if (live) {
-    live.el.remove();
+    view.unmount(live);
     live = null;
   }
   trimCaptions(0);
@@ -1413,7 +1204,7 @@ function createTracker(r) {
     commit(text, aboveLive) {
       if (aboveLive) {
         const seg = createSegment();
-        if (live) live.el.before(seg.el);
+        if (live) view.placeBefore(seg, live);
         commit(r, seg, text);
         return seg;
       }
@@ -1422,13 +1213,13 @@ function createTracker(r) {
     },
     setLive(text) {
       if (!text) {
-        live?.el.remove();
+        if (live) view.unmount(live);
         live = null;
         r.pacer.cancel();
         return;
       }
       if (!live) live = createSegment();
-      setText(live, 'src', text);
+      view.setText(live, 'src', text);
       r.pacer.update(text);
     },
     correct: (seg, text) => commit(r, seg, text),
@@ -1448,8 +1239,8 @@ function createInterimPacer(r) {
         ? translateInterimLines(r, live, text, context)
         : r.translator.translate(text, { history: recentHistory(r), previous: context.previous?.() }),
     show: (out) => {
-      clearTargets(live);
-      setText(live, 'tgt', out, 'pending');
+      view.clearTargets(live);
+      view.setText(live, 'tgt', out, 'pending');
     },
     onRateLimit: () => toast(t('toast.rateLimited'), 6000, 'warning'),
   });
@@ -1466,7 +1257,7 @@ async function translateInterimLines(r, seg, text, context) {
   );
   if (!source) return;
   const targets = targetsFor(r, source);
-  setTargets(seg, targets);
+  view.setTargets(seg, targets);
   const results = await Promise.allSettled(
     targets.map(async (code) => {
       const out = await r.translator.translate(text, {
@@ -1476,7 +1267,7 @@ async function translateInterimLines(r, seg, text, context) {
       });
       if (out) context.answer?.(code, out);
       if (seg === live && out && seg.tgts.some((x) => x.lang === code)) {
-        setLine(seg, code, out, 'pending');
+        view.setLine(seg, code, out, 'pending');
         context.keep?.(code, out);
       }
     }),
@@ -1503,13 +1294,6 @@ const intoSeveral = (r, text) =>
     r.langs.map((l) => l.name),
   ) === 'other' &&
   targetsFor(r, 'other').length > 1;
-// Back to a single translation line (two languages, after lines for a sentence in neither).
-function clearTargets(seg) {
-  if (!seg.tgts) return;
-  delete seg.tgts;
-  delete seg.lang;
-  seg.lines = null;
-}
 
 function finalize(r, text) {
   const seg = live;
@@ -1522,9 +1306,9 @@ function finalize(r, text) {
 }
 
 function commit(r, seg, text) {
-  seg.el.classList.remove('live');
+  view.markFinished(seg);
   seg.src = text;
-  setText(seg, 'src', text);
+  view.setText(seg, 'src', text);
   if (!r.session.segments.includes(seg)) r.session.segments.push(seg);
   markDirty(r.session);
   translateFinal(r, seg);
@@ -1560,11 +1344,11 @@ async function translateFinal(r, seg) {
   const history = recentHistory(r);
   seg.rev = (seg.rev || 0) + 1; // a segment can be re-translated when its text is corrected
   const rev = seg.rev;
-  clearTargets(seg);
-  const shown = () => seg.rev === rev && seg.el.isConnected;
+  view.clearTargets(seg);
+  const shown = () => seg.rev === rev && view.isMounted(seg);
   // If a translation of the in-progress text is already on screen, swap it once when the final one
   // is complete rather than replacing it with a few words that grow again.
-  const swapWhenDone = !!seg.tgtEl.textContent;
+  const swapWhenDone = !!view.shownTranslation(seg);
   // settle: an in-progress translation of the same text is the final one, without another request.
   let answers = settledAnswers(handover);
   if (answers instanceof Promise) answers = await answers;
@@ -1581,7 +1365,7 @@ async function translateFinal(r, seg) {
         history,
         previous,
         onDelta: (partial) => {
-          if (shown() && !swapWhenDone) setText(seg, 'tgt', partial);
+          if (shown() && !swapWhenDone) view.setText(seg, 'tgt', partial);
         },
         onTarget: (language) => {
           target = language;
@@ -1594,7 +1378,7 @@ async function translateFinal(r, seg) {
         await new Promise((res) => setTimeout(res, 1500 * 2 ** attempt));
         continue;
       }
-      if (shown()) setText(seg, 'tgt', errorText(err), 'error');
+      if (shown()) view.setText(seg, 'tgt', errorText(err), 'error');
       return;
     }
   }
@@ -1606,7 +1390,7 @@ async function translateFinal(r, seg) {
 // The steps after a sentence's single final translation is in, whether it was requested or settled.
 function finishFinal(r, seg, out, target) {
   seg.tgt = out;
-  if (seg.el.isConnected) setText(seg, 'tgt', out);
+  if (view.isMounted(seg)) view.setText(seg, 'tgt', out);
   markDirty(r.session);
   if (!seg.spoken) seg.spoken = readTranslation(r, out, target);
 }
@@ -1620,11 +1404,11 @@ async function translateFinalLines(r, seg) {
   const source = sourceByScript(seg.src, names) ?? (await r.translator.identify(seg.src, names).catch(() => 'other'));
   if (seg.rev !== rev) return;
   seg.lang = r.langs.find((l) => l.name === source)?.code ?? 'other';
-  tagSource(seg);
+  view.tagSource(seg);
   const targets = targetsFor(r, source);
   // Lines already showing a translation of the text in progress are swapped once, when complete.
-  const kept = !setTargets(seg, targets);
-  const swap = new Set(kept ? targets.filter((code) => seg.lines.get(code)?.lastChild.textContent) : []);
+  const kept = !view.setTargets(seg, targets);
+  const swap = new Set(kept ? targets.filter((code) => view.shownTranslation(seg, code)) : []);
   // settle: only when every line has an in-progress translation of the same text.
   let answers = settledAnswers(handover);
   if (answers instanceof Promise) answers = await answers;
@@ -1638,7 +1422,7 @@ async function translateFinalLines(r, seg) {
 
 async function translateLine(r, seg, rev, code, swapWhenDone, previous) {
   const history = recentHistory(r, code);
-  const shown = () => seg.rev === rev && seg.el.isConnected;
+  const shown = () => seg.rev === rev && view.isMounted(seg);
   for (let attempt = 0; ; attempt++) {
     try {
       const out = await r.translator.translate(seg.src, {
@@ -1646,7 +1430,7 @@ async function translateLine(r, seg, rev, code, swapWhenDone, previous) {
         into: langName(code),
         previous,
         onDelta: (partial) => {
-          if (shown() && !swapWhenDone) setLine(seg, code, partial);
+          if (shown() && !swapWhenDone) view.setLine(seg, code, partial);
         },
       });
       if (seg.rev !== rev) return;
@@ -1656,7 +1440,7 @@ async function translateLine(r, seg, rev, code, swapWhenDone, previous) {
         await new Promise((res) => setTimeout(res, 1500 * 2 ** attempt));
         continue;
       }
-      if (shown()) setLine(seg, code, errorText(err), 'error');
+      if (shown()) view.setLine(seg, code, errorText(err), 'error');
       return;
     }
   }
@@ -1669,7 +1453,7 @@ function finishLine(r, seg, code, out) {
     .map((x) => x.text)
     .filter(Boolean)
     .join('\n');
-  if (seg.el.isConnected) setLine(seg, code, out);
+  if (view.isMounted(seg)) view.setLine(seg, code, out);
   markDirty(r.session);
   // Each line is in a known language, so the one(s) chosen for reading aloud are read.
   seg.spokenLines ??= new Set();
