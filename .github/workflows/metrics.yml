@@ -1,9 +1,9 @@
 # Once a week, records the repository's views, clones, referrers, stars and release downloads as CSV files
 # on the `metrics` branch (scripts/record-metrics.mjs). GitHub keeps views and clones for 14 days only.
 #
-# Needs the secret METRICS_TOKEN: a fine-grained token for this repository with "Administration: read"
-# (the traffic figures) and "Contents: write" (the push to `metrics`). The workflow's own token cannot
-# read traffic.
+# Uses RELEASE_PR_TOKEN, the token release.yml already has. Besides "Contents: write" (the push to
+# `metrics`) it needs "Administration: read" for the traffic figures, which the workflow's own token
+# cannot read.
 name: metrics
 on:
   schedule:
@@ -23,7 +23,7 @@ jobs:
       contents: read
     env:
       BRANCH: metrics
-      GH_TOKEN: ${{ secrets.METRICS_TOKEN }}
+      GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -36,7 +36,7 @@ jobs:
       - name: Fetch the figures recorded so far
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::The secret METRICS_TOKEN is not set."
+            echo "::error::The secret RELEASE_PR_TOKEN is not set."
             exit 1
           fi
           gh auth setup-git

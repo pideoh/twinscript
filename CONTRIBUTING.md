@@ -95,9 +95,9 @@ cannot be read or a change is refused, the run fails instead, and the update is 
 ## Repository metrics
 
 GitHub keeps views and clones for 14 days. Every Monday the `metrics` workflow records them, with referrers,
-stars and release downloads, as CSV files on the `metrics` branch (`scripts/record-metrics.mjs`). It needs
-the secret `METRICS_TOKEN`: a fine-grained token for this repository with "Administration: read" and
-"Contents: write".
+stars and release downloads, as CSV files on the `metrics` branch (`scripts/record-metrics.mjs`). It uses
+the secret `RELEASE_PR_TOKEN`, which needs "Administration: read" for the traffic figures besides the
+permissions the release workflow uses.
 
 ## Adding a display language
 
