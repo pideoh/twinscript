@@ -1,10 +1,16 @@
 // Shared setup for the browser tests: each *.e2e.js file calls setup() to get its own static
 // server (random port) and its own Chrome, so Node's test runner can run the files in parallel.
 // Also the small readers every file uses (ready, reload, rows, saved, listening, ...).
+//
+// With E2E_COVERAGE=<directory>, each page openApp opens records Chrome's JavaScript coverage (block
+// level) and writes the part for the app's scripts (under /src/) to that directory as one JSON file,
+// when the page or its context is closed or when the file's browser closes. scripts/e2e-coverage.mjs
+// turns the files into a report. Without the variable no coverage is recorded.
 
-import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { extname, join, normalize } from 'node:path';
+import { extname, join, normalize, resolve } from 'node:path';
 import { after, before } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
@@ -18,6 +24,38 @@ const TYPES = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
 };
+const COVERAGE_DIR = process.env.E2E_COVERAGE ? resolve(process.env.E2E_COVERAGE) : null;
+const recording = new Map(); // page -> the origin of its server, while its coverage is recorded
+
+async function startCoverage(page, context, origin) {
+  await page.coverage.startJSCoverage({ resetOnNavigation: false });
+  recording.set(page, origin);
+  // Coverage can only be read from an open page, so closing it (or its context) writes it first.
+  for (const target of [page, context]) {
+    const close = target.close.bind(target);
+    target.close = async (...args) => {
+      await writeCoverage(page);
+      return close(...args);
+    };
+  }
+}
+
+async function writeCoverage(page) {
+  const origin = recording.get(page);
+  if (!origin) return;
+  recording.delete(page);
+  let entries;
+  try {
+    entries = await page.coverage.stopJSCoverage();
+  } catch {
+    return; // the page is gone already (it crashed or the browser closed)
+  }
+  const result = entries
+    .filter((e) => e.url.startsWith(`${origin}/src/`))
+    .map(({ scriptId, url, functions }) => ({ scriptId, url, functions }));
+  await mkdir(COVERAGE_DIR, { recursive: true });
+  await writeFile(join(COVERAGE_DIR, `${randomUUID()}.json`), JSON.stringify({ result }));
+}
 
 // Registers before/after hooks and returns { openApp } bound to this file's server and browser.
 export function setup() {
@@ -42,6 +80,7 @@ export function setup() {
     });
   });
   after(async () => {
+    await Promise.all([...recording.keys()].map(writeCoverage));
     await browser?.close();
     server?.close();
   });
@@ -55,6 +94,7 @@ export function setup() {
   async function openApp(query = '', settings, init, { locale = 'en-US', colorScheme = 'light' } = {}) {
     const context = await browser.newContext({ permissions: ['microphone'], locale, colorScheme });
     const page = await context.newPage();
+    if (COVERAGE_DIR) await startCoverage(page, context, origin);
     const errors = [];
     const messages = [];
     diagnostics.set(page, { messages, keys: [...MASKED_KEYS, settings?.apiKey].filter(Boolean) });

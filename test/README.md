@@ -6,7 +6,7 @@ The folder says what kind of test a file is.
 | --- | --- | --- |
 | `unit/src/` | The app's logic: one file per module in `src/`, in the same group folders (`speech/`, `translation/`, `session/`, `storage/`, `usage/`, `ui/`, `debug/`; DOM-free, no browser) | `npm test` |
 | `unit/app/` | Desktop rules: modules in `app/` (policy, secrets, shortcuts, updates); Electron is not started | `npm test` |
-| `unit/scripts/` | Tools: modules in `scripts/` (commit check, pricing update, metrics, tuning, macOS signing) | `npm test` |
+| `unit/scripts/` | Tools: modules in `scripts/` (commit check, pricing update, metrics, tuning, macOS signing, browser coverage) | `npm test` |
 | `unit/rules/` | Project rules rather than behavior: translation catalogs (`i18n`), design tokens, content security policy | `npm test` |
 | `e2e/` | Browser tests with Chrome, a fake microphone and mocked Gemini endpoints; one file per topic, shared setup in `helpers/` | `npm run test:e2e` |
 | `desktop/` | Desktop smoke tests; they open real windows, so they need a display and are not run in CI | `npm run test:app` |
@@ -14,6 +14,10 @@ The folder says what kind of test a file is.
 | `support/` | Helpers shared by tests that are not tests themselves | |
 
 Run one file with `node --test test/unit/src/speech/segmenter.test.js`.
+
+`npm test` covers only the files the unit tests load. To see which lines of `src/` the browser tests run,
+`npm run test:e2e:coverage` runs them with Chrome's coverage on (raw files in `dist/e2e-coverage/`) and
+prints a table per file; `scripts/e2e-coverage.mjs` says how a line is counted.
 
 ## Where a new test goes
 

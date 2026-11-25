@@ -36,6 +36,7 @@ The interface is plain HTML, CSS and ES modules with no build step, so it can al
 npm run lint       # formatting and lint rules (npm run format fixes what it can)
 npm test           # unit tests, no dependencies
 npm run test:e2e   # browser tests (needs Chrome); the Gemini API is mocked
+npm run test:e2e:coverage  # the browser tests, then which lines of src/ they ran
 npm run test:app   # desktop smoke tests (opens windows)
 ```
 

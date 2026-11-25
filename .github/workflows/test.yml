@@ -32,7 +32,12 @@ jobs:
       - run: node --test --experimental-test-coverage "test/unit/**/*.test.js"
       # The test files run in parallel. Node's default is one fewer than the CPU count, which is a
       # single file at a time on a two-core runner; the tests mostly wait, so four at once is fine.
+      # Chrome's coverage of each page is written to dist/e2e-coverage (see scripts/e2e-coverage.mjs).
       - run: node --test --test-concurrency=4 "test/e2e/*.e2e.js"
+        env:
+          E2E_COVERAGE: dist/e2e-coverage
+      # Which lines of src/ the browser tests ran, in the log.
+      - run: node scripts/e2e-coverage.mjs dist/e2e-coverage
 
   # The unit tests cover path handling and process rules for the desktop app, which differ by OS.
   unit-other-os:
