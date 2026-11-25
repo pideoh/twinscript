@@ -10,13 +10,25 @@ const JA = lang('ja-JP');
 const EN = lang('en-US');
 const KO = lang('ko-KR');
 
-// The page as the flow sees it: what each segment shows, kept in plain objects.
+// The page as the flow sees it: what each segment shows, kept in plain objects. Like the real view,
+// lines stay on the page after clearTargets until a single translation replaces them (`shownLines`),
+// and the single translation shown is then their text, language tags included.
 function standInView() {
-  const page = new Map(); // seg -> { src, text, cls, lines: Map(code -> { text, cls }) | null, onPage }
+  // seg -> { src, text, cls, lines: Map(code -> { text, cls }) | null, shownLines, onPage }
+  const page = new Map();
+  const shown = (p) => (p.shownLines ? [...p.shownLines].map(([code, line]) => code + line.text).join('') : p.text);
   return {
     page,
     mount(seg) {
-      page.set(seg, { src: seg.src, text: seg.tgt, cls: 'pending', lines: null, onPage: true, live: true });
+      page.set(seg, {
+        src: seg.src,
+        text: seg.tgt,
+        cls: 'pending',
+        lines: null,
+        shownLines: null,
+        onPage: true,
+        live: true,
+      });
       return seg;
     },
     unmount: (seg) => {
@@ -27,15 +39,16 @@ function standInView() {
       page.get(seg).live = false;
     },
     isMounted: (seg) => page.get(seg).onPage,
-    shownTranslation: (seg, code) => (code === undefined ? page.get(seg).text : page.get(seg).lines?.get(code)?.text),
+    shownTranslation: (seg, code) => (code === undefined ? shown(page.get(seg)) : page.get(seg).lines?.get(code)?.text),
     setText(seg, part, text, cls) {
       if (part === 'src') page.get(seg).src = text;
-      else Object.assign(page.get(seg), { text, cls });
+      else Object.assign(page.get(seg), { text, cls, shownLines: null });
     },
     setTargets(seg, codes) {
       if (page.get(seg).lines && sameTargets(seg.tgts, codes)) return false;
       seg.tgts = codes.map((code) => ({ lang: code, text: '' }));
       page.get(seg).lines = new Map();
+      page.get(seg).shownLines = page.get(seg).lines;
       return true;
     },
     clearTargets(seg) {
@@ -197,6 +210,27 @@ test('nothing is read aloud once the run has stopped', async () => {
   await settle();
   assert.equal(run.session.segments[0].tgt, 'Good morning, everyone.');
   assert.deepEqual(spoken, []);
+});
+
+test('a final translation into one language streams in place of the lines shown for the sentence in progress', async () => {
+  const { run, view, translator } = setup();
+  // Speech in neither language: the in-progress translation showed one line per language.
+  run.tracker.interim('안녕하세요 여러분');
+  const [seg] = view.page.keys();
+  view.setTargets(seg, ['ja-JP', 'en-US']);
+  view.setLine(seg, 'ja-JP', '皆さん、こんにちは', 'pending');
+  view.setLine(seg, 'en-US', 'Hello, everyone', 'pending');
+  // The finished text is mostly English, so it takes one request into Japanese.
+  run.tracker.final('안녕하세요, Zoom meeting.');
+  await settle();
+  assert.equal(translator.requests.length, 1);
+  translator.requests[0].options.onDelta('Zoom 会議');
+  assert.equal(view.page.get(seg).text, 'Zoom 会議');
+  assert.equal(view.shownTranslation(seg), 'Zoom 会議');
+  translator.requests[0].resolve('こんにちは、Zoom 会議。');
+  await settle();
+  assert.equal(seg.tgt, 'こんにちは、Zoom 会議。');
+  assert.equal(view.shownTranslation(seg), 'こんにちは、Zoom 会議。');
 });
 
 test('with three languages a sentence gets one translation line per other language, in the order of the selects', async () => {
