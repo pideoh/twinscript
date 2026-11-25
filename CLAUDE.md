@@ -23,7 +23,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/ui/` | Parts of the screen, i18n and message catalogs (`locales/`), icons, languages offered |
 | `src/debug/` | Recognizer trace, debug tools, the engines of the `?mock=1` demo |
 | `app/` | The desktop app (Electron): main process, preload bridge, and the rules that need no Electron (`policy`, `secrets`, `shortcuts`, `updates`) |
-| `scripts/` | Tools: commit check, price update, metrics, macOS signing, `tuning/` (replay and latency) |
+| `scripts/` | Tools: commit check, price update, metrics, macOS signing, what the browser tests cover (`e2e-coverage.mjs`), `tuning/` (replay and latency) |
 | `test/` | `unit/{src,app,scripts,rules}/`, `e2e/`, `desktop/`; see `test/README.md` |
 | `docs/` | Principles, tuning, API key guide, signing policy |
 | `.github/workflows/` | Tests, release (release-please), preview build, price check, metrics, signing check |
@@ -36,6 +36,7 @@ comment rather than expecting a description here, and keep it true when the file
 - `npm run lint`: Biome checks formatting and lint rules; `npm run format` applies the fixes. Run before committing.
 - `npm test`: unit tests. Run after every logic change.
 - `npm run test:e2e`: only when `src/app.js`, `src/speech/audio.js`, HTML or CSS changed.
+- `npm run test:e2e:coverage`: the browser tests, then a table of what they cover in `src/` (line % per file, uncovered ranges).
 - `npm start`: http://localhost:5173 (`?mock=1` for a demo without a key, `?debug=1` to log raw recognizer output, download a recognizer trace and use an audio file as input; see `docs/tuning.md`).
 - `npm run app`: start the desktop app. `npm run test:app` only when `app/` or the caption window changed.
 - `npm run dist:mac` / `npm run dist:win`: build zips into `dist/`.
