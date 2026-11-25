@@ -125,3 +125,57 @@ test('a start that comes before the saved sessions have loaded does nothing, and
   assert.deepEqual(errors, []);
   await close();
 });
+
+test('the controls that need a session wait for the saved sessions, and work afterwards', async () => {
+  // Presses each control at the moment the page attaches its handler, which is before the saved
+  // sessions have been read: until then there is no current session for them to act on.
+  const ids = [
+    'export',
+    'exportTranscript',
+    'summarize',
+    'summaryCopy',
+    'summaryDownload',
+    'summaryDelete',
+    'labelSpeakers',
+    'editSpeakers',
+    'speakerSave',
+  ];
+  const pressAtOnce = (ids) => {
+    window.earlyPresses = {};
+    const onclick = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'onclick');
+    const pending = new Set(ids);
+    new MutationObserver((_records, observer) => {
+      for (const id of [...pending]) {
+        const button = document.getElementById(id);
+        if (!button) continue;
+        pending.delete(id);
+        Object.defineProperty(button, 'onclick', {
+          configurable: true,
+          get: () => onclick.get.call(button),
+          set: (handler) => {
+            onclick.set.call(button, handler);
+            window.earlyPresses[id] = { disabled: button.disabled };
+            button.click();
+          },
+        });
+      }
+      if (!pending.size) observer.disconnect();
+    }).observe(document, { childList: true, subtree: true });
+  };
+  const { page, errors, close } = await openApp('?mock=1', undefined, { script: pressAtOnce, arg: ids });
+  assert.deepEqual(
+    await page.evaluate(() => window.earlyPresses),
+    Object.fromEntries(ids.map((id) => [id, { disabled: true }])),
+    'every control waits for the sessions',
+  );
+  assert.deepEqual(errors, []);
+  assert.equal(await page.isDisabled('#export'), false, 'the download button works once the sessions are shown');
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.getElementById('statusText').textContent !== '聞き取り中');
+  await page.click('#export');
+  assert.equal(await page.evaluate(() => document.getElementById('exportDialog').open), true);
+  assert.deepEqual(errors, []);
+  await close();
+});

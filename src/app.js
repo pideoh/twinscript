@@ -1145,13 +1145,27 @@ try {
 } catch {
   /* private mode */
 }
-// The main button is disabled in the HTML until there is a session to record into: a start that
-// came earlier (a click or a global shortcut right after opening) would find none.
+// The main button and the controls that act on the current session (download, summary, speaker
+// labels) are disabled in the HTML until there is a session: a press that came earlier (a click or
+// a global shortcut right after opening) would find none. None of them is disabled for another
+// reason; they are shown or hidden by the panels' own render functions, which have run by now.
 try {
   await showSession(sessions.find((x) => x.id === lastId) ?? blankSession());
 } finally {
   if (!current) await showSession(blankSession());
-  els.toggle.disabled = false;
+  for (const el of [
+    els.toggle,
+    els.export,
+    els.exportTranscript,
+    els.summarize,
+    els.summaryCopy,
+    els.summaryDownload,
+    els.summaryDelete,
+    els.labelSpeakers,
+    els.editSpeakers,
+    els.speakerSave,
+  ])
+    el.disabled = false;
 }
 if (MOCK) toast(t('toast.demo'), 4000);
 startUpdateChecks(); // not awaited: the app does not wait for GitHub
