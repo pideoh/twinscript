@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.15.0](https://github.com/pideoh/twinscript/compare/v0.14.0...v0.15.0) (2026-11-25)
+
+
+### Features
+
+* retry a translation after a passing server error ([#150](https://github.com/pideoh/twinscript/issues/150)) ([8219a13](https://github.com/pideoh/twinscript/commit/8219a130744602b9e21c09efea62fe21b7fca5b0)), closes [#147](https://github.com/pideoh/twinscript/issues/147)
+
+
+### Bug Fixes
+
+* count listening time once while the usage dialog is open ([#136](https://github.com/pideoh/twinscript/issues/136)) ([91e3dac](https://github.com/pideoh/twinscript/commit/91e3dacda8fb42b2d4e05ace6dc284510e511a25)), closes [#128](https://github.com/pideoh/twinscript/issues/128)
+* do not export or summarize before the saved sessions have loaded ([#137](https://github.com/pideoh/twinscript/issues/137)) ([63be8fd](https://github.com/pideoh/twinscript/commit/63be8fd62d0f653882659233d6c013ca1cb6fccb)), closes [#123](https://github.com/pideoh/twinscript/issues/123)
+* do not offer speaker labels in the demo ([#138](https://github.com/pideoh/twinscript/issues/138)) ([793460b](https://github.com/pideoh/twinscript/commit/793460b62e768a0b205fc4cf5b992907785502d0)), closes [#130](https://github.com/pideoh/twinscript/issues/130)
+* do not start before the saved sessions have loaded ([#121](https://github.com/pideoh/twinscript/issues/121)) ([3aecaad](https://github.com/pideoh/twinscript/commit/3aecaad9fed59a0f72bddc5386ad6c83ae9ed6f4))
+* keep a deleted session deleted while work on it finishes ([#139](https://github.com/pideoh/twinscript/issues/139)) ([d8df8eb](https://github.com/pideoh/twinscript/commit/d8df8eb9350982749ccfcef35ff727a35253db33)), closes [#122](https://github.com/pideoh/twinscript/issues/122)
+* say so when no translation comes back ([#151](https://github.com/pideoh/twinscript/issues/151)) ([fe373ff](https://github.com/pideoh/twinscript/commit/fe373ff8affbd481f1b8a5d6ef5b7f0d674aa561)), closes [#148](https://github.com/pideoh/twinscript/issues/148)
+* stream the final translation after a sentence shown in several languages ([#134](https://github.com/pideoh/twinscript/issues/134)) ([8b502d4](https://github.com/pideoh/twinscript/commit/8b502d44e7be4a3341aba116aca355ca44a53a30)), closes [#132](https://github.com/pideoh/twinscript/issues/132)
+* swap the two languages when one is set to the other's ([#146](https://github.com/pideoh/twinscript/issues/146)) ([4b521f4](https://github.com/pideoh/twinscript/commit/4b521f4f0c8f8c78a9504962634b4f0808aeaf19)), closes [#144](https://github.com/pideoh/twinscript/issues/144)
+
 ## [0.14.0](https://github.com/pideoh/twinscript/compare/v0.13.0...v0.14.0) (2026-11-25)
 
 
