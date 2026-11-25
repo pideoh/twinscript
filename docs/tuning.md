@@ -145,7 +145,7 @@ node scripts/tuning/replay.mjs test/fixtures/replay-trace.json --mock
 - Delay and flicker pull against each other: waiting longer rewrites less. Look at both columns together, and at
   `requests`, which is what a strategy costs.
 - Only the first two languages of a trace are replayed.
-- The replay copies the translation flow of `src/app.js` for two languages. When that flow changes, change
+- The replay copies the translation flow of `src/translation/flow.js` for two languages. When that flow changes, change
   `scripts/tuning/replay.mjs` with it.
 
 ### When answers are slow
