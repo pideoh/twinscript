@@ -27,6 +27,7 @@ import { UtteranceTracker } from './speech/segmenter.js';
 import { GeminiLiveTranscriber } from './speech/transcriber.js';
 import { applyReplacements, parseVocabulary } from './speech/vocabulary.js';
 import { loadApiKey, saveApiKey } from './storage/secrets.js';
+import { DEFAULTS, loadSettings, normalizeSettings, saveSettings as writeSettings } from './storage/settings.js';
 import { store } from './storage/store.js';
 import { createPacer, DEFAULT_STRATEGY, strategyNamed } from './translation/pacer.js';
 import { ReadAloud, readAloudLanguages } from './translation/read-aloud.js';
@@ -40,6 +41,7 @@ import {
 import { GeminiTranslator, RateLimitError } from './translation/translator.js';
 import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './ui/i18n.js';
 import { octicon } from './ui/icons.js';
+import { followPlace, LANGS, langLabel as labelIn, langName, langTag as tagAmong } from './ui/langs.js';
 import { MessageError } from './ui/message-error.js';
 import {
   afterCheck,
@@ -64,61 +66,6 @@ import {
   usageView,
 } from './usage/usage-stats.js';
 
-// code: what the recognizer is told; display: the tag whose name is shown in the UI language
-// (no region, but the script for Chinese); name: what the translation prompt says.
-const LANGS = [
-  { code: 'ja-JP', display: 'ja', name: 'Japanese' },
-  { code: 'en-US', display: 'en', name: 'English' },
-  { code: 'cmn-Hans-CN', display: 'zh-Hans', name: 'Simplified Chinese' },
-  { code: 'cmn-Hant-TW', display: 'zh-Hant', name: 'Traditional Chinese' },
-  { code: 'ko-KR', display: 'ko', name: 'Korean' },
-  { code: 'es-ES', display: 'es', name: 'Spanish' },
-  { code: 'fr-FR', display: 'fr', name: 'French' },
-  { code: 'de-DE', display: 'de', name: 'German' },
-  { code: 'it-IT', display: 'it', name: 'Italian' },
-  { code: 'pt-BR', display: 'pt', name: 'Portuguese' },
-  { code: 'vi-VN', display: 'vi', name: 'Vietnamese' },
-  { code: 'th-TH', display: 'th', name: 'Thai' },
-  { code: 'id-ID', display: 'id', name: 'Indonesian' },
-  { code: 'hi-IN', display: 'hi', name: 'Hindi' },
-];
-const DEFAULTS = {
-  langA: 'ja-JP',
-  langB: 'en-US',
-  langC: '', // an optional third language: every sentence is then translated into the other two
-  source: 'mic',
-  uiLang: 'auto',
-  translateModel: 'gemini-3.5-flash-lite',
-  interimTranslate: true,
-  smart: false,
-  record: true,
-  glossary: '',
-  vocabulary: '', // terms for the recognizer and `wrong => right` corrections, one per line
-  fontSize: 18,
-  // Speech in none of the selected languages goes into all of them ('all') or only into the one
-  // in that place ('A', 'B' or 'C').
-  otherInto: 'all',
-  // Translations into which language are read aloud: 'off', 'A', 'B', 'C' (three languages only) or
-  // 'both' (two languages only). A choice that does not fit the languages selected reads nothing.
-  readAloud: 'off',
-  captionItems: 3, // sentences kept in the caption zone, including the one being spoken
-  captionContent: 'both', // 'both' or 'tgt' (translation only) in the caption zone
-  // The same two with a third language, remembered apart. Translations only, so a sentence takes
-  // two lines there as well; fewer sentences would be replaced before they can be read.
-  captionItems3: 3,
-  captionContent3: 'tgt',
-  captionFontSize: 20, // text size while the caption zone is in the caption window
-  captionOpacity: 90, // background of the desktop caption overlay, in percent
-  clickThrough: false, // desktop caption overlay: mouse events go to the app underneath
-  globalShortcuts: true, // desktop app: start / stop and the caption window from any app
-  checkUpdates: true, // desktop app: ask GitHub once a day whether a newer version is out
-  interimInterval: 1.5, // seconds between re-translations of the sentence being spoken
-  summaryTemplate: DEFAULT_TEMPLATE, // the template, length and language last used for a summary
-  summaryLength: 'standard',
-  summaryLanguage: '', // a language code, or '' for the display language
-  // Prices for cost estimates that differ from src/usage/pricing.js: { [model]: { input?, output?, ... } }.
-  priceOverrides: {},
-};
 const HISTORY_LINES = 3;
 const SILENT_SYSTEM_AUDIO_MS = 8000; // how long PC audio may deliver nothing before the user is told
 const MOCK = new URLSearchParams(location.search).has('mock');
@@ -263,30 +210,21 @@ const els = Object.fromEntries(
 );
 
 // ---------- settings ----------
-// Returns the known settings only, plus the API key an earlier version kept in the same JSON.
-function loadSettings() {
-  let stored = {};
-  try {
-    stored = JSON.parse(localStorage.getItem('rt-settings') || '{}') ?? {};
-  } catch {
-    /* unreadable: start from the defaults */
-  }
-  const known = Object.fromEntries(Object.keys(DEFAULTS).map((name) => [name, stored[name] ?? DEFAULTS[name]]));
-  return { settings: known, legacyKey: typeof stored.apiKey === 'string' ? stored.apiKey : undefined };
-}
+// localStorage is reached only when a setting is read or written, so a page whose storage throws on
+// access starts from the defaults and keeps working (src/storage/settings.js catches it there).
+const settingsStorage = {
+  getItem: (name) => localStorage.getItem(name),
+  setItem: (name, value) => localStorage.setItem(name, value),
+};
 // The API key is not part of the settings: it is never written to localStorage (see secrets.js).
 function saveSettings() {
-  try {
-    localStorage.setItem('rt-settings', JSON.stringify(settings));
-  } catch {
-    /* private mode */
-  }
+  writeSettings(settingsStorage, settings);
 }
 // Earlier versions kept the key in the settings JSON: move it out and rewrite the JSON without it.
-const { settings, legacyKey } = loadSettings();
+const { settings, legacyKey } = loadSettings(settingsStorage);
 let { key: apiKey, storage: keyStorage } = await loadApiKey(window.secretStore, legacyKey);
 if (legacyKey !== undefined) saveSettings();
-// The caption zone keeps its own settings while a third language is selected (see DEFAULTS).
+// The caption zone keeps its own settings while a third language is selected (see DEFAULTS in settings.js).
 const captionKey = (name) => (settings.langC ? `${name}3` : name);
 const reader = new ReadAloud(); // reads finished translations aloud
 let captionWindow = null; // always-on-top caption window, when open
@@ -303,15 +241,7 @@ function applyLocale() {
   applyTranslations(document);
   els.nowList.dataset.empty = t('now.empty');
 }
-const langLabel = (code) => {
-  const l = LANGS.find((x) => x.code === code);
-  if (!l) return code;
-  try {
-    return languageNames?.of(l.display) ?? l.name;
-  } catch {
-    return l.name;
-  }
-};
+const langLabel = (code) => labelIn(code, languageNames);
 // Re-renders everything on screen that is not static markup.
 function relocalize() {
   applyLocale();
@@ -363,11 +293,8 @@ els.langC.add(new Option(t('header.langC.none'), ''));
 for (const l of LANGS) els.langC.add(new Option(langLabel(l.code), l.code));
 els.langA.value = settings.langA;
 els.langB.value = settings.langB;
-if (!LANGS.some((l) => l.code === settings.langC) || [settings.langA, settings.langB].includes(settings.langC))
-  settings.langC = '';
+normalizeSettings(settings); // a stored third language or choice for other languages that no longer fits
 els.langC.value = settings.langC;
-if (!['all', 'A', 'B', 'C'].includes(settings.otherInto) || (settings.otherInto === 'C' && !settings.langC))
-  settings.otherInto = 'all';
 if (!canCaptureSystemAudio()) {
   for (const option of els.source.querySelectorAll('option:not([value=mic])')) option.remove();
   settings.source = 'mic';
@@ -413,12 +340,8 @@ function onThirdLangChange() {
 function setLangs(a, b, c) {
   const was = { A: settings.langA, B: settings.langB, C: settings.langC };
   const now = { A: a, B: b, C: c };
-  const follow = (side, sides) =>
-    sides.includes(side) && was[side] ? (sides.find((s) => now[s] === was[side]) ?? side) : side;
-  settings.otherInto = follow(settings.otherInto, ['A', 'B', 'C']);
-  if (settings.otherInto === 'C' && !c) settings.otherInto = 'all';
-  settings.readAloud = follow(settings.readAloud, ['A', 'B', 'C']);
-  if (settings.readAloud === 'C' && !c) settings.readAloud = 'off';
+  settings.otherInto = followPlace(settings.otherInto, was, now, 'all');
+  settings.readAloud = followPlace(settings.readAloud, was, now, 'off');
   Object.assign(settings, { langA: a, langB: b, langC: c });
 }
 function langsChanged() {
@@ -950,15 +873,9 @@ function tagSource(seg) {
   }
   seg.srcEl.dataset.lang = lang ? langTag(lang.code) : '';
 }
-// The short code that leads a translation line: "EN", "JA", "ZH". All tags have the same width,
-// so the translations start at the same place. Two selected languages that share the code
-// (Simplified and Traditional Chinese) keep their full one.
+// The short code that leads a translation line, told apart among the selected languages (src/ui/langs.js).
 function langTag(code) {
-  const display = LANGS.find((l) => l.code === code)?.display ?? code;
-  const short = (d) => d.split('-')[0];
-  const selected = [settings.langA, settings.langB, settings.langC].filter((c) => c && c !== code);
-  const clash = selected.some((c) => short(LANGS.find((l) => l.code === c)?.display ?? c) === short(display));
-  return (clash ? display : short(display)).toUpperCase();
+  return tagAmong(code, [settings.langA, settings.langB, settings.langC]);
 }
 function setLine(seg, code, text, cls) {
   const wasNear = nearBottom();
@@ -1294,7 +1211,6 @@ try {
 }
 const shownSummaryId = new WeakMap(); // session -> id of the summary on screen (default: the latest)
 const hasFinished = (sess) => sess.segments.some((seg) => seg.src);
-const langName = (code) => LANGS.find((l) => l.code === code)?.name;
 const displayLangCode = () => LANGS.find((l) => l.display === getLocale())?.code;
 
 // Custom templates are kept in localStorage under their own key, apart from the settings (which

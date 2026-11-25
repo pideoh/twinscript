@@ -27,6 +27,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/speech/auto-gain.js` | Raises quiet PC audio to a usable level (not applied to the microphone). Pure class |
 | `src/speech/recorder.js` | Records with MediaRecorder, handing over a chunk every 5 seconds |
 | `src/storage/store.js` | IndexedDB, version 3: `sessions` (metadata and `segmentCount`, no segments), `segments` (one record per segment, key `[sessionId, pos]`, loaded when a session is opened; a save writes only changed segments), `summaries` (one record per summary, key `[sessionId, id]`) and `audio` (recording chunks). The upgrade from version 1 moves segments out of the session records. Three-language sessions add `langC` and, per segment, `lang` and `tgts`; `tgt` stays the translations joined by line breaks. A session's metadata carries its `usage` record; segments may carry `speaker`, and the metadata `speakerLabels` |
+| `src/storage/settings.js` | Settings: `DEFAULTS`, load / save as JSON in `localStorage` under `rt-settings` (storage passed in), the API key an earlier version kept there, and `normalizeSettings` for stored choices that no longer fit. Checks that depend on the page stay in `app.js`. DOM-free |
 | `src/storage/secrets.js` | Where the API key is kept (desktop: `window.secretStore`; browser: memory only). DOM-free |
 | `src/ui/update-check.js` | When the desktop app checks for a newer version (at start, then at most once every 24 hours, only with "Check for new versions" on) and which version the notice announces; state in `localStorage` under `rt-update`, dismissed versions. Pure, DOM-free |
 | `src/session/exporter.js` | Transcript export (txt / md / csv / srt). Pure functions |
@@ -34,6 +35,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `src/translation/pacer.js` | When the sentence being spoken is translated: pacing strategies `interval`, `steady`, `carry` (each request continues the translation on screen), `chunk` and `settle` (the app's default: `carry`, and a finished sentence keeps a shown translation that already covers it); `?debug=1&pacer=<name>` selects one. DOM-free, clock and timers injected |
 | `src/debug/trace.js` | Debug-only (`?debug=1`) trace of raw recognizer results with times; JSON format v1 and the download file name. DOM-free |
 | `src/debug/debug-tools.js` | Debug-only tools wired into `app.js`: the "Audio file (debug)" input and file picker, the trace download entry |
+| `src/ui/langs.js` | The spoken languages offered (`LANGS`), their English names, labels in the display language and short codes on translation lines, and `followPlace`: a setting stored as a place (A / B / C) follows its language when languages swap or the third is switched on or off. Pure |
 | `src/ui/i18n.js` | Display-language resolution (`resolveLocale`), `t(key, params)`, applying `data-i18n*` to static HTML. Languages are registered only in its `LOCALES` array |
 | `src/ui/locales/*.js` | Message catalogs (`en` is the reference and fallback, `ja`, `zh-Hans`). Dotted keys |
 | `src/ui/icons.js` | Octicons (SVG) for buttons that are created at runtime |
