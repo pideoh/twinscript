@@ -29,10 +29,10 @@ jobs:
       - run: npm ci
       - run: npm run lint
       # Unit tests with a coverage summary in the log.
-      - run: node --test --experimental-test-coverage test/*.test.js
+      - run: node --test --experimental-test-coverage "test/unit/**/*.test.js"
       # The test files run in parallel. Node's default is one fewer than the CPU count, which is a
       # single file at a time on a two-core runner; the tests mostly wait, so four at once is fine.
-      - run: node --test --test-concurrency=4 test/e2e/*.e2e.js
+      - run: node --test --test-concurrency=4 "test/e2e/*.e2e.js"
 
   # The unit tests cover path handling and process rules for the desktop app, which differ by OS.
   unit-other-os:

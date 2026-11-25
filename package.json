@@ -11,9 +11,9 @@
     "start": "python3 -m http.server 5173",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "test": "node --test test/*.test.js",
-    "test:e2e": "node --test test/e2e/*.e2e.js",
-    "test:app": "node --test test/app/*.app.js",
+    "test": "node --test \"test/unit/**/*.test.js\"",
+    "test:e2e": "node --test \"test/e2e/*.e2e.js\"",
+    "test:app": "node --test \"test/desktop/*.app.js\"",
     "app": "electron .",
     "dist:mac": "electron-builder --mac zip --arm64 --x64",
     "dist:win": "electron-builder --win zip --x64 --arm64"
