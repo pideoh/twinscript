@@ -200,11 +200,14 @@ export function createFlow({
     const history = recentHistory(r);
     seg.rev = (seg.rev || 0) + 1; // a segment can be re-translated when its text is corrected
     const rev = seg.rev;
+    // Lines shown for the sentence in progress (one per language) stay on the page until replaced;
+    // they are not a single translation the final one could swap with, so it streams over them.
+    const hadLines = !!seg.tgts;
     view.clearTargets(seg);
     const shown = () => seg.rev === rev && view.isMounted(seg);
     // If a translation of the in-progress text is already on screen, swap it once when the final one
     // is complete rather than replacing it with a few words that grow again.
-    const swapWhenDone = !!view.shownTranslation(seg);
+    const swapWhenDone = !hadLines && !!view.shownTranslation(seg);
     // settle: an in-progress translation of the same text is the final one, without another request.
     let answers = settledAnswers(handover);
     if (answers instanceof Promise) answers = await answers;
@@ -240,9 +243,6 @@ export function createFlow({
     }
   }
 
-  // With a third language: which language the sentence is in comes from its writing system, or else
-  // from the model; then it is translated into each of the others at once, each into its own line.
-  // With two languages this is only reached for a sentence the writing system shows is in neither.
   // The steps after a sentence's single final translation is in, whether it was requested or settled.
   function finishFinal(r, seg, out, target) {
     seg.tgt = out;
@@ -251,6 +251,9 @@ export function createFlow({
     if (!seg.spoken) seg.spoken = readTranslation(r, out, target);
   }
 
+  // With a third language: which language the sentence is in comes from its writing system, or else
+  // from the model; then it is translated into each of the others at once, each into its own line.
+  // With two languages this is only reached for a sentence the writing system shows is in neither.
   async function translateFinalLines(r, seg) {
     const handover = takeHandover(seg);
     const { previous } = handover;
