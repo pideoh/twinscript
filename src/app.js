@@ -2,25 +2,12 @@ import { addFileSourceOption, FILE_TAIL_MS, pickAudioFile, traceDownloadButton }
 import { MockSummarizer, MockTranscriber, MockTranslator } from './debug/mock.js';
 import { createTrace } from './debug/trace.js';
 import { MODEL as DIARIZE_MODEL, GeminiDiarizer, labelSpeakers } from './session/diarizer.js';
-import { buildTranscript, formatDateTime, formatElapsed, safeFileName } from './session/exporter.js';
+import { formatDateTime, formatElapsed, safeFileName } from './session/exporter.js';
 import { markdownToHtml } from './session/markdown.js';
 import { decodeRecording } from './session/speaker-audio.js';
 import { assignSpeakers, recordingTimeline } from './session/speakers.js';
 import { GeminiSummarizer, legacySummaryToMarkdown } from './session/summarizer.js';
-import {
-  DEFAULT_TEMPLATE,
-  exportTemplates,
-  LENGTHS,
-  MAX_FILE_BYTES,
-  MAX_TEMPLATES,
-  mergeTemplates,
-  PRESETS,
-  parseTemplateFile,
-  presetById,
-  readStoredTemplates,
-  storedTemplatesJson,
-  validateTemplate,
-} from './session/summary-templates.js';
+import { DEFAULT_TEMPLATE, LENGTHS, PRESETS, presetById } from './session/summary-templates.js';
 import { AudioCapture, canCaptureSystemAudio, inMacDesktopApp } from './speech/audio.js';
 import { canRecord, Recorder } from './speech/recorder.js';
 import { UtteranceTracker } from './speech/segmenter.js';
@@ -39,32 +26,17 @@ import {
   targetLanguages,
 } from './translation/script-hint.js';
 import { GeminiTranslator, RateLimitError } from './translation/translator.js';
+import { createExportDialog } from './ui/export-dialog.js';
 import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale, t } from './ui/i18n.js';
 import { octicon } from './ui/icons.js';
 import { followPlace, LANGS, langLabel as labelIn, langName, langTag as tagAmong } from './ui/langs.js';
 import { MessageError } from './ui/message-error.js';
-import {
-  afterCheck,
-  checkDue,
-  dismissVersion,
-  readUpdateState,
-  UPDATE_KEY,
-  versionToAnnounce,
-} from './ui/update-check.js';
-import { formatUsd, mergePrices, PRICES } from './usage/pricing.js';
-import { addListening, addTokens, addUsage, emptyUsage } from './usage/usage.js';
-import {
-  addToDaily,
-  DAILY_KEY,
-  emptyDaily,
-  formatDuration,
-  LIVE_MODEL,
-  overridesFromFields,
-  readDaily,
-  sessionRows,
-  totalsRows,
-  usageView,
-} from './usage/usage-stats.js';
+import { createShortcutsPanel } from './ui/shortcuts-panel.js';
+import { createTemplateEditor, createTemplateStore } from './ui/template-editor.js';
+import { createUpdateNotice } from './ui/update-notice.js';
+import { createUsageDialog } from './ui/usage-dialog.js';
+import { addTokens, emptyUsage } from './usage/usage.js';
+import { createUsageLog } from './usage/usage-log.js';
 
 const HISTORY_LINES = 3;
 const SILENT_SYSTEM_AUDIO_MS = 8000; // how long PC audio may deliver nothing before the user is told
@@ -210,18 +182,18 @@ const els = Object.fromEntries(
 );
 
 // ---------- settings ----------
-// localStorage is reached only when a setting is read or written, so a page whose storage throws on
-// access starts from the defaults and keeps working (src/storage/settings.js catches it there).
-const settingsStorage = {
+// localStorage is reached only when something is read or written, so a page whose storage throws on
+// access starts from the defaults and keeps working (the modules it is passed to catch it there).
+const browserStorage = {
   getItem: (name) => localStorage.getItem(name),
   setItem: (name, value) => localStorage.setItem(name, value),
 };
 // The API key is not part of the settings: it is never written to localStorage (see secrets.js).
 function saveSettings() {
-  writeSettings(settingsStorage, settings);
+  writeSettings(browserStorage, settings);
 }
 // Earlier versions kept the key in the settings JSON: move it out and rewrite the JSON without it.
-const { settings, legacyKey } = loadSettings(settingsStorage);
+const { settings, legacyKey } = loadSettings(browserStorage);
 let { key: apiKey, storage: keyStorage } = await loadApiKey(window.secretStore, legacyKey);
 if (legacyKey !== undefined) saveSettings();
 // The caption zone keeps its own settings while a third language is selected (see DEFAULTS in settings.js).
@@ -586,20 +558,6 @@ function blankSession() {
   };
 }
 
-const serialize = (sess) => ({
-  ...sess,
-  segments: sess.segments.map(({ id, at, elapsed, src, tgt, lang, tgts, speaker }) => ({
-    id,
-    at,
-    elapsed,
-    src,
-    tgt,
-    ...(lang && { lang }),
-    ...(tgts && { tgts: tgts.map(({ lang, text }) => ({ lang, text })) }),
-    ...(speaker && { speaker }),
-  })),
-});
-
 function markDirty(sess) {
   dirty.add(sess);
   clearTimeout(saveTimer);
@@ -943,121 +901,40 @@ applyCaptionOptions();
 if (settings.clickThrough) applyClickThrough();
 
 // ---------- global shortcuts (desktop app) ----------
-// The main process registers them (app/shortcuts.js); each one does what its button does.
-let shortcutStatus = null; // { enabled, shortcuts: [{ command, label, registered }] }
-els.shortcutsGroup.hidden = !window.appShortcuts;
-
-function renderShortcuts() {
-  if (!shortcutStatus) return;
-  els.globalShortcuts.checked = shortcutStatus.enabled;
-  els.shortcutList.replaceChildren(
-    ...shortcutStatus.shortcuts.flatMap((s) => {
-      const name = document.createElement('dt');
-      name.textContent = t(`settings.shortcuts.${s.command}`);
-      const keys = document.createElement('dd');
-      const kbd = document.createElement('kbd');
-      kbd.textContent = s.label;
-      keys.append(kbd);
-      if (shortcutStatus.enabled && !s.registered) {
-        const note = document.createElement('span');
-        note.className = 'shortcut-unavailable';
-        note.textContent = t('settings.shortcuts.unavailable');
-        keys.prepend(note);
-      }
-      return [name, keys];
-    }),
-  );
-}
-async function showShortcuts() {
-  if (!window.appShortcuts) return;
-  try {
-    shortcutStatus = await window.appShortcuts.status();
-  } catch {
-    return;
-  }
-  renderShortcuts();
-}
-async function applyGlobalShortcuts() {
-  if (!window.appShortcuts) return;
-  try {
-    shortcutStatus = await window.appShortcuts.setEnabled(settings.globalShortcuts);
-  } catch {
-    return;
-  }
-  renderShortcuts();
-}
-window.appShortcuts?.onCommand((command) => {
-  if (command === 'toggle') els.toggle.click();
-  else if (command === 'captions' && !els.pip.hidden) els.pip.click();
+// The settings' list of shortcuts and their switch (src/ui/shortcuts-panel.js); each shortcut does
+// what its button does.
+const shortcutsPanel = createShortcutsPanel({
+  els,
+  t,
+  settings,
+  bridge: () => window.appShortcuts,
+  onCommand: (command) => {
+    if (command === 'toggle') els.toggle.click();
+    else if (command === 'captions' && !els.pip.hidden) els.pip.click();
+  },
 });
-if (window.appShortcuts && !settings.globalShortcuts) applyGlobalShortcuts();
+function renderShortcuts() {
+  shortcutsPanel.render();
+}
+function showShortcuts() {
+  return shortcutsPanel.show();
+}
+function applyGlobalShortcuts() {
+  return shortcutsPanel.apply();
+}
 
 // ---------- newer versions (desktop app) ----------
-// The main process asks GitHub (app/updates.js); this page decides when (src/ui/update-check.js): at
-// start and then at most once every 24 hours, only while the setting is on. The last answer is
-// kept, so the notice comes back at the next start without a request until it is dismissed or
-// the app is updated. Failures say nothing.
-const UPDATE_LOOK_MS = 60 * 60 * 1000; // how often a long-running app looks whether a check is due
-let updateState = readUpdateState(null);
-let runningVersion = null;
-let updateChecking = false;
-els.updatesGroup.hidden = !window.appUpdates;
-
-function saveUpdateState() {
-  try {
-    localStorage.setItem(UPDATE_KEY, JSON.stringify(updateState));
-  } catch {
-    /* private mode */
-  }
-}
+// The notice of a newer version, and when to ask for one (src/ui/update-notice.js).
+const updateNotice = createUpdateNotice({ els, t, settings, storage: browserStorage, bridge: () => window.appUpdates });
 function showUpdateNotice() {
-  const version = window.appUpdates && settings.checkUpdates ? versionToAnnounce(updateState, runningVersion) : null;
-  els.updateNotice.hidden = !version;
-  if (version) {
-    els.updateNotice.dataset.version = version;
-    els.updateText.textContent = t('update.available', { version });
-  }
+  updateNotice.show();
 }
-async function checkForUpdates() {
-  if (!window.appUpdates || !runningVersion || updateChecking) return showUpdateNotice();
-  if (settings.checkUpdates && checkDue(updateState, Date.now())) {
-    updateChecking = true;
-    let result = null;
-    try {
-      result = await window.appUpdates.check();
-    } catch (err) {
-      console.warn('update check failed', err);
-    }
-    updateChecking = false;
-    updateState = afterCheck(updateState, result, Date.now());
-    saveUpdateState();
-  }
-  showUpdateNotice();
+function checkForUpdates() {
+  return updateNotice.check();
 }
-async function startUpdateChecks() {
-  if (!window.appUpdates) return;
-  try {
-    updateState = readUpdateState(localStorage.getItem(UPDATE_KEY));
-  } catch {
-    /* private mode: start empty */
-  }
-  try {
-    runningVersion = await window.appUpdates.version();
-  } catch (err) {
-    console.warn('running version unknown', err);
-    return;
-  }
-  await checkForUpdates();
-  setInterval(checkForUpdates, UPDATE_LOOK_MS);
+function startUpdateChecks() {
+  return updateNotice.start();
 }
-els.updateOpen.onclick = () => {
-  window.appUpdates?.openReleasePage(els.updateNotice.dataset.version).catch(() => {});
-};
-els.updateDismiss.onclick = () => {
-  updateState = dismissVersion(updateState, els.updateNotice.dataset.version);
-  saveUpdateState();
-  showUpdateNotice();
-};
 
 async function openCaptionWindow() {
   // Electron exposes documentPictureInPicture but requestWindow fails there, so check it first.
@@ -1129,74 +1006,24 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
 }
 
-els.export.onclick = () => {
-  if (isEmpty(current) && !(DEBUG && lastTrace)) return toast(t('toast.nothingToSave'));
-  flushSaves(); // so the title and recording lengths are up to date
-  const sess = current;
-  const rows = sess.recordings.map((rec, i) => {
-    const row = document.createElement('div');
-    row.className = 'rec';
-    const info = document.createElement('span');
-    const length = run?.recording === rec ? t('export.recordingNow') : formatElapsed(rec.durationMs);
-    info.textContent = t('export.recording', { n: i + 1, date: formatDateTime(rec.startedAt), length });
-    const save = document.createElement('button');
-    save.type = 'button';
-    save.className = 'btn';
-    const label = document.createElement('span');
-    label.textContent = t('export.save');
-    save.append(octicon('download'), label);
-    save.onclick = async () => {
-      const chunks = await store.getAudioChunks(sess.id, rec.id).catch(() => []);
-      if (!chunks.length) return toast(t('toast.recordingMissing'), 6000, 'critical');
-      const ext = rec.mime.includes('mp4') ? 'm4a' : 'webm';
-      download(new Blob(chunks, { type: rec.mime }), `${safeFileName(sess.title)}-${i + 1}.${ext}`);
-    };
-    row.append(info, save);
-    return row;
-  });
-  if (rows.length) {
-    const heading = document.createElement('h3');
-    heading.textContent = t('export.recordings');
-    rows.unshift(heading);
-  }
-  if (DEBUG && lastTrace) rows.push(traceDownloadButton(lastTrace, download));
-  els.recordings.replaceChildren(...rows);
-  els.exportDialog.showModal();
-};
-
-els.exportTranscript.onclick = () => {
-  if (!current.segments.length) return toast(t('toast.noTranscript'));
-  const latest = summariesOf(current).at(-1);
-  const exported = serialize(current);
-  // Names, not ids, go into the file; a session without labels has none.
-  for (const seg of exported.segments) seg.speaker = speakerName(current, seg.speaker);
-  const { text, ext, mime } = buildTranscript(exported, {
-    format: els.exportFormat.value,
-    content: els.exportContent.value,
-    langLabel,
-    // The latest summary; the panel downloads any other one on its own.
-    summary: latest && { markdown: latest.markdown, title: latest.templateName, truncated: latest.truncated },
-    labels: {
-      ...Object.fromEntries(
-        [
-          'title',
-          'date',
-          'languages',
-          'duration',
-          'time',
-          'speaker',
-          'source',
-          'translation',
-          'separator',
-          'transcript',
-        ].map((k) => [k, t(`file.${k}`)]),
-      ),
-      summary: t('summary.title'),
-      summaryTruncated: t('summary.truncated'),
-    },
-  });
-  download(new Blob([text], { type: `${mime};charset=utf-8` }), `${safeFileName(current.title)}.${ext}`);
-};
+// The download dialog (src/ui/export-dialog.js).
+createExportDialog({
+  els,
+  t,
+  octicon,
+  store,
+  toast,
+  download,
+  getCurrent: () => current,
+  getRun: () => run,
+  isEmpty,
+  flushSaves,
+  getTrace: () => (DEBUG ? lastTrace : null),
+  traceButton: (trace) => traceDownloadButton(trace, download),
+  summariesOf,
+  speakerName,
+  langLabel,
+});
 
 // ---------- summary ----------
 // One summary request at a time; every summary made is kept with its session, newest last. The
@@ -1213,24 +1040,10 @@ const shownSummaryId = new WeakMap(); // session -> id of the summary on screen 
 const hasFinished = (sess) => sess.segments.some((seg) => seg.src);
 const displayLangCode = () => LANGS.find((l) => l.display === getLocale())?.code;
 
-// Custom templates are kept in localStorage under their own key, apart from the settings (which
-// are rewritten on every change); at most MAX_TEMPLATES of at most ~8 KB each stay well inside
-// the browser's quota for this origin.
-const TEMPLATES_KEY = 'rt-summary-templates';
-let customTemplates = [];
-try {
-  customTemplates = readStoredTemplates(localStorage.getItem(TEMPLATES_KEY));
-} catch {
-  /* private mode */
-}
-// Throws when the browser refuses to store them (quota, private mode).
-function saveTemplates(list) {
-  localStorage.setItem(TEMPLATES_KEY, storedTemplatesJson(list));
-  customTemplates = list;
-}
-const templateById = (id) => presetById(id) ?? customTemplates.find((tpl) => tpl.id === id) ?? null;
-const templateName = (tpl) => (tpl.preset ? t(tpl.nameKey) : tpl.name);
-const templateDescription = (tpl) => (tpl.preset ? t(tpl.descriptionKey) : tpl.description);
+// The user's own templates (src/ui/template-editor.js), read from localStorage here.
+const templates = createTemplateStore({ storage: browserStorage, t });
+const templateById = (id) => templates.byId(id);
+const templateName = (tpl) => templates.name(tpl);
 
 // A summary made by an earlier version, shown as the session's oldest summary. It stays on disk
 // as it was until it is deleted; its Markdown is made here, in the display language.
@@ -1270,7 +1083,7 @@ function fillSummaryTemplates() {
   };
   els.summaryTemplate.replaceChildren(
     group(t('summary.presets'), PRESETS),
-    ...(customTemplates.length ? [group(t('summary.custom'), customTemplates)] : []),
+    ...(templates.custom().length ? [group(t('summary.custom'), templates.custom())] : []),
   );
   if (!templateById(settings.summaryTemplate)) settings.summaryTemplate = DEFAULT_TEMPLATE;
   els.summaryTemplate.value = settings.summaryTemplate;
@@ -1713,486 +1526,68 @@ els.speakerDialog.addEventListener('close', () => {
 });
 
 // ---------- summary templates (settings dialog) ----------
-let editingTemplate = null; // { id } of the template in the editor; id null for a new one
-
-function showTemplateStatus(message, variant = 'info') {
-  els.templateStatus.textContent = message;
-  els.templateStatus.dataset.variant = variant;
-  els.templateStatus.hidden = false;
-}
-
+const templateEditor = createTemplateEditor({
+  els,
+  t,
+  octicon,
+  templates,
+  uid,
+  errorText,
+  download,
+  onTemplatesChanged: () => fillSummaryTemplates(),
+});
 function renderTemplateList() {
-  const action = (icon, label, fn) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'icon-btn';
-    button.title = label.short;
-    button.setAttribute('aria-label', label.full);
-    button.append(octicon(icon));
-    button.onclick = fn;
-    return button;
-  };
-  els.templateList.replaceChildren(
-    ...[...PRESETS, ...customTemplates].map((tpl) => {
-      const name = templateName(tpl);
-      const row = document.createElement('li');
-      row.className = 'template-row';
-      const text = document.createElement('div');
-      text.className = 'template-text';
-      const title = document.createElement('span');
-      title.className = 'template-name';
-      title.textContent = name;
-      text.append(title);
-      if (tpl.preset) {
-        const badge = document.createElement('span');
-        badge.className = 'label';
-        badge.textContent = t('templates.builtIn');
-        text.append(' ', badge);
-      }
-      const description = templateDescription(tpl);
-      if (description) {
-        const line = document.createElement('span');
-        line.className = 'template-description';
-        line.textContent = description;
-        text.append(line);
-      }
-      const acts = document.createElement('div');
-      acts.className = 'template-acts';
-      const label = (key, full) => ({ short: t(key), full: t(full, { name }) });
-      acts.append(
-        action('copy', label('templates.duplicate', 'templates.duplicateOf'), () => openTemplateEditor(tpl, true)),
-      );
-      if (!tpl.preset)
-        acts.append(
-          action('pencil', label('templates.edit', 'templates.editOf'), () => openTemplateEditor(tpl)),
-          action('trash', label('templates.delete', 'templates.deleteOf'), () => deleteTemplate(tpl)),
-        );
-      row.append(text, acts);
-      return row;
-    }),
-  );
-  els.templateExport.disabled = !customTemplates.length;
-  els.templateNew.disabled = customTemplates.length >= MAX_TEMPLATES;
-}
-
-// tpl: the template to edit, or to start from when `copy` (a duplicate); none for a new one.
-function openTemplateEditor(tpl, copy = false) {
-  editingTemplate = { id: tpl && !copy ? tpl.id : null };
-  els.templateEditorTitle.textContent = t(editingTemplate.id ? 'templates.editTitle' : 'templates.newTitle');
-  els.templateName.value = tpl
-    ? (copy ? t('templates.copyName', { name: templateName(tpl) }) : tpl.name).slice(0, els.templateName.maxLength)
-    : '';
-  els.templateDescription.value = tpl ? templateDescription(tpl) : '';
-  els.templatePrompt.value = tpl?.prompt ?? '';
-  els.templateError.hidden = true;
-  els.templateStatus.hidden = true;
-  els.templateEditor.hidden = false;
-  els.templateEditor.scrollIntoView({ block: 'nearest' });
-  els.templateName.focus();
+  templateEditor.renderList();
 }
 function closeTemplateEditor() {
-  editingTemplate = null;
-  els.templateEditor.hidden = true;
+  templateEditor.close();
 }
-function templatesChanged() {
-  fillSummaryTemplates();
-  renderTemplateList();
-}
-
-els.templateNew.onclick = () => openTemplateEditor(null);
-els.templateCancel.onclick = () => {
-  closeTemplateEditor();
-  els.templateNew.focus();
-};
-// Enter in a one-line field would submit the settings form and close the dialog.
-for (const input of [els.templateName, els.templateDescription]) {
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') e.preventDefault();
-  });
-}
-els.templateSave.onclick = () => {
-  const error = (message) => {
-    els.templateError.textContent = message;
-    els.templateError.hidden = false;
-  };
-  if (!els.templateName.value.trim()) return error(t('templates.nameRequired'));
-  if (!els.templatePrompt.value.trim()) return error(t('templates.promptRequired'));
-  let template;
-  try {
-    template = validateTemplate({
-      id: editingTemplate?.id ?? uid(),
-      name: els.templateName.value,
-      description: els.templateDescription.value,
-      prompt: els.templatePrompt.value,
-    });
-  } catch (err) {
-    return error(errorText(err));
-  }
-  const list = customTemplates.some((tpl) => tpl.id === template.id)
-    ? customTemplates.map((tpl) => (tpl.id === template.id ? template : tpl))
-    : [...customTemplates, template];
-  try {
-    if (list.length > MAX_TEMPLATES) throw new MessageError('templates.error.tooMany', { max: MAX_TEMPLATES });
-    saveTemplates(list);
-  } catch (err) {
-    return error(t('templates.saveFailed', { message: errorText(err) }));
-  }
-  closeTemplateEditor();
-  templatesChanged();
-  showTemplateStatus(t('templates.saved', { name: template.name }));
-  els.templateNew.focus();
-};
-
-function deleteTemplate(tpl) {
-  if (!confirm(t('templates.deleteConfirm', { name: tpl.name }))) return;
-  try {
-    saveTemplates(customTemplates.filter((x) => x.id !== tpl.id));
-  } catch (err) {
-    return showTemplateStatus(t('templates.saveFailed', { message: errorText(err) }), 'critical');
-  }
-  if (editingTemplate?.id === tpl.id) closeTemplateEditor();
-  templatesChanged();
-  showTemplateStatus(t('templates.deleted', { name: tpl.name }));
-  els.templateNew.focus();
-}
-
-els.templateExport.onclick = () => {
-  if (!customTemplates.length) return;
-  download(
-    new Blob([exportTemplates(customTemplates)], { type: 'application/json' }),
-    'twinscript-summary-templates.json',
-  );
-};
-els.templateImport.onclick = () => els.templateImportFile.click();
-els.templateImportFile.onchange = async () => {
-  const file = els.templateImportFile.files[0];
-  els.templateImportFile.value = '';
-  if (!file) return;
-  try {
-    if (file.size > MAX_FILE_BYTES)
-      throw new MessageError('templates.error.tooLarge', { max: Math.round(MAX_FILE_BYTES / 1000) });
-    const imported = parseTemplateFile(await file.text(), { newId: uid });
-    const { templates, added, replaced } = mergeTemplates(customTemplates, imported);
-    saveTemplates(templates);
-    templatesChanged();
-    showTemplateStatus(t('templates.imported', { added, replaced }));
-  } catch (err) {
-    showTemplateStatus(t('templates.importFailed', { message: errorText(err) }), 'critical');
-  }
-};
 
 // ---------- usage and cost estimates ----------
-// Each session keeps what it used in `usage` (src/usage/usage.js), saved with its metadata. The same usage
-// is added to running totals per calendar day in localStorage (src/usage/usage-stats.js), which outlive the
-// sessions. In the demo mode the made-up usage goes into its session only, which is marked `demo`;
-// the daily totals, the only source of the totals shown, never see it. `usagePartial` marks a session
-// from before usage was counted that was used again afterwards: only the later part is known.
-function currentPrices() {
-  try {
-    return mergePrices(PRICES, settings.priceOverrides);
-  } catch {
-    return PRICES; // stored overrides that are not valid (edited by hand) are ignored
-  }
-}
-function readDailyTotals() {
-  try {
-    return readDaily(localStorage.getItem(DAILY_KEY));
-  } catch {
-    return emptyDaily();
-  }
-}
-function addToDailyTotals(usage) {
-  try {
-    // Read again each time: another window of the app may have added to them.
-    const daily = readDailyTotals();
-    if (!daily.readOnly) localStorage.setItem(DAILY_KEY, JSON.stringify(addToDaily(daily, usage)));
-  } catch {
-    /* private mode or full storage: the session keeps its own record */
-  }
-}
+// What each session used and the daily totals (src/usage/usage-log.js), the usage dialog and the price
+// fields in the settings (src/ui/usage-dialog.js). In the demo mode the made-up usage goes into its
+// session only.
+const usageLog = createUsageLog({
+  settings,
+  storage: browserStorage,
+  demo: MOCK,
+  isEmpty,
+  markDirty,
+  onRecorded: () => usageDialog.refresh(),
+});
+const usageDialog = createUsageDialog({
+  els,
+  t,
+  getLocale,
+  settings,
+  getCurrent: () => current,
+  getSessions: () => sessions,
+  getRun: () => run,
+  usageLog,
+  defaultTranslateModel: DEFAULTS.translateModel,
+  diarizeModel: DIARIZE_MODEL,
+});
 // Adds `usage`, what one request or a stretch of listening used, to `sess` and to the totals.
 function recordUsage(sess, usage) {
-  if (!sess.usage) {
-    if (sess.activeMs > 0 || !isEmpty(sess)) sess.usagePartial = true;
-    sess.usage = emptyUsage();
-  }
-  try {
-    sess.usage = addUsage(sess.usage, usage);
-  } catch {
-    /* a record written by a newer version is left as it is */
-  }
-  if (MOCK) sess.demo = true;
-  else addToDailyTotals(usage);
-  markDirty(sess);
-  if (els.usageDialog.open) renderUsage();
+  usageLog.recordUsage(sess, usage);
 }
 // Listening time counts while the recognizer is connected (state 'listening').
 function accrueListening(r) {
-  if (!r.listeningSince) return;
-  const now = Date.now();
-  recordUsage(r.session, addListening(emptyUsage(), LIVE_MODEL, now - r.listeningSince));
-  r.listeningSince = now;
+  usageLog.accrueListening(r);
 }
-
-const formatCount = (n) => new Intl.NumberFormat(getLocale()).format(n);
-const costText = (part) => (part.noPrice ? t('usage.noPrice') : formatUsd(part.usd));
-function cell(text, { header = false, num = false, className = '' } = {}) {
-  const el = document.createElement(header ? 'th' : 'td');
-  if (header) el.scope = 'row';
-  el.className = [num && 'num', className].filter(Boolean).join(' ');
-  el.textContent = text;
-  return el;
-}
-const row = (...cells) => {
-  const tr = document.createElement('tr');
-  tr.append(...cells);
-  return tr;
-};
-// One row of the tables with the columns label, listening time, requests, tokens in and out, cost.
-// Cells left null stay empty (listening time has no tokens; translation has no listening time).
-function usageRow(label, { listeningMs = null, requests = null, input = null, output = null, cost }, total = false) {
-  const text = (value, format) => (value === null ? '' : format(value));
-  const tr = row(
-    cell(label, { header: true }),
-    cell(text(listeningMs, formatDuration), { num: true }),
-    cell(text(requests, formatCount), { num: true }),
-    cell(text(input, formatCount), { num: true }),
-    cell(text(output, formatCount), { num: true }),
-    cell(costText(cost), { num: true }),
-  );
-  if (total) tr.className = 'usage-total';
-  return tr;
-}
-const viewRow = (label, view, total = false) =>
-  usageRow(
-    label,
-    {
-      listeningMs: view.listeningMs,
-      requests: view.requests,
-      input: view.inputTokens,
-      output: view.outputTokens,
-      cost: view.cost.total,
-    },
-    total,
-  );
-function sessionLabel(text) {
-  const label = document.createElement('span');
-  label.className = 'label';
-  label.textContent = text;
-  return label;
-}
-
 function renderUsage() {
-  if (run) accrueListening(run);
-  const prices = currentPrices();
-  const unpriced = new Set();
-
-  // This session: its three parts and their sum.
-  const sess = current;
-  const recorded = !!sess?.usage;
-  const notes = [];
-  if (!recorded) notes.push(t('usage.notRecordedSession'));
-  if (sess?.usagePartial) notes.push(t('usage.partialSession'));
-  if (sess?.demo) notes.push(t('usage.demoSession'));
-  els.usageSessionNote.textContent = notes.join(' ');
-  els.usageSessionNote.hidden = !notes.length;
-  els.usageSessionWrap.hidden = !recorded;
-  if (recorded) {
-    const view = usageView(sess.usage, prices);
-    for (const model of view.unpriced) unpriced.add(model);
-    const tokens = (kind) => ({
-      requests: view[kind].requests,
-      input: view[kind].inputTokens,
-      output: view[kind].outputTokens,
-      cost: view.cost[kind],
-    });
-    els.usageSession.replaceChildren(
-      usageRow(t('usage.listening'), { listeningMs: view.listeningMs, cost: view.cost.transcription }),
-      usageRow(t('usage.translation'), tokens('translation')),
-      usageRow(t('usage.summary'), tokens('summary')),
-      usageRow(t('usage.speakers'), tokens('diarization')),
-      viewRow(t('usage.total'), view, true),
-    );
-  }
-
-  // Totals per period, from the daily totals.
-  els.usageTotals.replaceChildren(
-    ...totalsRows(readDailyTotals(), prices).map((r) => {
-      for (const model of r.unpriced) unpriced.add(model);
-      return viewRow(t(`usage.period.${r.period}`), r);
-    }),
-  );
-
-  // Saved sessions, most recent first.
-  const rows = sessionRows(sessions, prices);
-  els.usageSessions.replaceChildren(
-    ...rows.map((r) => {
-      const title = cell(r.title || formatDateTime(r.createdAt), { header: true, className: 'usage-title' });
-      if (r.demo) title.append(' ', sessionLabel(t('usage.demo')));
-      if (r.partial) title.append(' ', sessionLabel(t('usage.partial')));
-      if (!r.recorded) {
-        const none = cell(t('usage.notRecorded'), { className: 'muted' });
-        none.colSpan = 2;
-        return row(cell(formatDateTime(r.createdAt)), title, none);
-      }
-      for (const model of r.view.unpriced) unpriced.add(model);
-      return row(
-        cell(formatDateTime(r.createdAt)),
-        title,
-        cell(formatDuration(r.view.listeningMs), { num: true }),
-        cell(costText(r.view.cost.total), { num: true }),
-      );
-    }),
-  );
-  if (!rows.length) {
-    const none = cell(t('usage.noSessions'), { className: 'muted' });
-    none.colSpan = 4;
-    els.usageSessions.append(row(none));
-  }
-
-  els.usageUnpriced.textContent = unpriced.size ? t('usage.unpriced', { models: [...unpriced].join(', ') }) : '';
-  els.usageUnpriced.hidden = !unpriced.size;
-  const [y, m, d] = PRICES.asOf.split('-').map(Number);
-  const date = new Intl.DateTimeFormat(getLocale(), { dateStyle: 'medium' }).format(new Date(y, m - 1, d));
-  const custom = Object.keys(settings.priceOverrides ?? {}).length > 0;
-  els.usageNote.textContent = [t('usage.note', { date }), custom ? t('usage.customPrices') : '']
-    .filter(Boolean)
-    .join(' ');
-}
-
-els.openUsage.onclick = () => {
-  renderUsage();
-  els.usageDialog.showModal();
-};
-
-// ---------- prices for estimates (settings dialog) ----------
-// The models in use and the prices each is estimated with: listening time for the live model, tokens
-// for the translation model (which also writes the summaries) and for the speaker-label model.
-const PRICE_UNITS = { listening: ['inputPerMinute', 'outputPerMinute'], tokens: ['input', 'output'] };
-let priceDraft = {}; // { [model]: { [field]: text } } as typed, until the dialog closes
-let pricesReset = false; // Reset was pressed: overrides of models not shown are dropped too
-function priceModels() {
-  const translation = els.translateModel.value.trim() || DEFAULTS.translateModel;
-  const models =
-    translation === LIVE_MODEL
-      ? [[LIVE_MODEL, [...PRICE_UNITS.listening, ...PRICE_UNITS.tokens]]]
-      : [
-          [LIVE_MODEL, PRICE_UNITS.listening],
-          [translation, PRICE_UNITS.tokens],
-        ];
-  // The model that labels speakers, in tokens.
-  if (!models.some(([model]) => model === DIARIZE_MODEL)) models.push([DIARIZE_MODEL, PRICE_UNITS.tokens]);
-  return models;
-}
-const priceText = (prices, model, field) => (prices[model]?.[field] === undefined ? '' : String(prices[model][field]));
-function fillPriceDraft(prices) {
-  priceDraft = {};
-  for (const [model, fields] of priceModels()) {
-    priceDraft[model] = Object.fromEntries(fields.map((field) => [field, priceText(prices, model, field)]));
-  }
-  renderPriceFields();
+  usageDialog.render();
 }
 function openPriceFields() {
-  pricesReset = false;
-  fillPriceDraft(currentPrices().models);
+  usageDialog.openPriceFields();
 }
 function renderPriceFields() {
-  const prices = currentPrices().models;
-  els.priceFields.replaceChildren(
-    ...priceModels().map(([model, fields], i) => {
-      priceDraft[model] ??= {};
-      const group = document.createElement('div');
-      group.className = 'price-model';
-      group.setAttribute('role', 'group');
-      const title = document.createElement('h3');
-      title.className = 'price-model-title';
-      title.id = `priceModel${i}`;
-      title.textContent = model;
-      group.setAttribute('aria-labelledby', title.id);
-      group.append(title);
-      if (!PRICES.models[model]) {
-        const help = document.createElement('small');
-        help.className = 'caption';
-        help.textContent = t('prices.noPrice');
-        group.append(help);
-      }
-      const grid = document.createElement('div');
-      grid.className = 'price-grid';
-      for (const field of fields) {
-        const label = document.createElement('label');
-        label.className = 'form-control';
-        const name = document.createElement('span');
-        name.className = 'form-label';
-        name.textContent = t(`prices.field.${field}`);
-        const input = document.createElement('input');
-        input.className = 'text-input';
-        input.type = 'text';
-        input.inputMode = 'decimal';
-        input.autocomplete = 'off';
-        input.spellcheck = false;
-        input.dataset.model = model;
-        input.dataset.field = field;
-        priceDraft[model][field] ??= priceText(prices, model, field);
-        input.value = priceDraft[model][field];
-        input.oninput = () => {
-          priceDraft[model][field] = input.value;
-          checkPrices();
-        };
-        label.append(name, input);
-        grid.append(label);
-      }
-      group.append(grid);
-      return group;
-    }),
-  );
-  checkPrices();
+  usageDialog.renderPriceFields();
 }
-// The overrides the fields describe, or null while any of them is not a price.
+// The overrides the price fields describe, or null while any of them is not a price.
 function pendingOverrides() {
-  const shown = Object.fromEntries(priceModels().map(([model]) => [model, priceDraft[model] ?? {}]));
-  const overrides = overridesFromFields(shown, PRICES);
-  // Overrides of a model not shown now (an earlier translation model) are kept, unless reset.
-  if (!pricesReset) {
-    for (const [model, values] of Object.entries(settings.priceOverrides ?? {})) {
-      if (!(model in shown)) overrides[model] = values;
-    }
-  }
-  try {
-    mergePrices(PRICES, overrides);
-    return overrides;
-  } catch {
-    return null;
-  }
+  return usageDialog.pendingOverrides();
 }
-function checkPrices() {
-  let invalid = false;
-  for (const input of els.priceFields.querySelectorAll('input')) {
-    const text = input.value.trim();
-    const bad = text !== '' && !(Number(text.replace(',', '.')) >= 0);
-    if (bad) {
-      input.setAttribute('aria-invalid', 'true');
-      input.setAttribute('aria-describedby', 'pricesError');
-    } else {
-      input.removeAttribute('aria-invalid');
-      input.removeAttribute('aria-describedby');
-    }
-    invalid ||= bad;
-  }
-  invalid ||= !pendingOverrides();
-  els.pricesError.textContent = invalid ? t('prices.invalid') : '';
-  els.pricesError.hidden = !invalid;
-}
-els.pricesReset.onclick = () => {
-  pricesReset = true;
-  fillPriceDraft(PRICES.models);
-};
-// A different translation model has prices of its own. The fields are rebuilt only then: the change
-// event also comes when the field merely loses focus, often to a price field that must stay in place.
-els.translateModel.addEventListener('change', () => {
-  const shown = [...els.priceFields.querySelectorAll('h3')].map((h) => h.textContent);
-  const wanted = priceModels().map(([model]) => model);
-  if (shown.join('\n') !== wanted.join('\n')) renderPriceFields();
-});
 
 // ---------- live run ----------
 let wakeLock = null;

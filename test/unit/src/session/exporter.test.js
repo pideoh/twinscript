@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildTranscript, formatElapsed, safeFileName } from '../../../../src/session/exporter.js';
+import {
+  buildTranscript,
+  DEFAULT_LABELS,
+  formatElapsed,
+  recordingFileName,
+  safeFileName,
+  serializeSession,
+  transcriptLabels,
+  withSpeakerNames,
+} from '../../../../src/session/exporter.js';
 
 const session = {
   title: '定例会議',
@@ -273,4 +282,77 @@ test('files of a session without speaker labels are the same as before labels ex
 test('safeFileName strips characters that are invalid in file names', () => {
   assert.equal(safeFileName('a/b:c*?"<>|d'), 'a b c d');
   assert.equal(safeFileName(''), 'transcript');
+});
+
+test('a downloaded session carries what is saved of each segment, nothing of the screen', () => {
+  const el = { tagName: 'DIV' };
+  const sess = {
+    id: 's1',
+    title: 'Weekly',
+    recordings: [{ id: 'r1' }],
+    segments: [
+      { id: 'a', at: 1, elapsed: 0, src: 'Hi.', tgt: 'やあ。', el, srcEl: el, tgtEl: el, rev: 2, handover: null },
+      {
+        id: 'b',
+        at: 2,
+        elapsed: 1000,
+        src: 'Hola.',
+        tgt: 'Hello.\nこんにちは。',
+        lang: 'es-ES',
+        tgts: [
+          { lang: 'en-US', text: 'Hello.', extra: 1 },
+          { lang: 'ja-JP', text: 'こんにちは。' },
+        ],
+        speaker: 's2',
+        lines: new Map(),
+      },
+    ],
+  };
+  const out = serializeSession(sess);
+  assert.equal(out.title, 'Weekly');
+  assert.equal(out.recordings, sess.recordings);
+  assert.deepEqual(out.segments, [
+    { id: 'a', at: 1, elapsed: 0, src: 'Hi.', tgt: 'やあ。' },
+    {
+      id: 'b',
+      at: 2,
+      elapsed: 1000,
+      src: 'Hola.',
+      tgt: 'Hello.\nこんにちは。',
+      lang: 'es-ES',
+      tgts: [
+        { lang: 'en-US', text: 'Hello.' },
+        { lang: 'ja-JP', text: 'こんにちは。' },
+      ],
+      speaker: 's2',
+    },
+  ]);
+  assert.equal(sess.segments[0].el, el, 'the session itself is left as it was');
+});
+
+test('a downloaded transcript names its speakers, and has no names without labels', () => {
+  const sess = { segments: [{ src: 'a', speaker: 's1' }, { src: 'b' }, { src: 'c', speaker: 'gone' }] };
+  const names = { s1: 'Aiko' };
+  const out = withSpeakerNames(sess, (id) => names[id] ?? '');
+  assert.deepEqual(
+    out.segments.map((seg) => seg.speaker),
+    ['Aiko', '', ''],
+  );
+  assert.equal(sess.segments[0].speaker, 's1', 'the session keeps its ids');
+});
+
+test('the words of a transcript file come in the display language', () => {
+  const t = (key) => `<${key}>`;
+  const words = transcriptLabels(t);
+  assert.deepEqual(Object.keys(words).sort(), Object.keys(DEFAULT_LABELS).sort(), 'every word of the file');
+  assert.equal(words.title, '<file.title>');
+  assert.equal(words.separator, '<file.separator>');
+  assert.equal(words.summary, '<summary.title>');
+  assert.equal(words.summaryTruncated, '<summary.truncated>');
+});
+
+test('a recording is saved under the session title and its number, as .m4a or .webm', () => {
+  assert.equal(recordingFileName('Weekly/plan', 1, 'audio/mp4'), 'Weekly plan-1.m4a');
+  assert.equal(recordingFileName('Weekly', 2, 'audio/webm;codecs=opus'), 'Weekly-2.webm');
+  assert.equal(recordingFileName('', 3, ''), 'transcript-3.webm');
 });
