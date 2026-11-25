@@ -32,6 +32,7 @@ npm run test:app   # desktop smoke tests (opens windows)
 
 - Questions and rough ideas go to [Discussions](https://github.com/pideoh/twinscript/discussions). Issues hold bugs
   and the work that has been decided on, so the issue list reads as the plan.
+  The [project board](https://github.com/users/pideoh/projects/1) shows what is an idea, next, in progress and done.
 - A feature or a bug fix starts from an issue. The pull request says `Closes #N` in its summary, so the issue
   closes on merge and can be found from the release notes. Small changes (typos, dependency updates, refactors,
   tests) need no issue.

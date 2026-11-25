@@ -4,7 +4,7 @@ The steps a session follows for any change. What the code must satisfy is in `CL
 
 ## 1. Before starting
 
-- A feature or a bug fix has a GitHub issue; create it if it is missing. Typos, dependency updates, refactors and tests need none.
+- A feature or a bug fix has a GitHub issue; create it if it is missing, and put it on the project board (`gh project item-add 1 --owner pideoh --url <issue>`; columns Idea, Next, In progress, Done). Typos, dependency updates, refactors and tests need none.
 - Read the decisions that cover the area: `gh issue list --label decision --state all`, then `gh issue view N`. A change that goes against one needs a new decision issue that replaces it, not a quiet reversal.
 - Fetch `main` and branch from its tip: `type/short-name` (`feat/…`, `fix/…`, `docs/…`). Never branch from, or add commits to, a branch whose pull request is merged or still open: `main` takes squash merges only, so stacked branches conflict.
 - Two changes that touch the same tests or the same lines go into one branch. Merged separately, each passes and `main` breaks.
