@@ -28,6 +28,16 @@ npm run test:app   # desktop smoke tests (opens windows)
 - Styling uses the Primer tokens defined at the top of `styles.css` and Octicons; no ad-hoc colors.
 - No new runtime dependencies.
 
+## Issues, discussions and decisions
+
+- Questions and rough ideas go to [Discussions](https://github.com/pideoh/twinscript/discussions). Issues hold bugs
+  and the work that has been decided on, so the issue list reads as the plan.
+- A feature or a bug fix starts from an issue. The pull request says `Closes #N` in its summary, so the issue
+  closes on merge and can be found from the release notes. Small changes (typos, dependency updates, refactors,
+  tests) need no issue.
+- A decision that shapes the product or is costly to reverse (a storage format, an API, a release or signing
+  method) is recorded in [`docs/decisions/`](docs/decisions/README.md) in the pull request that makes it.
+
 ## Commit messages and releases
 
 Pull requests are squash-merged, so the pull request title becomes the commit on `main` and its line in the changelog.

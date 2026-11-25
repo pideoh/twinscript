@@ -74,6 +74,8 @@ browser, which is used for development and the browser tests. Usage and pricing 
 - Some assumptions about the Gemini Live API are unverified against the real service (interim text is the whole utterance so far; one final result per utterance). Check the official documentation instead of guessing when a change depends on API behavior.
 - User-visible text goes through i18n (`t()` or `data-i18n*`; modules without UI throw `MessageError` with a message key). Add every new key to all files in `src/locales/` with the same placeholders; `test/i18n.test.js` checks this.
 - Code, comments and commit messages are in English.
+- A feature or a bug fix starts from a GitHub issue, and its pull request says `Closes #N`. Typos, dependency updates, refactors and tests need no issue.
+- A decision that shapes the product or is costly to reverse gets a record in `docs/decisions/` (format and index in its `README.md`) in the pull request that makes it. Read the records there before changing what they cover.
 - Commit subjects and pull request titles follow Conventional Commits, `type(scope)!: description`, with the types feat, fix, perf, revert, docs, test, build, ci, chore, refactor, style; `scripts/check-commits.js` enforces this on pull requests.
 
 ## Design
