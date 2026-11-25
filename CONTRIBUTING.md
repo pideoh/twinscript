@@ -36,7 +36,9 @@ npm run test:app   # desktop smoke tests (opens windows)
   closes on merge and can be found from the release notes. Small changes (typos, dependency updates, refactors,
   tests) need no issue.
 - A decision that shapes the product or is costly to reverse (a storage format, an API, a release or signing
-  method) is recorded in [`docs/decisions/`](docs/decisions/README.md) in the pull request that makes it.
+  method) is recorded as an issue with the [`decision` label](https://github.com/pideoh/twinscript/issues?q=label%3Adecision): the context, what was decided and
+  what follows from it. The pull request that carries it out links to it. When a decision changes, a new issue
+  replaces the old one and says so; the old one is not rewritten.
 
 ## Commit messages and releases
 

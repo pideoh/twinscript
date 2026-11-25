@@ -5,7 +5,7 @@ The steps a session follows for any change. What the code must satisfy is in `CL
 ## 1. Before starting
 
 - A feature or a bug fix has a GitHub issue; create it if it is missing. Typos, dependency updates, refactors and tests need none.
-- Read the records in `docs/decisions/` that cover the area. A change that goes against one needs a new record, not a quiet reversal.
+- Read the decisions that cover the area: `gh issue list --label decision --state all`, then `gh issue view N`. A change that goes against one needs a new decision issue that replaces it, not a quiet reversal.
 - Fetch `main` and branch from its tip: `type/short-name` (`feat/…`, `fix/…`, `docs/…`). Never branch from, or add commits to, a branch whose pull request is merged or still open: `main` takes squash merges only, so stacked branches conflict.
 - Two changes that touch the same tests or the same lines go into one branch. Merged separately, each passes and `main` breaks.
 
@@ -28,4 +28,4 @@ The steps a session follows for any change. What the code must satisfy is in `CL
 ## 4. After the merge
 
 - release-please updates the release pull request; the maintainer merges it when a release is wanted. Never edit `version` or `CHANGELOG.md` by hand. A wrong changelog line is fixed with a `BEGIN_COMMIT_OVERRIDE` block in the merged pull request's body.
-- A decision that shapes the product or is costly to reverse has its record in `docs/decisions/` in the same pull request.
+- A decision that shapes the product or is costly to reverse has its `decision` issue, written before or with the pull request, which links to it. The issue is closed when the change is merged.
