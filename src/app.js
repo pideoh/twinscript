@@ -1,3 +1,11 @@
+// The entry of the page: it wires the parts together. It reads the page (`els`), loads the settings and
+// the saved sessions, creates each part of the screen (src/ui/) and the engines (speech, translation,
+// session, storage, usage), and connects them with callbacks. Startup, start and stop of a run, the
+// settings dialog and opening a session are here.
+// The order matters: everything between the first and the last top-level `await` runs in one pass, and
+// the handlers are attached in it. No module imports this file. New logic goes into a module; see
+// .claude/rules/structure.md.
+
 import { addFileSourceOption, FILE_TAIL_MS, pickAudioFile, traceDownloadButton } from './debug/debug-tools.js';
 import { MockTranscriber, MockTranslator } from './debug/mock.js';
 import { createTrace } from './debug/trace.js';
