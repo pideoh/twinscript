@@ -2828,6 +2828,13 @@ try {
 } catch {
   /* private mode */
 }
-await showSession(sessions.find((x) => x.id === lastId) ?? blankSession());
+// The main button is disabled in the HTML until there is a session to record into: a start that
+// came earlier (a click or a global shortcut right after opening) would find none.
+try {
+  await showSession(sessions.find((x) => x.id === lastId) ?? blankSession());
+} finally {
+  if (!current) await showSession(blankSession());
+  els.toggle.disabled = false;
+}
 if (MOCK) toast(t('toast.demo'), 4000);
 startUpdateChecks(); // not awaited: the app does not wait for GitHub

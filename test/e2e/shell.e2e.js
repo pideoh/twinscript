@@ -92,3 +92,36 @@ test('the content security policy blocks requests to anywhere but the Gemini API
   assert.ok(errors.filter((e) => /Content Security Policy/i.test(e)).length >= 3, 'each attempt is reported');
   await close();
 });
+
+test('a start that comes before the saved sessions have loaded does nothing, and the next one works', async () => {
+  // Presses the main button at the moment the page attaches its handler, which is before the saved
+  // sessions have been read, as a click or a global shortcut right after opening the app can.
+  const pressAtOnce = () => {
+    const onclick = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'onclick');
+    new MutationObserver((_records, observer) => {
+      const button = document.getElementById('toggle');
+      if (!button) return;
+      observer.disconnect();
+      Object.defineProperty(button, 'onclick', {
+        configurable: true,
+        get: () => onclick.get.call(button),
+        set: (handler) => {
+          onclick.set.call(button, handler);
+          window.earlyPress = { disabled: button.disabled };
+          button.click();
+        },
+      });
+    }).observe(document, { childList: true, subtree: true });
+  };
+  const { page, errors, close } = await openApp('?mock=1', undefined, { script: pressAtOnce });
+  assert.deepEqual(
+    await page.evaluate(() => window.earlyPress),
+    { disabled: true },
+    'the button waits for the sessions',
+  );
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.getElementById('statusText').textContent === '聞き取り中');
+  await page.click('#toggle');
+  assert.deepEqual(errors, []);
+  await close();
+});
