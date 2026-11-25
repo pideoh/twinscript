@@ -32,7 +32,7 @@ test('serves only the app files from app://rt/', async () => {
   // Asked from the main process: the page's content security policy does not let it fetch.
   const status = (path) => app.evaluate(({ net }, p) => net.fetch(`app://rt/${p}`).then((r) => r.status), path);
   assert.equal(await status('src/app.js'), 200);
-  assert.equal(await status('src/locales/ja.js'), 200);
+  assert.equal(await status('src/ui/locales/ja.js'), 200);
   assert.equal(await status('package.json'), 404);
   assert.equal(await status('app/main.js'), 404);
 });

@@ -8,7 +8,7 @@ import {
   resolveLocale,
   setLocale,
   t,
-} from '../../../src/i18n.js';
+} from '../../../src/ui/i18n.js';
 
 afterEach(() => setLocale(DEFAULT_LOCALE));
 

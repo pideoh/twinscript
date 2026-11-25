@@ -10,7 +10,7 @@ same speech instead of by impression.
 | --- | --- | --- |
 | 1. Record | the app with `?debug=1` | a trace: what the recognizer delivered, and when |
 | 2. Replay | `scripts/tuning/replay.mjs` | a table of delay, flicker and requests per pacing strategy |
-| 3. Change | `src/pacer.js` | a new strategy, compared on the same trace |
+| 3. Change | `src/translation/pacer.js` | a new strategy, compared on the same trace |
 
 ## 1. Record a trace
 
@@ -69,8 +69,8 @@ is the recognizer's text before the correction rules from the settings. `source`
 GEMINI_API_KEY=... node scripts/tuning/replay.mjs twinscript-trace-20261123-101500.json
 ```
 
-The trace is played back on its own timestamps through the app's sentence segmentation (`src/segmenter.js`), the
-pacer (`src/pacer.js`) and the real translation model, without a browser. **A run takes as long as the speech in the
+The trace is played back on its own timestamps through the app's sentence segmentation (`src/speech/segmenter.js`), the
+pacer (`src/translation/pacer.js`) and the real translation model, without a browser. **A run takes as long as the speech in the
 trace**; a line of progress is printed every ten seconds:
 
 ```
@@ -169,7 +169,7 @@ translates, which is where seconds go.
 
 ## 3. Try another pacing strategy
 
-`src/pacer.js` decides when the sentence being spoken is translated. A strategy is a function registered in
+`src/translation/pacer.js` decides when the sentence being spoken is translated. A strategy is a function registered in
 `STRATEGIES` there. Each one below builds on the one before:
 
 | Strategy | |
@@ -193,7 +193,7 @@ To try one in the app, open it with `?debug=1&pacer=<name>`, for example
 http://localhost:5173/?debug=1&pacer=chunk. It applies to that page load only; without `?debug=1` the parameter is
 ignored, and an unknown name falls back to `interval` with a warning in the console.
 
-Add a strategy, cover it in `test/unit/src/pacer.test.js`, and compare:
+Add a strategy, cover it in `test/unit/src/translation/pacer.test.js`, and compare:
 
 ```sh
 GEMINI_API_KEY=... node scripts/tuning/replay.mjs trace.json --strategy interval,steady,carry,chunk,settle
@@ -215,7 +215,7 @@ answers, the more a settled sentence saves.
 ## Speaker labels across parts
 
 A recording longer than 25 minutes is labelled in parts, and each part after the first starts with reference clips
-of the speakers found so far (`src/speakers.js` explains how). With `?debug=1`, "Label speakers" logs one line per
+of the speakers found so far (`src/session/speakers.js` explains how). With `?debug=1`, "Label speakers" logs one line per
 part to the console, `[speakers]` followed by JSON with numbers only, never speech:
 
 | Field | |

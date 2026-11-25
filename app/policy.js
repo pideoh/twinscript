@@ -22,7 +22,8 @@ const ALLOWED = [
   /^styles\.css$/,
   /^icons\/[\w-][\w.-]*\.(svg|png)$/,
   /^src\/[\w-][\w.-]*\.js$/,
-  /^src\/locales\/[\w-][\w.-]*\.js$/,
+  /^src\/(speech|translation|session|storage|usage|ui|debug)\/[\w-][\w.-]*\.js$/,
+  /^src\/ui\/locales\/[\w-][\w.-]*\.js$/,
 ];
 
 // Maps a request URL on the app's own origin to a file relative to the app root.

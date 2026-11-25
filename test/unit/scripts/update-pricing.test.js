@@ -17,7 +17,7 @@ import {
   readPricesBlock,
   replacePricesBlock,
 } from '../../../scripts/update-pricing.mjs';
-import { PRICES } from '../../../src/pricing.js';
+import { PRICES } from '../../../src/usage/pricing.js';
 
 const LIVE = 'gemini-3.5-transcribe-live';
 const LITE = 'gemini-3.5-flash-lite';
@@ -25,7 +25,7 @@ const root = fileURLToPath(new URL('../../..', import.meta.url));
 // Line endings are normalized: a checkout on Windows may turn them into CRLF.
 const fixture = (name) => readFileSync(join(root, 'test', 'fixtures', name), 'utf8').replaceAll('\r\n', '\n');
 const PAGE = `# Gemini Developer API pricing\n\n${fixture('pricing-transcribe-live.md')}\n${fixture('pricing-flash-lite.md')}`;
-const SOURCE = readFileSync(join(root, 'src', 'pricing.js'), 'utf8');
+const SOURCE = readFileSync(join(root, 'src', 'usage', 'pricing.js'), 'utf8');
 
 test('the saved pricing page gives the prices in the table, per-minute prices included', () => {
   assert.deepEqual(parseModelPrices(PAGE, LIVE, PRICES.models[LIVE]), PRICES.models[LIVE]);
@@ -191,7 +191,7 @@ test('the script checks, writes and refuses as its exit code says', async (t) =>
 });
 
 test('rewriting keeps the line endings of the file, as checked out on Windows', async () => {
-  const lf = readFileSync(new URL('../../../src/pricing.js', import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+  const lf = readFileSync(new URL('../../../src/usage/pricing.js', import.meta.url), 'utf8').replaceAll('\r\n', '\n');
   const crlf = lf.replaceAll('\n', '\r\n');
   const table = await readPricesBlock(lf);
   assert.equal(replacePricesBlock(lf, table), lf);

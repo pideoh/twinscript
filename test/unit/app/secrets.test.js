@@ -1,5 +1,5 @@
 // Secret storage of the API key: the desktop store (app/secrets.js, tested without Electron) and
-// the page's side (src/secrets.js).
+// the page's side (src/storage/secrets.js).
 
 import assert from 'node:assert/strict';
 import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 import { createSecretStore, isSecretName } from '../../../app/secrets.js';
-import { KEY_STORAGE, loadApiKey, saveApiKey } from '../../../src/secrets.js';
+import { KEY_STORAGE, loadApiKey, saveApiKey } from '../../../src/storage/secrets.js';
 
 let dir;
 before(async () => {

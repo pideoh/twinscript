@@ -14,7 +14,7 @@ Sections 1 to 3 apply to everyone, in a clone of the repository or of a fork. Se
 ## 2. While working
 
 - Tests come with the behavior change, in the same commit. Docs for a visible change come in the same pull request (README in both languages, `docs/`).
-- Before pushing: `npm run lint`, `npm test`, and `npm run test:e2e` when `src/app.js`, `src/audio.js`, HTML or CSS changed.
+- Before pushing: `npm run lint`, `npm test`, and `npm run test:e2e` when `src/app.js`, `src/speech/audio.js`, HTML or CSS changed.
 - Run one browser test suite at a time on a machine. Several at once (for example from parallel agents) make tests time out that are not broken.
 - Code that touches paths, line endings or the file system must work on Windows: `fileURLToPath` instead of `URL.pathname`, and no assumption that a checked-out file ends lines with LF only.
 - The API key never appears in a command, a file, a test or a log. A script reads it from the environment (`read -s GEMINI_API_KEY && export GEMINI_API_KEY`). Recognizer traces, recordings and anything else that holds speech stay on the machine: not in commits, issues or pull requests.

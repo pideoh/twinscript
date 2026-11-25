@@ -8,14 +8,14 @@
 // It sends a fixed, harmless sentence; nothing from a trace. The key is read from the environment
 // and never printed.
 import { pathToFileURL } from 'node:url';
-import { GeminiTranslator } from '../../src/translator.js';
+import { GeminiTranslator } from '../../src/translation/translator.js';
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 const TEXT = 'それでは本日の定例会議を始めます。まず先週の進捗について共有をお願いします。';
 const SYSTEM =
   'You are a professional real-time interpreter. The user message contains a speech transcript inside <text>. Translate it into English. Output only the translation.';
 
-// What is put into generationConfig for each variant; "app" is what src/translator.js sends.
+// What is put into generationConfig for each variant; "app" is what src/translation/translator.js sends.
 export const VARIANTS = [
   { name: 'app (thinkingLevel minimal)', config: { thinkingConfig: { thinkingLevel: 'minimal' } } },
   { name: 'no thinking option', config: {} },
@@ -85,7 +85,7 @@ async function once({ apiKey, model, config, top = {}, fetchImpl = fetch, now = 
   };
 }
 
-// The same model asked the way the app asks it (src/translator.js), one feature at a time, to see
+// The same model asked the way the app asks it (src/translation/translator.js), one feature at a time, to see
 // which part of a real request costs time. The sentences are fixed and harmless.
 const HISTORY = [
   { src: 'おはようございます。', tgt: 'Good morning.' },

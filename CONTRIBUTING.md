@@ -24,7 +24,7 @@ npm run test:app   # desktop smoke tests (opens windows)
 - Add or update tests with every behavior change.
 - If users can see the change, update the README (English and Japanese) and `docs/` in the same pull request. Regenerate
   the README animation with `node scripts/demo.mjs` only when the main screen looks different.
-- User-visible text goes through `src/i18n.js`; add each new key to every file in `src/locales/`.
+- User-visible text goes through `src/ui/i18n.js`; add each new key to every file in `src/ui/locales/`.
 - Styling uses the Primer tokens defined at the top of `styles.css` and Octicons; no ad-hoc colors.
 - No new runtime dependencies.
 
@@ -89,7 +89,7 @@ How the captions feel depends on when the sentence being spoken is translated an
 is rewritten. [docs/tuning.md](docs/tuning.md) describes the tools for measuring that:
 
 - the app opened with `?debug=1` records what the recognizer delivered (a trace) and can take an audio file as input;
-- `node scripts/tuning/replay.mjs <trace.json>` replays a trace through the segmentation, the pacer (`src/pacer.js`) and
+- `node scripts/tuning/replay.mjs <trace.json>` replays a trace through the segmentation, the pacer (`src/translation/pacer.js`) and
   the translation model, and reports delay, flicker and the number of requests (`--help` lists the options).
 
 A trace contains what was said in the meeting. Do not commit traces or attach them to public issues;
@@ -98,7 +98,7 @@ A trace contains what was said in the meeting. Do not commit traces or attach th
 ## Gemini prices
 
 The prices used to estimate costs live in the block between `// BEGIN PRICES` and `// END PRICES` in
-`src/pricing.js`: the paid tier, Standard, of each model the app uses, per 1M tokens (and per minute of audio for
+`src/usage/pricing.js`: the paid tier, Standard, of each model the app uses, per 1M tokens (and per minute of audio for
 the live transcription model), with the date they were taken from
 [Google's pricing page](https://ai.google.dev/gemini-api/docs/pricing). To check or update them by hand:
 
@@ -125,8 +125,8 @@ permissions the release workflow uses.
 
 ## Adding a display language
 
-Copy `src/locales/en.js` to a new file, translate the values, and register it in the `LOCALES`
-array in `src/i18n.js`. A unit test checks that every locale has the same keys and placeholders.
+Copy `src/ui/locales/en.js` to a new file, translate the values, and register it in the `LOCALES`
+array in `src/ui/i18n.js`. A unit test checks that every locale has the same keys and placeholders.
 
 ## Reporting bugs
 
