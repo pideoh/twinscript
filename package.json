@@ -3,7 +3,7 @@
   "productName": "Twinscript",
   "private": true,
   "license": "MIT",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Real-time speech transcription and two-way translation for meetings (static web app / PWA)",
   "author": "Hideo Sumi",
   "main": "app/main.js",
