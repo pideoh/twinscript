@@ -14,7 +14,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | Where | What |
 | --- | --- |
 | `index.html`, `styles.css` | The page and its styles (Primer tokens in the block at the top of `styles.css`) |
-| `src/app.js` | The entry: wires the parts together (startup, start and stop, settings, opening a session). It does not grow |
+| `src/app.js` | The entry: wires the parts together (startup, start and stop, opening a session). It does not grow |
 | `src/speech/` | Capture, recognition (Gemini Live), segmentation into sentences, vocabulary |
 | `src/translation/` | Translation, when the sentence in progress is translated (pacing), script hints, reading aloud |
 | `src/session/` | After a meeting: summaries and templates, speaker labels, Markdown, export |
