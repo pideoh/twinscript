@@ -43,9 +43,9 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `app/shortcuts.js` | Global shortcut table, platform labels and registration status. Electron-free |
 | `app/updates.js` | Whether a newer release exists: the request to GitHub's latest-release API (generic User-Agent, fixed Accept-Language, no credentials, 10 s timeout), validation of the answer (tag `vX.Y.Z` only), numeric version comparison, the release-page URL built from the version. Electron-free |
 | `app/secrets.js` | Desktop secret store: `safeStorage` ciphertext in `userData/secrets.json`, allowlisted names. Electron-free |
-| `test/*.test.js` | Unit tests (`node:test`, no dependencies) |
+| `test/unit/{src,app,scripts,rules}/*.test.js` | Unit tests (`node:test`, no dependencies), in folders by what they test: modules in `src/`, modules in `app/`, the tools in `scripts/`, and checks of project rules (i18n, design tokens, CSP). `test/README.md` lists the kinds; `test/fixtures/` holds data, `test/support/` shared helpers |
 | `test/e2e/*.e2e.js`, `test/e2e/helpers.js`, `test/e2e/helpers/*.js` | Browser tests: Chrome, a fake microphone and mocked Gemini endpoints. One file per topic so they run in parallel (`api-key`, `language`, `shell`, `capture` for the microphone, `pc-audio`, `live-token`, `vocabulary`, `sessions`, `summary`, `speakers`, `usage`, `a11y`, ...). Shared setup lives in `helpers/` by topic (`app.js`: server, `openApp`, `listening`; `gemini.js`: Gemini mocks; `speakers.js`, `summary.js`, `storage.js`, `targets.js`, `pc-audio.js`); `helpers.js` only re-exports them, and tests import from `./helpers.js` |
-| `test/app/desktop.app.js` | Desktop smoke tests (need a display, so not run in CI) |
+| `test/desktop/desktop.app.js` | Desktop smoke tests (need a display, so not run in CI) |
 | `.github/workflows/release.yml`, `release-please-config.json`, `.release-please-manifest.json` | release-please keeps a release pull request open on `main`; merging it tags `vX.Y.Z`, creates the GitHub Release, and the workflow builds and uploads the zips |
 | `.github/workflows/preview-build.yml` | Started by hand: builds signed zips of a branch as workflow artifacts, to try the app before a release. Publishes nothing |
 | `scripts/check-commits.js` | Checks that a pull request's commit subjects and title follow Conventional Commits (run in `test.yml`) |
@@ -71,11 +71,11 @@ browser, which is used for development and the browser tests. Usage and pricing 
 
 - A change to the tuning tools (`?debug=1`, `scripts/tuning/`, the trace format, the pacer's strategies) updates `docs/tuning.md` in the same pull request.
 - A change that users can see updates the docs in the same pull request: the README (both languages) and pages under `docs/` that describe it, and the README animation when the main screen looks different (`node scripts/demo.mjs` writes `docs/demo.png`). Do not regenerate the animation otherwise: each version adds several megabytes to the repository.
-- Add or update tests in the same commit as a behavior change. For a segmentation bug, add the failing case to `test/segmenter.test.js` before fixing it.
+- Add or update tests in the same commit as a behavior change. For a segmentation bug, add the failing case to `test/unit/src/segmenter.test.js` before fixing it.
 - No new dependencies: zero at runtime; dev dependencies are `playwright-core`, `electron`, `electron-builder`, `@biomejs/biome` and `axe-core` only.
 - The interface must keep running in a plain browser (development and the browser tests rely on it). Desktop-only code lives in `app/`; `src/` only branches on detecting Electron.
 - Some assumptions about the Gemini Live API are unverified against the real service (interim text is the whole utterance so far; one final result per utterance). Check the official documentation instead of guessing when a change depends on API behavior.
-- User-visible text goes through i18n (`t()` or `data-i18n*`; modules without UI throw `MessageError` with a message key). Add every new key to all files in `src/locales/` with the same placeholders; `test/i18n.test.js` checks this.
+- User-visible text goes through i18n (`t()` or `data-i18n*`; modules without UI throw `MessageError` with a message key). Add every new key to all files in `src/locales/` with the same placeholders; `test/unit/rules/i18n.test.js` checks this.
 - Code, comments and commit messages are in English.
 - A feature or a bug fix starts from a GitHub issue, and its pull request says `Closes #N`. Typos, dependency updates, refactors and tests need no issue.
 - A decision that shapes the product or is costly to reverse is recorded as a GitHub issue with the `decision` label (context, decision, consequences; `.github/ISSUE_TEMPLATE/decision.yml`). Before changing what one covers, read it: `gh issue list --repo pideoh/twinscript --label decision --state all`. The order of work, and what only the maintainer does, is in `.claude/rules/workflow.md`.
