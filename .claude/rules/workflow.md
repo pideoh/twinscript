@@ -1,6 +1,6 @@
 # From an issue to a merged pull request
 
-The order of work for a change. What the code must satisfy is in `CLAUDE.md`.
+The order of work for a change. What the work is built on is in `docs/principles.md`; where the other rules are is in `CLAUDE.md`.
 
 Sections 1 to 3 apply to everyone, in a clone of the repository or of a fork. Section 4 applies only when the person you work for maintains the repository: `gh repo view pideoh/twinscript --json viewerPermission` answers `ADMIN` or `MAINTAIN`. If it answers anything else, or `gh` is not signed in, skip section 4 and do not try its commands: the project board, preview builds, labels and releases are the maintainer's.
 
@@ -24,7 +24,7 @@ Sections 1 to 3 apply to everyone, in a clone of the repository or of a fork. Se
 
 - Open it against `main` of `pideoh/twinscript` (from a fork: from the fork's branch), as a draft, with the headings of `.github/PULL_REQUEST_TEMPLATE.md`. The title follows Conventional Commits and becomes the changelog line, so it says what users get. End the summary with `Closes #N` when there is an issue.
 - Describe only what the merged product will contain.
-- It is ready for review when three checks are green: `test`, and `unit-other-os` on macOS and on Windows. Wait for all three; Windows has failed alone more than once. On a first contribution from a fork the checks start only after the maintainer approves the run.
+- It is ready for review when three checks are green: `test`, and `unit-other-os` on macOS and on Windows. A change is verified when it has passed on every system it ships for, not on the one it was written on. On a first contribution from a fork the checks start only after the maintainer approves the run.
 - The maintainer merges. Do not push to a branch after its pull request is merged; a follow-up is a new branch from `main`.
 - Never edit `version` in `package.json` or `CHANGELOG.md`: releases are made from a release pull request (see `CLAUDE.md`).
 

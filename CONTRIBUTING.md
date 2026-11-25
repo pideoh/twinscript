@@ -2,6 +2,24 @@
 
 Thanks for your interest. Bug reports, fixes, translations and features are all welcome.
 
+## What the project is built on
+
+[`docs/principles.md`](docs/principles.md) lists the twelve principles behind the product and the work. Read it first: when
+something is not covered by a rule below, decide it from there.
+
+The conventions, each written in one place:
+
+| Topic | Where |
+| --- | --- |
+| The order of work, from an issue to a merged pull request | [`.claude/rules/workflow.md`](.claude/rules/workflow.md) |
+| Where code and tests go, how a module is written | [`.claude/rules/structure.md`](.claude/rules/structure.md), [`test/README.md`](test/README.md) |
+| Tests | [`.claude/rules/tests.md`](.claude/rules/tests.md) |
+| User-visible text | [`.claude/rules/i18n.md`](.claude/rules/i18n.md) |
+| Visual design | [`.claude/rules/design.md`](.claude/rules/design.md) |
+| The desktop app | [`.claude/rules/desktop.md`](.claude/rules/desktop.md) |
+
+They are plain Markdown and apply to everyone; the folder name only means that Claude Code loads them by itself.
+
 ## Getting started
 
 ```sh
@@ -21,12 +39,9 @@ npm run test:e2e   # browser tests (needs Chrome); the Gemini API is mocked
 npm run test:app   # desktop smoke tests (opens windows)
 ```
 
-- Add or update tests with every behavior change.
-- If users can see the change, update the README (English and Japanese) and `docs/` in the same pull request. Regenerate
-  the README animation with `node scripts/demo.mjs` only when the main screen looks different.
-- User-visible text goes through `src/ui/i18n.js`; add each new key to every file in `src/ui/locales/`.
-- Styling uses the Primer tokens defined at the top of `styles.css` and Octicons; no ad-hoc colors.
-- No new runtime dependencies.
+- Tests come with every behavior change, and docs with every change users can see (README in English and Japanese, `docs/`).
+- No new dependencies.
+- The rest is in the conventions listed above: where code and tests go, user-visible text, visual design, the desktop app.
 
 ## Issues, discussions and decisions
 
