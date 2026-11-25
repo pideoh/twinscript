@@ -72,10 +72,17 @@ export function saveSettings(storage, settings) {
   }
 }
 
-// Drops stored choices that no longer fit, in place: a third language the app does not offer or
+// Drops stored choices that no longer fit, in place: a first or second language the app does not
+// offer goes back to the default for its side (the second takes the other default when the two would
+// be the same), a third language the app does not offer or
 // that equals one of the first two is turned off, and a choice for other languages that is unknown,
 // or names the third language when there is none, goes back to all of them. Returns the settings.
 export function normalizeSettings(settings) {
+  const offered = (code) => LANGS.some((l) => l.code === code);
+  if (!offered(settings.langA)) settings.langA = DEFAULTS.langA;
+  if (!offered(settings.langB)) settings.langB = DEFAULTS.langB;
+  if (settings.langB === settings.langA)
+    settings.langB = settings.langA === DEFAULTS.langB ? DEFAULTS.langA : DEFAULTS.langB;
   if (!LANGS.some((l) => l.code === settings.langC) || [settings.langA, settings.langB].includes(settings.langC))
     settings.langC = '';
   if (!['all', 'A', 'B', 'C'].includes(settings.otherInto) || (settings.otherInto === 'C' && !settings.langC))

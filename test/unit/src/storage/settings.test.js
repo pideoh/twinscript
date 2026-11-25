@@ -106,6 +106,31 @@ test('storage that refuses to save leaves the app running', () => {
   assert.doesNotThrow(() => saveSettings(throwing, { ...DEFAULTS }));
 });
 
+test('a stored first or second language that is not offered goes back to the default for its side', () => {
+  const fixed = normalizeSettings({ ...DEFAULTS, langA: 'xx-XX', langB: 'fr-FR' });
+  assert.deepEqual([fixed.langA, fixed.langB], ['ja-JP', 'fr-FR']);
+  const second = normalizeSettings({ ...DEFAULTS, langA: 'fr-FR', langB: 'xx-XX' });
+  assert.deepEqual([second.langA, second.langB], ['fr-FR', 'en-US']);
+  const both = normalizeSettings({ ...DEFAULTS, langA: 'xx-XX', langB: 'yy-YY' });
+  assert.deepEqual([both.langA, both.langB], ['ja-JP', 'en-US']);
+  const missing = normalizeSettings({ ...DEFAULTS, langA: undefined, langB: null });
+  assert.deepEqual([missing.langA, missing.langB], ['ja-JP', 'en-US']);
+});
+
+test('a stored second language equal to the first takes the other default', () => {
+  const same = normalizeSettings({ ...DEFAULTS, langA: 'fr-FR', langB: 'fr-FR' });
+  assert.deepEqual([same.langA, same.langB], ['fr-FR', 'en-US']);
+  const english = normalizeSettings({ ...DEFAULTS, langA: 'en-US', langB: 'en-US' });
+  assert.deepEqual([english.langA, english.langB], ['en-US', 'ja-JP']);
+  const japanese = normalizeSettings({ ...DEFAULTS, langA: 'xx-XX', langB: 'ja-JP' });
+  assert.deepEqual([japanese.langA, japanese.langB], ['ja-JP', 'en-US']);
+});
+
+test('a stored language that is not offered no longer breaks reading aloud', () => {
+  const settings = normalizeSettings({ ...DEFAULTS, langA: 'xx-XX', langB: 'yy-YY' });
+  assert.doesNotThrow(() => canReadAloud(settings));
+});
+
 test('a stored third language that is not offered, or equals one of the first two, is turned off', () => {
   assert.equal(normalizeSettings({ ...DEFAULTS, langC: 'xx-XX' }).langC, '');
   assert.equal(normalizeSettings({ ...DEFAULTS, langC: 'ja-JP' }).langC, '');
