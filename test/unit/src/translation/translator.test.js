@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { GeminiTranslator, RateLimitError } from '../../../../src/translation/translator.js';
+import { GeminiTranslator, passes, RateLimitError } from '../../../../src/translation/translator.js';
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -83,6 +83,31 @@ test('other errors surface the API message', async () => {
     assert.deepEqual(err.params, { status: 403, message: 'API key not valid' });
     return true;
   });
+});
+
+test('a rate limit, a server error that passes and a network error are worth trying again; nothing else is', async () => {
+  const failure = async (response) => {
+    globalThis.fetch = async () => response();
+    return make()
+      .translate('やあ')
+      .then(
+        () => assert.fail('the request should fail'),
+        (err) => err,
+      );
+  };
+  const status = (n) => failure(() => new Response(JSON.stringify({ error: { message: 'x' } }), { status: n }));
+  for (const n of [429, 500, 502, 503, 504]) assert.equal(passes(await status(n)), true, `HTTP ${n}`);
+  for (const n of [400, 401, 403, 404, 501]) assert.equal(passes(await status(n)), false, `HTTP ${n}`);
+  const offline = await failure(() => {
+    throw new TypeError('Failed to fetch');
+  });
+  assert.equal(passes(offline), true, 'the request itself rejected');
+  const aborted = await failure(() => {
+    throw new DOMException('The operation was aborted.', 'AbortError');
+  });
+  assert.equal(passes(aborted), false, 'an aborted request');
+  assert.equal(passes(new Error('anything else')), false);
+  assert.equal(passes(undefined), false);
 });
 
 test('a third language goes to the first language unless told otherwise', async () => {
