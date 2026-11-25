@@ -30,15 +30,9 @@ import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocal
 import { octicon } from './ui/icons.js';
 import { followPlace, LANGS, langLabel as labelIn, langName, langTag as tagAmong } from './ui/langs.js';
 import { MessageError } from './ui/message-error.js';
+import { createShortcutsPanel } from './ui/shortcuts-panel.js';
 import { createTemplateEditor, createTemplateStore } from './ui/template-editor.js';
-import {
-  afterCheck,
-  checkDue,
-  dismissVersion,
-  readUpdateState,
-  UPDATE_KEY,
-  versionToAnnounce,
-} from './ui/update-check.js';
+import { createUpdateNotice } from './ui/update-notice.js';
 import { createUsageDialog } from './ui/usage-dialog.js';
 import { addTokens, emptyUsage } from './usage/usage.js';
 import { createUsageLog } from './usage/usage-log.js';
@@ -920,121 +914,40 @@ applyCaptionOptions();
 if (settings.clickThrough) applyClickThrough();
 
 // ---------- global shortcuts (desktop app) ----------
-// The main process registers them (app/shortcuts.js); each one does what its button does.
-let shortcutStatus = null; // { enabled, shortcuts: [{ command, label, registered }] }
-els.shortcutsGroup.hidden = !window.appShortcuts;
-
-function renderShortcuts() {
-  if (!shortcutStatus) return;
-  els.globalShortcuts.checked = shortcutStatus.enabled;
-  els.shortcutList.replaceChildren(
-    ...shortcutStatus.shortcuts.flatMap((s) => {
-      const name = document.createElement('dt');
-      name.textContent = t(`settings.shortcuts.${s.command}`);
-      const keys = document.createElement('dd');
-      const kbd = document.createElement('kbd');
-      kbd.textContent = s.label;
-      keys.append(kbd);
-      if (shortcutStatus.enabled && !s.registered) {
-        const note = document.createElement('span');
-        note.className = 'shortcut-unavailable';
-        note.textContent = t('settings.shortcuts.unavailable');
-        keys.prepend(note);
-      }
-      return [name, keys];
-    }),
-  );
-}
-async function showShortcuts() {
-  if (!window.appShortcuts) return;
-  try {
-    shortcutStatus = await window.appShortcuts.status();
-  } catch {
-    return;
-  }
-  renderShortcuts();
-}
-async function applyGlobalShortcuts() {
-  if (!window.appShortcuts) return;
-  try {
-    shortcutStatus = await window.appShortcuts.setEnabled(settings.globalShortcuts);
-  } catch {
-    return;
-  }
-  renderShortcuts();
-}
-window.appShortcuts?.onCommand((command) => {
-  if (command === 'toggle') els.toggle.click();
-  else if (command === 'captions' && !els.pip.hidden) els.pip.click();
+// The settings' list of shortcuts and their switch (src/ui/shortcuts-panel.js); each shortcut does
+// what its button does.
+const shortcutsPanel = createShortcutsPanel({
+  els,
+  t,
+  settings,
+  bridge: () => window.appShortcuts,
+  onCommand: (command) => {
+    if (command === 'toggle') els.toggle.click();
+    else if (command === 'captions' && !els.pip.hidden) els.pip.click();
+  },
 });
-if (window.appShortcuts && !settings.globalShortcuts) applyGlobalShortcuts();
+function renderShortcuts() {
+  shortcutsPanel.render();
+}
+function showShortcuts() {
+  return shortcutsPanel.show();
+}
+function applyGlobalShortcuts() {
+  return shortcutsPanel.apply();
+}
 
 // ---------- newer versions (desktop app) ----------
-// The main process asks GitHub (app/updates.js); this page decides when (src/ui/update-check.js): at
-// start and then at most once every 24 hours, only while the setting is on. The last answer is
-// kept, so the notice comes back at the next start without a request until it is dismissed or
-// the app is updated. Failures say nothing.
-const UPDATE_LOOK_MS = 60 * 60 * 1000; // how often a long-running app looks whether a check is due
-let updateState = readUpdateState(null);
-let runningVersion = null;
-let updateChecking = false;
-els.updatesGroup.hidden = !window.appUpdates;
-
-function saveUpdateState() {
-  try {
-    localStorage.setItem(UPDATE_KEY, JSON.stringify(updateState));
-  } catch {
-    /* private mode */
-  }
-}
+// The notice of a newer version, and when to ask for one (src/ui/update-notice.js).
+const updateNotice = createUpdateNotice({ els, t, settings, storage: browserStorage, bridge: () => window.appUpdates });
 function showUpdateNotice() {
-  const version = window.appUpdates && settings.checkUpdates ? versionToAnnounce(updateState, runningVersion) : null;
-  els.updateNotice.hidden = !version;
-  if (version) {
-    els.updateNotice.dataset.version = version;
-    els.updateText.textContent = t('update.available', { version });
-  }
+  updateNotice.show();
 }
-async function checkForUpdates() {
-  if (!window.appUpdates || !runningVersion || updateChecking) return showUpdateNotice();
-  if (settings.checkUpdates && checkDue(updateState, Date.now())) {
-    updateChecking = true;
-    let result = null;
-    try {
-      result = await window.appUpdates.check();
-    } catch (err) {
-      console.warn('update check failed', err);
-    }
-    updateChecking = false;
-    updateState = afterCheck(updateState, result, Date.now());
-    saveUpdateState();
-  }
-  showUpdateNotice();
+function checkForUpdates() {
+  return updateNotice.check();
 }
-async function startUpdateChecks() {
-  if (!window.appUpdates) return;
-  try {
-    updateState = readUpdateState(localStorage.getItem(UPDATE_KEY));
-  } catch {
-    /* private mode: start empty */
-  }
-  try {
-    runningVersion = await window.appUpdates.version();
-  } catch (err) {
-    console.warn('running version unknown', err);
-    return;
-  }
-  await checkForUpdates();
-  setInterval(checkForUpdates, UPDATE_LOOK_MS);
+function startUpdateChecks() {
+  return updateNotice.start();
 }
-els.updateOpen.onclick = () => {
-  window.appUpdates?.openReleasePage(els.updateNotice.dataset.version).catch(() => {});
-};
-els.updateDismiss.onclick = () => {
-  updateState = dismissVersion(updateState, els.updateNotice.dataset.version);
-  saveUpdateState();
-  showUpdateNotice();
-};
 
 async function openCaptionWindow() {
   // Electron exposes documentPictureInPicture but requestWindow fails there, so check it first.
