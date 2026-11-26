@@ -15,6 +15,10 @@
 // - With the settle strategy, an in-progress translation of the same text as the finished one is
 //   the final translation (the pacer's handover); a finished translation is read aloud once.
 // - With a third language, or two and a sentence in neither, a sentence has one line per target.
+// - What the app reads aloud may come back from the recognizer (src/translation/own-voice.js). A
+//   finished sentence that is the app's own voice is not mounted, translated, saved or read (the
+//   tracker gets OWN as its handle, so a late final result for it is ignored too); a sentence in
+//   progress that may be is neither shown nor handed to the pacer until it grows away from it.
 // - scripts/tuning/replay.mjs runs this flow, with a view that records what would be shown and a
 //   simulated clock, to score pacing strategies outside the app: the clock and timers stay injected.
 
@@ -26,11 +30,14 @@ import { languageByScript, scriptsDiffer, sourceByScript, targetByScript, target
 import { passes, RateLimitError } from './translator.js';
 
 const HISTORY_LINES = 3;
+const OWN = Object.freeze({}); // the tracker's handle of a sentence dropped as the app's own voice
+const NOT_OWN = { isOwn: () => false, mayBeOwn: () => false };
 
 // A run `r` (made by the app's start()) carries what the translator was given: { session, langs:
 // [{ code, name }] (two or three), otherInto, translator, pacer, tracker }; the flow makes its
 // tracker (tracker(r)) and pacer (pacer(r)).
-// view: the transcript view; reader: reads aloud (available, speak(text, code)); settings: the app's
+// view: the transcript view; reader: reads aloud (available, speak(text, code)); ownVoice: tells what
+// the reader has just read aloud (isOwn(text), mayBeOwn(text); by default nothing is); settings: the app's
 // settings (interimTranslate, interimInterval, readAloud, source); getRun(): the run in progress, or
 // null; selectedLangs(): the codes of the languages selected; platform: where the app runs
 // ({ desktop, platform }, see appPlatform in src/speech/audio.js); markDirty(sess): saves it soon;
@@ -41,6 +48,7 @@ const HISTORY_LINES = 3;
 export function createFlow({
   view,
   reader,
+  ownVoice = NOT_OWN,
   settings,
   getRun,
   selectedLangs,
@@ -65,6 +73,7 @@ export function createFlow({
   function createTracker(r) {
     return new UtteranceTracker({
       commit(text, aboveLive) {
+        if (ownVoice.isOwn(text)) return dropOwn(r, aboveLive);
         if (aboveLive) {
           const seg = createSegment();
           if (live) view.placeBefore(seg, live);
@@ -81,12 +90,26 @@ export function createFlow({
           r.pacer.cancel();
           return;
         }
+        if (!live && ownVoice.mayBeOwn(text)) return; // shown once it grows away from what was read
         if (!live) live = createSegment();
         view.setText(live, 'src', text);
         r.pacer.update(text);
       },
-      correct: (seg, text) => commit(r, seg, text),
+      correct: (seg, text) => {
+        if (seg !== OWN) commit(r, seg, text);
+      },
     });
+  }
+
+  // A finished sentence that is the app's own voice: nothing of it stays on the page. The sentence in
+  // progress is its beginning (aboveLive: another one is being spoken, which stays).
+  function dropOwn(r, aboveLive) {
+    if (!aboveLive && live) {
+      view.unmount(live);
+      live = null;
+      r.pacer.cancel();
+    }
+    return OWN;
   }
 
   // The sentence being spoken is translated as it grows; src/translation/pacer.js decides when.

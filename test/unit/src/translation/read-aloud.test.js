@@ -199,3 +199,88 @@ test('reading aloud is off while the app would hear itself, and the stored choic
     }
   }
 });
+
+// A synthesizer that, like the browser's, says when it starts reading a sentence.
+function startingSynth() {
+  const fake = fakeSynth();
+  const { speak } = fake.synth;
+  fake.synth.speak = (u) => {
+    speak(u);
+    u.onstart?.();
+  };
+  return fake;
+}
+
+function listened(options = {}) {
+  const { synth, Utterance } = startingSynth();
+  const heard = [];
+  const reader = new ReadAloud({
+    synth,
+    Utterance,
+    onStart: (text, lang) => heard.push(['start', text, lang]),
+    onEnd: (text) => heard.push(['end', text]),
+    ...options,
+  });
+  return { synth, reader, heard };
+}
+
+test('the start and the end of each sentence read aloud are reported, in order', () => {
+  const { synth, reader, heard } = listened();
+  reader.speak('One.', 'en-US');
+  reader.speak('二つ目。', 'ja-JP');
+  assert.deepEqual(heard, [['start', 'One.', 'en-US']], 'the second one has not started');
+  synth.finish();
+  synth.finish();
+  assert.deepEqual(heard, [
+    ['start', 'One.', 'en-US'],
+    ['end', 'One.'],
+    ['start', '二つ目。', 'ja-JP'],
+    ['end', '二つ目。'],
+  ]);
+});
+
+test('a sentence that fails while being read is reported as ended', () => {
+  const { synth, reader, heard } = listened();
+  reader.speak('One.', 'en-US');
+  synth.spoken[0].onerror();
+  assert.deepEqual(heard, [
+    ['start', 'One.', 'en-US'],
+    ['end', 'One.'],
+  ]);
+});
+
+test('a sentence cancelled by stopping is reported as ended at once, and only once', () => {
+  const { synth, reader, heard } = listened();
+  reader.speak('One.', 'en-US');
+  reader.speak('Two.', 'en-US');
+  reader.stop();
+  synth.spoken[0].onerror?.(); // what cancel() reports for the interrupted sentence
+  assert.deepEqual(heard, [
+    ['start', 'One.', 'en-US'],
+    ['end', 'One.'],
+  ]);
+});
+
+test('a waiting sentence dropped before it was read is never reported, since nothing was heard', () => {
+  const { synth, reader, heard } = listened();
+  for (const s of ['One.', 'Two.', 'Three.', 'Four.']) reader.speak(s, 'en-US');
+  synth.finish();
+  synth.finish();
+  synth.finish();
+  assert.deepEqual(
+    heard.filter(([, text]) => text === 'Two.'),
+    [],
+  );
+  assert.equal(heard.length, 6);
+});
+
+test('a sentence the synthesizer never started is not reported when it ends', () => {
+  const { synth, Utterance } = fakeSynth(); // reports no start
+  const heard = [];
+  const reader = new ReadAloud({ synth, Utterance, onEnd: (text) => heard.push(text) });
+  reader.speak('One.', 'en-US');
+  synth.spoken[0].onerror();
+  reader.speak('Two.', 'en-US');
+  reader.stop();
+  assert.deepEqual(heard, []);
+});

@@ -21,6 +21,7 @@ import { loadApiKey, saveApiKey } from './storage/secrets.js';
 import { DEFAULTS, loadSettings, selectedLangs, saveSettings as writeSettings } from './storage/settings.js';
 import { store } from './storage/store.js';
 import { createFlow } from './translation/flow.js';
+import { createOwnVoice } from './translation/own-voice.js';
 import { DEFAULT_STRATEGY, strategyNamed } from './translation/pacer.js';
 import { ReadAloud } from './translation/read-aloud.js';
 import { GeminiTranslator } from './translation/translator.js';
@@ -70,7 +71,8 @@ const loadedKey = await loadApiKey(window.secretStore, legacyKey);
 if (legacyKey !== undefined) saveSettings();
 // The caption zone keeps its own settings while a third language is selected (see DEFAULTS in settings.js).
 const captionKey = (name) => (settings.langC ? `${name}3` : name);
-const reader = new ReadAloud(); // reads finished translations aloud
+const ownVoice = createOwnVoice(); // what is read aloud, to leave it out when it is heard again
+const reader = new ReadAloud({ onStart: ownVoice.started, onEnd: ownVoice.ended }); // reads translations aloud
 let captionWindow = null; // the caption window part (src/ui/caption-window.js), made in its section below
 
 // The settings dialog, the display language and the language selects (src/ui/settings-dialog.js). The
@@ -674,6 +676,7 @@ document.addEventListener('visibilitychange', () => {
 const flow = createFlow({
   view,
   reader,
+  ownVoice,
   settings,
   getRun: () => run,
   selectedLangs: () => selectedLangs(settings),

@@ -7,8 +7,9 @@ import { fakeDisplayMedia, listening, mockTargets, setup } from './helpers.js';
 const { openApp } = setup();
 
 // Stands in for the system's speech synthesis: what the page asks to read is kept in
-// window.spoken, and calls to cancel() are counted in window.cancels. Nothing finishes on its own:
-// window.finishSpeaking() ends the sentence being read.
+// window.spoken, and calls to cancel() are counted in window.cancels. A sentence starts at once, like
+// the browser's (onstart); nothing finishes on its own: window.finishSpeaking() ends the sentence being
+// read.
 function fakeSpeech({ missing = false } = {}) {
   if (window !== top) return;
   if (missing) {
@@ -25,6 +26,7 @@ function fakeSpeech({ missing = false } = {}) {
     speak: (u) => {
       last = u;
       window.spoken.push({ text: u.text, lang: u.lang });
+      u.onstart?.();
     },
     cancel: () => {
       window.cancels++;
@@ -331,6 +333,80 @@ test('a choice of reading aloud that does not fit the number of languages shows 
   await page.selectOption('#langA', 'ko-KR');
   await page.click('#openSettings');
   assert.equal(await page.inputValue('#readAloud'), 'A', 'the choice follows Korean to another place');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+// The app's own voice heard again: every source text the page ever shows is kept in window.shownSrc,
+// so that a sentence shown for a moment and taken away again would be seen.
+function watchSources() {
+  window.shownSrc = new Set();
+  new MutationObserver(() => {
+    for (const el of document.querySelectorAll('.seg .src')) window.shownSrc.add(el.textContent);
+  }).observe(document, { subtree: true, childList: true, characterData: true });
+}
+// The texts of the translation requests the page makes, in order.
+function countRequests(page) {
+  const texts = [];
+  page.on('request', (req) => {
+    if (!/streamGenerateContent/.test(req.url())) return;
+    texts.push(req.postDataJSON().contents[0].parts[0].text.match(/<text>\n([\s\S]*)\n<\/text>/)[1]);
+  });
+  return texts;
+}
+
+// A sentence translated into Japanese and read aloud, then the recognizer hears that Japanese again,
+// as the microphone would from the speakers, written a little differently; then a person speaks.
+async function hearOwnVoice(readAloud) {
+  const { page, errors, close } = await openApp(
+    '',
+    { apiKey: 'test-key', readAloud, interimInterval: 0.5 },
+    { script: `(${fakeSpeech})();(${watchSources})();` },
+  );
+  const send = await mockMeeting(page);
+  const requested = countRequests(page);
+  await page.click('#toggle');
+  await listening(page);
+  send('inputTranscription', 'It is raining today.');
+  await shownTranslation(page, '今日は雨が降っています。');
+  send('interimInputTranscription', '今日は雨が');
+  send('interimInputTranscription', '今日は 雨が降って');
+  send('inputTranscription', '今日は 雨が降ってます');
+  await page.evaluate(() => window.finishSpeaking?.());
+  send('inputTranscription', 'See you next week.');
+  await shownTranslation(page, 'また来週お会いしましょう。');
+  return { page, errors, close, requested };
+}
+
+test('a translation read aloud and heard again is left out: not shown, not translated, not read', async () => {
+  const { page, errors, close, requested } = await hearOwnVoice('A');
+  assert.deepEqual(
+    await page.locator('.seg .src').allTextContents(),
+    ['It is raining today.', 'See you next week.'],
+    'the next sentence is handled as usual',
+  );
+  const shown = await page.evaluate(() => [...window.shownSrc]);
+  assert.ok(!shown.some((t) => t.includes('雨')), `never on the page, even for a moment: ${shown}`);
+  assert.deepEqual(requested, ['It is raining today.', 'See you next week.']);
+  assert.deepEqual(
+    (await spoken(page)).map((x) => x.text),
+    ['今日は雨が降っています。', 'また来週お会いしましょう。'],
+  );
+  await page.click('#toggle');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('with reading aloud off, the same recognizer output is shown and translated', async () => {
+  const { page, errors, close, requested } = await hearOwnVoice('off');
+  assert.deepEqual(await page.locator('.seg .src').allTextContents(), [
+    'It is raining today.',
+    '今日は雨が降ってます',
+    'See you next week.',
+  ]);
+  assert.ok(requested.includes('今日は雨が降ってます'));
+  assert.deepEqual(await spoken(page), []);
+  await page.click('#toggle');
   assert.deepEqual(errors, []);
   await close();
 });

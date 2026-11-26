@@ -100,8 +100,9 @@ In a browser the caption window is a picture-in-picture window, which is always 
 languages, into both) with the voices of your operating system; sentences still being spoken are not read. It takes
 effect at once, also while listening. With three languages you choose one of them, and only the translations into it
 are read; sentences spoken in that language are not. With two languages it needs different writing systems (such as
-Japanese and English), because that is how the app tells which language a translation is in. Use headphones: from
-speakers, the microphone picks up the voice and transcribes it again.
+Japanese and English), because that is how the app tells which language a translation is in. What the app reads
+aloud is recognized as its own voice: when the microphone or the captured audio picks it up, it is left out of the
+transcript and not translated again. It can be missed when someone speaks at the same time; headphones avoid that.
 
 In the desktop app on Windows, reading aloud is not available while PC audio is captured ("PC audio" or
 "Microphone + PC audio"): PC audio there is everything the computer plays, the app's own voice included, so the app

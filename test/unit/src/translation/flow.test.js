@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createFlow } from '../../../../src/translation/flow.js';
+import { createOwnVoice } from '../../../../src/translation/own-voice.js';
+import { ReadAloud } from '../../../../src/translation/read-aloud.js';
 import { RateLimitError } from '../../../../src/translation/translator.js';
 import { LANGS } from '../../../../src/ui/langs.js';
 import { MessageError } from '../../../../src/ui/message-error.js';
@@ -81,7 +83,16 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 const BROWSER = { desktop: false, platform: 'other' };
 
-function setup({ langs = [JA, EN], readAloud = 'off', source = 'mic', platform = BROWSER, handover } = {}) {
+function setup({
+  langs = [JA, EN],
+  readAloud = 'off',
+  source = 'mic',
+  platform = BROWSER,
+  handover,
+  ownVoice,
+  reader,
+  pacer,
+} = {}) {
   const view = standInView();
   const translator = standInTranslator();
   const spoken = [];
@@ -92,7 +103,8 @@ function setup({ langs = [JA, EN], readAloud = 'off', source = 'mic', platform =
   let ids = 0;
   const flow = createFlow({
     view,
-    reader: { available: true, speak: (text, code) => spoken.push({ text, code }) },
+    reader: reader ?? { available: true, speak: (text, code) => spoken.push({ text, code }) },
+    ownVoice,
     settings,
     getRun: () => run,
     selectedLangs: () => [settings.langA, settings.langB, settings.langC].filter(Boolean),
@@ -110,7 +122,7 @@ function setup({ langs = [JA, EN], readAloud = 'off', source = 'mic', platform =
   });
   run = { session: { segments: [] }, langs, otherInto: 'all', translator };
   // What the pacer hands over when a sentence is finished.
-  run.pacer = { update() {}, cancel() {}, finish: () => handover };
+  run.pacer = pacer ?? { update() {}, cancel() {}, finish: () => handover };
   run.tracker = flow.tracker(run);
   return { flow, run, view, translator, spoken, waits, saved, stop: () => (run = null) };
 }
@@ -472,4 +484,159 @@ test('with three languages only the line whose translation came back empty says 
   assert.deepEqual(view.page.get(seg).lines.get('ja-JP'), { text: '皆さん、おはようございます。', cls: undefined });
   assert.deepEqual(view.page.get(seg).lines.get('ko-KR'), { text: 'failed: error.noTranslation', cls: 'error' });
   assert.equal(seg.tgt, '皆さん、おはようございます。');
+});
+
+// The app's own voice: what the reader reads aloud is told to the own-voice module, as in app.js.
+// The synthesizer starts each sentence at once and never finishes it, so it is still being read.
+function ownVoiceSetup(options = {}) {
+  let time = 0;
+  const ownVoice = createOwnVoice({ now: () => time });
+  const utterances = [];
+  const synth = {
+    getVoices: () => [],
+    speak(u) {
+      utterances.push(u);
+      u.onstart?.();
+    },
+    cancel() {},
+  };
+  class Utterance {
+    constructor(text) {
+      this.text = text;
+    }
+  }
+  const told = [];
+  const reader = new ReadAloud({
+    synth,
+    Utterance,
+    onStart: (text, lang) => {
+      told.push(text);
+      ownVoice.started(text, lang);
+    },
+    onEnd: (text) => ownVoice.ended(text),
+  });
+  const pacer = { updates: [], update: (text) => pacer.updates.push(text), cancel() {}, finish() {} };
+  const s = setup({ readAloud: 'B', ownVoice, reader, pacer, ...options });
+  return {
+    ...s,
+    pacer,
+    told,
+    utterances,
+    at: (ms) => {
+      time = ms;
+    },
+    // A Japanese sentence, translated into English (and read aloud when that is on).
+    async readAloud(src, out) {
+      s.run.tracker.final(src);
+      s.translator.requests.at(-1).resolve(out);
+      await settle();
+    },
+  };
+}
+
+const onPage = (view) => [...view.page.entries()].filter(([, p]) => p.onPage).map(([seg]) => seg);
+
+test('a sentence the app has just read aloud, heard again, is not shown, translated, saved or read', async () => {
+  const { run, view, translator, saved, utterances, readAloud, at } = ownVoiceSetup();
+  await readAloud('おはようございます、皆さん。', 'Good morning, everyone.');
+  assert.deepEqual(
+    utterances.map((u) => u.text),
+    ['Good morning, everyone.'],
+  );
+  const savedBefore = saved.length;
+  at(1500);
+  run.tracker.final('Good morning everyone.');
+  await settle();
+  assert.equal(run.session.segments.length, 1);
+  assert.equal(onPage(view).length, 1);
+  assert.equal(translator.requests.length, 1);
+  assert.equal(saved.length, savedBefore);
+  assert.equal(utterances.length, 1);
+});
+
+test('the sentence after one the app read aloud is shown and translated as usual', async () => {
+  const { run, view, translator, readAloud, at } = ownVoiceSetup();
+  await readAloud('おはようございます、皆さん。', 'Good morning, everyone.');
+  at(1500);
+  run.tracker.interim('Good morning');
+  run.tracker.final('Good morning, everyone.');
+  run.tracker.interim('では始めましょう');
+  run.tracker.final('では始めましょう。');
+  const [first, second] = run.session.segments;
+  assert.equal(first.id, 'seg-1');
+  assert.equal(second.id, 'seg-2', 'no id was taken by the dropped sentence');
+  assert.equal(second.src, 'では始めましょう。');
+  assert.deepEqual(onPage(view), [first, second]);
+  assert.equal(translator.requests.at(-1).text, 'では始めましょう。');
+  translator.requests.at(-1).resolve('Let us begin.');
+  await settle();
+  assert.equal(second.tgt, 'Let us begin.');
+  assert.equal(view.page.get(second).text, 'Let us begin.');
+});
+
+test('the app’s own voice in progress is not shown and not translated', async () => {
+  const { run, view, pacer, readAloud, at, flow } = ownVoiceSetup();
+  await readAloud('おはようございます、皆さん。', 'Good morning, everyone. Today we review the budget.');
+  at(1000);
+  run.tracker.interim('Good morning');
+  run.tracker.interim('Good morning, everyone. Today we');
+  assert.equal(onPage(view).length, 1, 'only the first sentence is on the page');
+  assert.deepEqual(pacer.updates, []);
+  run.tracker.final('Good morning, everyone. Today we review the budget.');
+  flow.dropLive();
+  assert.equal(onPage(view).length, 1);
+  assert.equal(run.session.segments.length, 1);
+});
+
+test('a sentence in progress that grows away from what is read aloud is shown from then on', async () => {
+  const { run, view, pacer, readAloud, at } = ownVoiceSetup();
+  await readAloud('おはようございます、皆さん。', 'Good morning, everyone.');
+  at(1000);
+  run.tracker.interim('Good morning');
+  assert.equal(onPage(view).length, 1);
+  run.tracker.interim('Good morning, I would like to add a topic about hiring');
+  const live = onPage(view)[1];
+  assert.equal(view.page.get(live).src, 'Good morning, I would like to add a topic about hiring');
+  assert.deepEqual(pacer.updates, ['Good morning, I would like to add a topic about hiring']);
+  run.tracker.final('Good morning, I would like to add a topic about hiring.');
+  assert.equal(run.session.segments[1], live);
+});
+
+test('the app’s own voice cut off when the run stops leaves nothing behind', async () => {
+  const { run, view, readAloud, at, flow } = ownVoiceSetup();
+  await readAloud('おはようございます、皆さん。', 'Good morning, everyone. Today we review the budget.');
+  at(1000);
+  run.tracker.interim('Good morning, everyone. Today we review');
+  run.tracker.flush();
+  flow.dropLive();
+  assert.equal(onPage(view).length, 1);
+  assert.equal(run.session.segments.length, 1);
+});
+
+test('a late final result for the app’s own voice does not bring it back', async () => {
+  const { run, view, translator, readAloud, at } = ownVoiceSetup();
+  await readAloud('おはようございます、皆さん。', 'Good morning, everyone. Today we review the budget.');
+  at(1000);
+  run.tracker.interim('Good morning, everyone. Today we review the budget');
+  run.tracker.interim('それでは'); // a new utterance before the own one was finished
+  run.tracker.final('Good morning, everyone. Today we review the budget.');
+  run.tracker.final('それでは始めます。');
+  assert.deepEqual(
+    run.session.segments.map((x) => x.src),
+    ['おはようございます、皆さん。', 'それでは始めます。'],
+  );
+  assert.equal(onPage(view).length, 2);
+  assert.ok(translator.requests.every((x) => !x.text.startsWith('Good morning')));
+});
+
+test('with reading aloud off nothing is told about the app’s voice and nothing is dropped', async () => {
+  const { run, view, translator, told, readAloud, at } = ownVoiceSetup({ readAloud: 'off' });
+  await readAloud('おはようございます、皆さん。', 'Good morning, everyone.');
+  assert.deepEqual(told, []);
+  at(1500);
+  run.tracker.interim('Good morning');
+  assert.equal(onPage(view).length, 2, 'the sentence in progress is shown');
+  run.tracker.final('Good morning everyone.');
+  assert.equal(run.session.segments.length, 2);
+  assert.equal(translator.requests.at(-1).text, 'Good morning everyone.');
 });
