@@ -21,7 +21,7 @@
 import { UtteranceTracker } from '../speech/segmenter.js';
 import { langName } from '../ui/langs.js';
 import { createPacer } from './pacer.js';
-import { readAloudLanguages } from './read-aloud.js';
+import { readAloudInEffect, readAloudLanguages } from './read-aloud.js';
 import { languageByScript, scriptsDiffer, sourceByScript, targetByScript, targetLanguages } from './script-hint.js';
 import { passes, RateLimitError } from './translator.js';
 
@@ -31,8 +31,9 @@ const HISTORY_LINES = 3;
 // [{ code, name }] (two or three), otherInto, translator, pacer, tracker }; the flow makes its
 // tracker (tracker(r)) and pacer (pacer(r)).
 // view: the transcript view; reader: reads aloud (available, speak(text, code)); settings: the app's
-// settings (interimTranslate, interimInterval, readAloud); getRun(): the run in progress, or null;
-// selectedLangs(): the codes of the languages selected; markDirty(sess): saves it soon;
+// settings (interimTranslate, interimInterval, readAloud, source); getRun(): the run in progress, or
+// null; selectedLangs(): the codes of the languages selected; platform: where the app runs
+// ({ desktop, platform }, see appPlatform in src/speech/audio.js); markDirty(sess): saves it soon;
 // errorText(err): an error's message; onRateLimit(): told when an in-progress request was refused
 // for the rate limit; uid(): a new id; elapsedNow(): the session's active time now; strategy: the
 // pacer's strategy; now(), wait(ms), setTimer(fn, ms), clearTimer(id): the clock, a promise that
@@ -43,6 +44,7 @@ export function createFlow({
   settings,
   getRun,
   selectedLangs,
+  platform,
   markDirty,
   errorText,
   onRateLimit,
@@ -333,12 +335,16 @@ export function createFlow({
     if (read) seg.spokenLines.add(code);
   }
 
+  // The languages whose translations are read aloud now: none while the app would hear itself.
+  const readLanguages = () =>
+    readAloudLanguages(readAloudInEffect(settings.readAloud, platform, settings.source), selectedLangs());
+
   // With three languages: reads a finished translation line aloud when it is into the language
   // chosen. A sentence in that language has no line into it, so it is not read. Returns whether it
   // was read.
   function readLine(r, text, code) {
     if (getRun() !== r || !reader.available) return false;
-    if (!readAloudLanguages(settings.readAloud, selectedLangs()).includes(code)) return false;
+    if (!readLanguages().includes(code)) return false;
     reader.speak(text, code);
     return true;
   }
@@ -352,7 +358,7 @@ export function createFlow({
     if (!scriptsDiffer(a.name, b.name)) return false;
     const name = languageByScript(text, a.name, b.name) ?? target;
     const lang = r.langs.find((l) => l.name === name);
-    if (!lang || !readAloudLanguages(settings.readAloud, selectedLangs()).includes(lang.code)) return false;
+    if (!lang || !readLanguages().includes(lang.code)) return false;
     reader.speak(text, lang.code);
     return true;
   }

@@ -217,6 +217,8 @@ export default {
   'settings.readAloud.both': '双向',
   'settings.readAloud.help': '用系统语音朗读已确定的句子。请使用耳机：用扬声器播放时，麦克风会收到声音并再次转录。',
   'settings.readAloud.unavailable': '这两种语言使用相同的文字，无法判断译文的语言，因此不能朗读。',
+  'settings.readAloud.heard':
+    '在 Windows 上采集电脑音频时无法使用：应用会听到自己朗读的声音。音频输入为麦克风时可以使用。',
   'settings.captionItems': '下方区域保留的句数',
   'settings.captionItems.help': '包括正在说的句子。数量越多越便于回看，区域也会越高。',
   'settings.captionItems.one': '{n} 句',

@@ -13,7 +13,7 @@ import { MODEL as DIARIZE_MODEL } from './session/diarizer.js';
 import { formatElapsed } from './session/exporter.js';
 import { createSessionSaver, isEmpty, blankSession as newSession } from './session/session-save.js';
 import { hasLabels } from './session/speaker-labels.js';
-import { AudioCapture, inMacDesktopApp } from './speech/audio.js';
+import { AudioCapture, appPlatform, inMacDesktopApp } from './speech/audio.js';
 import { canRecord, Recorder } from './speech/recorder.js';
 import { GeminiLiveTranscriber } from './speech/transcriber.js';
 import { applyReplacements, parseVocabulary } from './speech/vocabulary.js';
@@ -677,6 +677,7 @@ const flow = createFlow({
   settings,
   getRun: () => run,
   selectedLangs: () => selectedLangs(settings),
+  platform: appPlatform(),
   markDirty: saver.markDirty,
   errorText,
   onRateLimit: () => toast(t('toast.rateLimited'), 6000, 'warning'),

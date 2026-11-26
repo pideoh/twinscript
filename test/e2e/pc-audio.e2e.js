@@ -1,5 +1,5 @@
-// Browser tests: PC audio (the desktop app on macOS without its own sound, a browser tab or screen, the permission
-// guidance, the silent-audio warning, auto gain).
+// Browser tests: PC audio (the desktop app on macOS without its own sound, on Windows the plain system loopback, a
+// browser tab or screen, the permission guidance, the silent-audio warning, auto gain).
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -57,6 +57,28 @@ test('the desktop app on macOS streams PC audio without picking up its own sound
   assert.equal(calls.length, 1);
   assert.equal(calls[0].audio.restrictOwnAudio, true);
   assert.ok(await page.locator('#toast').isHidden(), 'no silent-audio warning');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('the desktop app on Windows asks for the whole system sound, from every app', async () => {
+  const { page, errors, close } = await openApp(
+    '',
+    { apiKey: 'test-key', source: 'both', record: false },
+    { script: fakeDisplayMedia, arg: { desktopApp: 'win' } },
+  );
+  await mockGemini(page, []);
+  await page.click('#toggle');
+  await listening(page);
+  await page.click('#toggle');
+  const calls = await page.evaluate(() => window.displayMediaCalls);
+  assert.deepEqual(calls, [
+    {
+      video: true,
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      systemAudio: 'include',
+    },
+  ]);
   assert.deepEqual(errors, []);
   await close();
 });

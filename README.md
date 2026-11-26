@@ -103,6 +103,11 @@ are read; sentences spoken in that language are not. With two languages it needs
 Japanese and English), because that is how the app tells which language a translation is in. Use headphones: from
 speakers, the microphone picks up the voice and transcribes it again.
 
+In the desktop app on Windows, reading aloud is not available while PC audio is captured ("PC audio" or
+"Microphone + PC audio"): PC audio there is everything the computer plays, the app's own voice included, so the app
+would transcribe and translate it again. It works with the microphone as the source; the choice in settings is kept
+and applies again when you switch back to the microphone.
+
 ### Shortcuts
 
 These work from any app while Twinscript is running, and can be turned off in settings:
@@ -218,6 +223,7 @@ and everything recorded, and each saved session.
   another selected one (such as English and French, or Simplified and Traditional Chinese) are told apart by the
   translation model, which takes one more request for such a sentence. A language that is not selected but is written
   like a selected one (French when only English uses the Latin alphabet) is taken for that one.
+- In the desktop app on Windows, translations are not read aloud while PC audio is captured.
 - Recordings (WebM) carry no duration information, so some players cannot seek in them.
 
 ## How it works
