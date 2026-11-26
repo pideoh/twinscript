@@ -132,17 +132,3 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: gh release upload "$TAG" dist/*.zip dist/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY"
-      # release-please links every "#N" in the notes as an issue, also a pull request; a click on such a
-      # link inside GitHub ends in "Unable to load page". Point them at the pull request. The release is
-      # complete without this, so a failure here does not fail it.
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
-          sparse-checkout: scripts
-          persist-credentials: false
-      - name: Point the links in the notes at pull requests
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.release-please.outputs.tag_name }}
-        run: node scripts/release-note-links.mjs "$TAG"
