@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { listening, mockTargets, setup } from './helpers.js';
+import { fakeDisplayMedia, listening, mockTargets, setup } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -38,6 +38,9 @@ function fakeSpeech({ missing = false } = {}) {
   Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
   Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: Utterance, configurable: true });
 }
+
+// The fake speech engine in the Windows desktop app (its user agent), with PC audio standing in too.
+const inWindowsApp = { script: { content: `(${fakeSpeech})();(${fakeDisplayMedia})({ desktopApp: 'win' });` } };
 
 // The recognizer is driven by hand; translations are real-looking text in the other language.
 async function mockMeeting(page) {
@@ -171,6 +174,69 @@ test('reading aloud is unavailable for two languages written in the same alphabe
   await page.click('#openSettings');
   assert.ok(await page.locator('#readAloud').isEnabled());
   assert.ok(await page.locator('#readAloudUnavailable').isHidden());
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('in the Windows desktop app reading aloud is not offered while PC audio is captured, and the choice is kept', async () => {
+  const { page, errors, close } = await openApp('', { source: 'system', readAloud: 'A' }, inWindowsApp);
+  await page.click('#openSettings');
+  assert.ok(await page.locator('#readAloud').isDisabled());
+  assert.equal(await page.inputValue('#readAloud'), 'off');
+  assert.equal(
+    await page.locator('#readAloudHeard').textContent(),
+    'Windows では、PC音声を取り込んでいる間は使えません。アプリが自分の読み上げを聞き取ってしまうためです。音声入力がマイクなら使えます。',
+  );
+  assert.ok(await page.locator('#readAloudHeard').isVisible());
+  assert.ok(await page.locator('#readAloudUnavailable').isHidden());
+  await page.click('#settings button[value=ok]');
+
+  await page.selectOption('#source', 'mic');
+  await page.click('#openSettings');
+  assert.ok(await page.locator('#readAloud').isEnabled());
+  assert.equal(await page.inputValue('#readAloud'), 'A', 'the stored choice applies again');
+  assert.ok(await page.locator('#readAloudHeard').isHidden());
+  await page.click('#settings button[value=ok]');
+
+  await page.selectOption('#source', 'both');
+  await page.click('#openSettings');
+  assert.ok(await page.locator('#readAloud').isDisabled());
+  assert.ok(await page.locator('#readAloudHeard').isVisible());
+  await page.click('#settings button[value=ok]');
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('rt-settings')).readAloud);
+  assert.equal(stored, 'A');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('in the Windows desktop app nothing is read aloud while PC audio is captured', async () => {
+  const { page, errors, close } = await openApp(
+    '',
+    { apiKey: 'test-key', source: 'system', record: false, readAloud: 'both' },
+    inWindowsApp,
+  );
+  const send = await mockMeeting(page);
+  await page.click('#toggle');
+  await listening(page);
+  send('inputTranscription', 'それでは会議を始めます。');
+  await shownTranslation(page, 'Let us begin the meeting.');
+  send('inputTranscription', 'See you next week.');
+  await shownTranslation(page, 'また来週お会いしましょう。');
+  assert.deepEqual(await spoken(page), []);
+  await page.click('#toggle');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('in the Windows desktop app translations are read aloud with the microphone as the source', async () => {
+  const { page, errors, close } = await openApp('', { apiKey: 'test-key', readAloud: 'both' }, inWindowsApp);
+  const send = await mockMeeting(page);
+  await page.click('#toggle');
+  await listening(page);
+  send('inputTranscription', 'それでは会議を始めます。');
+  await page.waitForFunction(() => window.spoken.length === 1);
+  assert.deepEqual(await spoken(page), [{ text: 'Let us begin the meeting.', lang: 'en-US' }]);
+  await page.click('#toggle');
   assert.deepEqual(errors, []);
   await close();
 });

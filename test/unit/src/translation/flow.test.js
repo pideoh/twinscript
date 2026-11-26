@@ -79,13 +79,15 @@ function standInTranslator() {
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-function setup({ langs = [JA, EN], readAloud = 'off', handover } = {}) {
+const BROWSER = { desktop: false, platform: 'other' };
+
+function setup({ langs = [JA, EN], readAloud = 'off', source = 'mic', platform = BROWSER, handover } = {}) {
   const view = standInView();
   const translator = standInTranslator();
   const spoken = [];
   const waits = [];
   const saved = [];
-  const settings = { langA: langs[0].code, langB: langs[1].code, langC: langs[2]?.code ?? '', readAloud };
+  const settings = { langA: langs[0].code, langB: langs[1].code, langC: langs[2]?.code ?? '', readAloud, source };
   let run = null;
   let ids = 0;
   const flow = createFlow({
@@ -94,6 +96,7 @@ function setup({ langs = [JA, EN], readAloud = 'off', handover } = {}) {
     settings,
     getRun: () => run,
     selectedLangs: () => [settings.langA, settings.langB, settings.langC].filter(Boolean),
+    platform,
     markDirty: (sess) => saved.push(sess),
     errorText: (err) => `failed: ${err.key ?? err.message}`,
     onRateLimit: () => {},
@@ -287,6 +290,46 @@ test('nothing is read aloud once the run has stopped', async () => {
   assert.deepEqual(spoken, []);
 });
 
+const WINDOWS_APP = { desktop: true, platform: 'windows' };
+
+test('in the Windows desktop app nothing is read aloud while PC audio is captured', async () => {
+  for (const source of ['system', 'both']) {
+    const { run, translator, spoken } = setup({ readAloud: 'B', source, platform: WINDOWS_APP });
+    run.tracker.final('おはようございます、皆さん。');
+    translator.requests[0].resolve('Good morning, everyone.');
+    await settle();
+    assert.equal(run.session.segments[0].tgt, 'Good morning, everyone.', source);
+    assert.deepEqual(spoken, [], source);
+  }
+  const three = setup({ langs: [JA, EN, KO], readAloud: 'C', source: 'system', platform: WINDOWS_APP });
+  three.run.tracker.final('Good morning, everyone.');
+  await settle();
+  three.translator.requests[0].resolve('皆さん、おはようございます。');
+  three.translator.requests[1].resolve('여러분, 안녕하세요.');
+  await settle();
+  assert.deepEqual(three.spoken, [], 'three languages');
+});
+
+test('in the Windows desktop app translations are read aloud with the microphone as the source', async () => {
+  const { run, translator, spoken } = setup({ readAloud: 'B', source: 'mic', platform: WINDOWS_APP });
+  run.tracker.final('おはようございます、皆さん。');
+  translator.requests[0].resolve('Good morning, everyone.');
+  await settle();
+  assert.deepEqual(spoken, [{ text: 'Good morning, everyone.', code: 'en-US' }]);
+});
+
+test('in the macOS desktop app translations are read aloud while PC audio is captured', async () => {
+  const { run, translator, spoken } = setup({
+    readAloud: 'B',
+    source: 'both',
+    platform: { desktop: true, platform: 'mac' },
+  });
+  run.tracker.final('おはようございます、皆さん。');
+  translator.requests[0].resolve('Good morning, everyone.');
+  await settle();
+  assert.deepEqual(spoken, [{ text: 'Good morning, everyone.', code: 'en-US' }]);
+});
+
 test('a final translation into one language streams in place of the lines shown for the sentence in progress', async () => {
   const { run, view, translator } = setup();
   // Speech in neither language: the in-progress translation showed one line per language.
@@ -362,6 +405,7 @@ test('the pacer the flow builds runs on the clock and timers it is given', async
     settings,
     getRun: () => run,
     selectedLangs: () => ['ja-JP', 'en-US'],
+    platform: BROWSER,
     markDirty: () => {},
     errorText: (err) => err.message,
     onRateLimit: () => {},

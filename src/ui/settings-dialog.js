@@ -2,14 +2,15 @@
 // three language selects, the swap button and the audio source): each field's read and write, opening,
 // and saving when the dialog closes. Also the API key while the page runs, and re-localizing the page
 // when the display language changes. The rules (which choices are offered for the languages selected,
-// what follows what, what a field falls back to) are in src/storage/settings.js and src/ui/langs.js.
+// what follows what, what a field falls back to) are in src/storage/settings.js and src/ui/langs.js;
+// when reading aloud is not offered because the app would hear itself, in src/translation/read-aloud.js.
 //
 // Made during the startup pass, before the other parts of the screen: it fills the selects and applies
 // the display language and the text size as it is made. What it asks of other parts goes through the
 // callbacks below, which reach them only when called.
 
 import { addFileSourceOption } from '../debug/debug-tools.js';
-import { canCaptureSystemAudio } from '../speech/audio.js';
+import { appPlatform, canCaptureSystemAudio } from '../speech/audio.js';
 import {
   canReadAloud,
   knownUiLang,
@@ -21,6 +22,7 @@ import {
   translateModelOr,
   usableSource,
 } from '../storage/settings.js';
+import { readAloudHeard } from '../translation/read-aloud.js';
 import { applyTranslations, availableLocales, getLocale, resolveLocale, setLocale } from './i18n.js';
 import { followLangChange, followPlace, followThirdLangChange, LANGS, langLabel as labelIn } from './langs.js';
 
@@ -118,6 +120,7 @@ export function createSettingsDialog({
   normalizeSettings(settings); // a stored third language or choice for other languages that no longer fits
   els.langC.value = settings.langC;
   const systemAudio = canCaptureSystemAudio();
+  const platform = appPlatform();
   if (!systemAudio) {
     for (const option of els.source.querySelectorAll('option:not([value=mic])')) option.remove();
   }
@@ -233,10 +236,14 @@ export function createSettingsDialog({
       return t('settings.readAloud.into', { lang: langLabel(c.lang) });
     };
     els.readAloud.replaceChildren(...readAloudChoices(settings).map((c) => new Option(label(c), c.value)));
-    els.readAloud.value = shownReadAloud(settings);
+    // While the app would hear itself, nothing is read: the field shows off, and the stored choice
+    // is kept for when the source is the microphone only (the source cannot change while listening).
+    const heard = readAloudHeard(platform, settings.source);
     const available = canReadAloud(settings);
-    els.readAloud.disabled = !available;
-    els.readAloudUnavailable.hidden = available;
+    els.readAloud.value = heard ? 'off' : shownReadAloud(settings);
+    els.readAloud.disabled = heard || !available;
+    els.readAloudUnavailable.hidden = heard || available;
+    els.readAloudHeard.hidden = !heard;
   }
   // Applies at once, also while listening.
   els.readAloud.onchange = () => {

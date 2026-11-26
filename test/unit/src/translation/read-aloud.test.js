@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { pickVoice, ReadAloud, readAloudLanguages, speechLang } from '../../../../src/translation/read-aloud.js';
+import {
+  pickVoice,
+  ReadAloud,
+  readAloudHeard,
+  readAloudInEffect,
+  readAloudLanguages,
+  speechLang,
+} from '../../../../src/translation/read-aloud.js';
 
 // A synthesizer that reads nothing: it keeps what it was given and finishes on request.
 function fakeSynth(voices = []) {
@@ -159,4 +166,36 @@ test('a choice that does not fit the languages selected reads nothing', () => {
   assert.deepEqual(readAloudLanguages('C', ['ja-JP', 'en-US']), [], 'the third, with two languages');
   assert.deepEqual(readAloudLanguages('X', ['ja-JP', 'en-US']), []);
   assert.deepEqual(readAloudLanguages(undefined, ['ja-JP', 'en-US']), []);
+});
+
+const PLACES = {
+  browser: { desktop: false, platform: 'other' },
+  'browser on Windows': { desktop: false, platform: 'windows' },
+  'macOS app': { desktop: true, platform: 'mac' },
+  'Windows app': { desktop: true, platform: 'windows' },
+};
+
+test('the Windows desktop app would hear what it reads aloud while PC audio is captured, and only then', () => {
+  const heard = [];
+  for (const [place, platform] of Object.entries(PLACES)) {
+    for (const source of ['mic', 'system', 'both', 'file']) {
+      if (readAloudHeard(platform, source)) heard.push(`${place} ${source}`);
+    }
+  }
+  assert.deepEqual(heard, ['Windows app system', 'Windows app both']);
+});
+
+test('reading aloud is off while the app would hear itself, and the stored choice applies otherwise', () => {
+  for (const choice of ['off', 'A', 'B', 'C', 'both']) {
+    for (const [place, platform] of Object.entries(PLACES)) {
+      for (const source of ['mic', 'system', 'both']) {
+        const off = place === 'Windows app' && source !== 'mic';
+        assert.equal(
+          readAloudInEffect(choice, platform, source),
+          off ? 'off' : choice,
+          `${choice}, ${place}, ${source}`,
+        );
+      }
+    }
+  }
 });

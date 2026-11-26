@@ -1,6 +1,8 @@
 // Reads finished translations aloud with the system's speech synthesis (Web Speech API: no
 // network, no key). DOM-free; the synthesizer is injected so it can be tested.
 
+import { ownAudioRestricted } from '../speech/audio.js';
+
 // The app's language codes where the voices are tagged differently.
 const BCP47 = { 'cmn-Hans-CN': 'zh-CN', 'cmn-Hant-TW': 'zh-TW' };
 export const speechLang = (code) => BCP47[code] ?? code;
@@ -27,6 +29,17 @@ export function readAloudLanguages(choice, langs) {
   const i = ['A', 'B', 'C'].indexOf(choice);
   return i >= 0 && langs[i] ? [langs[i]] : [];
 }
+
+// Whether translations read aloud would be captured again, and so transcribed and translated in a
+// loop: in the desktop app, while PC audio ('system' or 'both') is captured with the app's own sound
+// (see ownAudioRestricted). platform: { desktop, platform } as appPlatform() gives it; source: what is
+// being captured (the source setting, which cannot change while listening).
+export const readAloudHeard = (platform, source) =>
+  platform.desktop && !ownAudioRestricted(platform) && (source === 'system' || source === 'both');
+
+// The reading-aloud choice in effect: the stored one, or 'off' while it would be heard again. The
+// stored choice is kept and applies again when the source is the microphone only.
+export const readAloudInEffect = (choice, platform, source) => (readAloudHeard(platform, source) ? 'off' : choice);
 
 export class ReadAloud {
   // maxWaiting: sentences kept in line behind the one being read. When another one arrives the

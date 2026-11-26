@@ -225,6 +225,8 @@ export default {
     'Finished sentences are read with your system’s voices. Use headphones: from speakers, the microphone would pick up the voice and transcribe it again.',
   'settings.readAloud.unavailable':
     'Not available for this language pair: both languages use the same writing system, so the language of a translation cannot be told.',
+  'settings.readAloud.heard':
+    'Not available on Windows while PC audio is captured: the app would hear its own voice. It works with the microphone as the source.',
   'settings.captionItems': 'Sentences kept in the area below',
   'settings.captionItems.help':
     'This includes the sentence being spoken. More is easier to re-read, and the area gets taller.',

@@ -47,6 +47,7 @@ const IDS = [
   'readAloud',
   'readAloudField',
   'readAloudUnavailable',
+  'readAloudHeard',
   'captionItems',
   'captionItemsOut',
   'captionContent',

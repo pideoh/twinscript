@@ -222,6 +222,8 @@ export default {
   'settings.readAloud.help':
     '確定した文をシステムの音声で読み上げます。ヘッドホンを使ってください。スピーカーから流すとマイクが音声を拾い、もう一度文字起こしされてしまいます。',
   'settings.readAloud.unavailable': 'この2言語は同じ文字を使うため訳文の言語を判別できず、読み上げは使えません。',
+  'settings.readAloud.heard':
+    'Windows では、PC音声を取り込んでいる間は使えません。アプリが自分の読み上げを聞き取ってしまうためです。音声入力がマイクなら使えます。',
   'settings.captionItems': '下の欄に残す文数',
   'settings.captionItems.help': '話している文を含む数です。増やすと読み返しやすくなり、欄は高くなります。',
   'settings.captionItems.one': '{n} 文',

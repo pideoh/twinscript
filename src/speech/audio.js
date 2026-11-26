@@ -10,6 +10,18 @@ const inDesktopApp = () => /\bElectron\//.test(navigator.userAgent);
 // The macOS desktop app, where PC audio depends on the "System Audio Recording" permission.
 export const inMacDesktopApp = () => inDesktopApp() && /Mac/.test(navigator.userAgent);
 
+// Where the page runs: { desktop, platform }, platform being 'mac', 'windows' or 'other'.
+export const appPlatform = (ua = navigator.userAgent) => ({
+  desktop: /\bElectron\//.test(ua),
+  platform: /Windows/.test(ua) ? 'windows' : /Mac/.test(ua) ? 'mac' : 'other',
+});
+
+// Whether PC audio is asked for without the app's own sound (restrictOwnAudio). Only the desktop app
+// captures the whole system's audio, which includes its own sound. On Windows the option switches
+// Chromium from the loopback of the output device to a per-process capture, which misses the sound of
+// some apps (the Teams desktop app), so Windows takes the plain loopback, the app's own sound included.
+export const ownAudioRestricted = ({ desktop, platform }) => desktop && platform !== 'windows';
+
 function toBase64(buffer) {
   const bytes = new Uint8Array(buffer);
   let bin = '';
@@ -35,8 +47,7 @@ export class AudioCapture {
     try {
       if (source === 'system' || source === 'both') {
         const audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
-        // The desktop app captures the whole system's audio, which would include its own sounds.
-        if (inDesktopApp()) audio.restrictOwnAudio = true;
+        if (ownAudioRestricted(appPlatform())) audio.restrictOwnAudio = true;
         // Ask for this first: the picker needs the click's user activation.
         const display = await navigator.mediaDevices.getDisplayMedia({ video: true, audio, systemAudio: 'include' });
         this.streams.push(display);
