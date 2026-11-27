@@ -10,7 +10,7 @@
 
 import { MODEL as DIARIZE_MODEL, GeminiDiarizer, labelSpeakers } from '../session/diarizer.js';
 import { formatDateTime, formatElapsed } from '../session/exporter.js';
-import { decodeRecording } from '../session/speaker-audio.js';
+import { decodeRecordings } from '../session/speaker-audio.js';
 import {
   canLabel,
   cleanSpeakerName,
@@ -22,7 +22,6 @@ import {
 import { assignSpeakers, recordingTimeline } from '../session/speakers.js';
 import { RateLimitError } from '../translation/translator.js';
 import { addTokens, emptyUsage } from '../usage/usage.js';
-import { MessageError } from './message-error.js';
 
 const SPEAKERS_CONSENT_KEY = 'rt-speakers-consent';
 
@@ -134,21 +133,10 @@ export function createSpeakerPanel({
     renderSpeakerTools();
     flushSaves(); // so the lengths of the recordings are on disk
     try {
-      // Each recording is decoded on its own and kept as 16 kHz mono samples (about 115 MB an hour).
-      const decoded = [];
-      for (const rec of sess.recordings) {
-        const chunks = await store.getAudioChunks(sess.id, rec.id).catch(() => []);
-        controller.signal.throwIfAborted();
-        if (!chunks.length) continue;
-        try {
-          const audio = await decodeRecording(new Blob(chunks, { type: rec.mime }));
-          if (audio.samples.length) decoded.push({ elapsedStart: rec.elapsedStart ?? 0, ...audio });
-        } catch {
-          /* a recording that cannot be decoded: its lines get no speaker */
-        }
-        controller.signal.throwIfAborted();
-      }
-      if (!decoded.length) throw new MessageError('error.speakersNoAudio');
+      const decoded = await decodeRecordings(sess, {
+        getAudioChunks: (...args) => store.getAudioChunks(...args),
+        signal: controller.signal,
+      });
       const timeline = recordingTimeline(decoded);
       const result = await labelSpeakers({
         pieces: decoded,

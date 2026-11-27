@@ -23,7 +23,7 @@ import { store } from './storage/store.js';
 import { createFlow } from './translation/flow.js';
 import { DEFAULT_STRATEGY, strategyNamed } from './translation/pacer.js';
 import { ReadAloud } from './translation/read-aloud.js';
-import { GeminiTranslator } from './translation/translator.js';
+import { translatorFor } from './translation/translator.js';
 import { createCaptionWindow } from './ui/caption-window.js';
 import { readElements } from './ui/elements.js';
 import { createExportDialog } from './ui/export-dialog.js';
@@ -544,18 +544,8 @@ async function start() {
     r.translator = new MockTranslator({ model: settings.translateModel, onUsage });
     r.transcriber = new MockTranscriber({ ...handlers, languages: [langA, langB, langC].map((l) => l?.name) });
   } else {
-    r.translator = new GeminiTranslator({
-      apiKey,
-      model: settings.translateModel,
-      onUsage,
-      langA: langA.name,
-      langB: langB.name,
-      langC: langC?.name,
-      glossary: settings.glossary,
-      // For the rules of two languages; 'all' gives the first language there, as before. Speech
-      // that its writing system shows to be neither language never reaches those rules with 'all'.
-      otherInto: (r.otherInto === 'B' ? langB : langA).name,
-    });
+    const { translateModel: model, glossary } = settings;
+    r.translator = translatorFor({ apiKey, model, langs: r.langs, otherInto: r.otherInto, glossary, onUsage });
     r.transcriber = new GeminiLiveTranscriber({
       apiKey,
       languageCodes: r.langs.map((l) => l.code),

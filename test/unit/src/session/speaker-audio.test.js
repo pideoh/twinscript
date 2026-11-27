@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { decodeRecording } from '../../../../src/session/speaker-audio.js';
+import { decodeRecording, decodeRecordings } from '../../../../src/session/speaker-audio.js';
 import { withGlobals } from '../../../support/globals.js';
 
 // An OfflineAudioContext whose decoder returns the given channels (or fails), and remembers how it
@@ -88,4 +88,41 @@ test('a recording the browser cannot decode is reported to the caller, not turne
   await withGlobals({ OfflineAudioContext }, async () => {
     await assert.rejects(decodeRecording(blobOf([9, 9])), failure);
   });
+});
+
+test("a session's recordings are decoded in order; one without audio or that cannot be read is left out", async () => {
+  const sess = {
+    id: 's',
+    recordings: [
+      { id: 'r1', elapsedStart: 0, mime: 'audio/webm' },
+      { id: 'r2', elapsedStart: 5000, mime: 'audio/webm' },
+      { id: 'r3', elapsedStart: 9000, mime: 'audio/webm' },
+      { id: 'r4', mime: 'audio/webm' },
+    ],
+  };
+  const chunks = { r1: [blobOf([1])], r2: [], r3: [blobOf([3])], r4: [blobOf([4])] };
+  const getAudioChunks = async (_, recId) => chunks[recId];
+  const decode = async (blob) => {
+    const [byte] = new Uint8Array(await blob.arrayBuffer());
+    if (byte === 3) throw new Error('unreadable');
+    return { samples: new Int16Array(byte * 10), durationMs: byte * 100 };
+  };
+  const decoded = await decodeRecordings(sess, { getAudioChunks, decode });
+  assert.deepEqual(
+    decoded.map((d) => [d.elapsedStart, d.durationMs]),
+    [
+      [0, 100],
+      [0, 400],
+    ],
+  );
+  await assert.rejects(
+    decodeRecordings({ id: 's', recordings: [] }, { getAudioChunks, decode }),
+    (err) => err.key === 'error.speakersNoAudio',
+  );
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(
+    decodeRecordings(sess, { getAudioChunks, decode, signal: controller.signal }),
+    (err) => err.name === 'AbortError',
+  );
 });

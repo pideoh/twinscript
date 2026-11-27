@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { GeminiTranslator, passes, RateLimitError } from '../../../../src/translation/translator.js';
+import { GeminiTranslator, passes, RateLimitError, translatorFor } from '../../../../src/translation/translator.js';
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -440,4 +440,20 @@ test('an answer with no translation in it is reported as an error with a message
     reports.map((r) => r.usageMetadata),
     [usage],
   );
+});
+
+test("a session's translator is given its languages by name and the language for other speech", () => {
+  const langs = [
+    { code: 'ja-JP', name: 'Japanese' },
+    { code: 'en-US', name: 'English' },
+    { code: 'ko-KR', name: 'Korean' },
+  ];
+  const three = translatorFor({ apiKey: 'KEY', model: 'm-1', langs, otherInto: 'B', glossary: 'g' });
+  assert.ok(three instanceof GeminiTranslator);
+  assert.deepEqual(three.langs, { langA: 'Japanese', langB: 'English', otherInto: 'English' });
+  assert.equal(three.langC, 'Korean');
+  assert.equal(three.glossary, 'g');
+  const two = translatorFor({ apiKey: 'KEY', model: 'm-1', langs: langs.slice(0, 2), otherInto: 'all' });
+  assert.deepEqual(two.langs, { langA: 'Japanese', langB: 'English', otherInto: 'Japanese' });
+  assert.equal(two.langC, undefined);
 });
