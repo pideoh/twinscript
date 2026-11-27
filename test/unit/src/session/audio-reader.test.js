@@ -18,7 +18,14 @@ function fakeLibrary({ pieces = [], codec = 'aac', decodable = true, track = tru
       seen.formats = formats.map((f) => f.name);
     }
     async getPrimaryAudioTrack() {
-      return track ? { codec, canDecode: async () => decodable, computeDuration: async () => seconds } : null;
+      return track
+        ? {
+            codec,
+            canDecode: async () => decodable,
+            computeDuration: async () => seconds,
+            getFirstTimestamp: async () => pieces[0]?.timestamp ?? 0,
+          }
+        : null;
     }
     dispose() {
       seen.disposed++;
@@ -93,6 +100,33 @@ test('audio before time 0, an encoder’s priming, is left out', async () => {
   const { samples } = await readAudio(blob, { load });
   assert.equal(samples.length, 1024 - 64);
   assert.equal(seen.closed, 3);
+});
+
+test('decoded audio is placed by its timestamps: a gap becomes silence, an overlap is dropped', async () => {
+  const pieces = [
+    { rate: 16000, channels: [constant(1600, 0.5)], timestamp: 0 },
+    // 50 ms missing, then a piece that starts 10 ms before the end of the one before it.
+    { rate: 16000, channels: [constant(1600, 0.5)], timestamp: 0.15 },
+    { rate: 16000, channels: [constant(1600, 0.25)], timestamp: 0.24 },
+  ];
+  const { load } = fakeLibrary({ pieces });
+  const { samples, source } = await readAudio(blob, { load });
+  assert.equal(samples.length, 1600 + 800 + 1600 + 1600 - 160);
+  assert.equal(samples[2000], 0, 'the gap is silent');
+  assert.equal(samples[2400 + 800], 16384, 'the second piece where it belongs');
+  assert.equal(samples[4000 + 100], 8192, 'the third piece after the overlap');
+  assert.deepEqual(source, { codec: 'aac', firstTimestamp: 0, firstSample: 0, duration: 1, sampleRate: 16000 });
+});
+
+test('audio that starts after time 0 starts the recording, as decodeAudioData has it', async () => {
+  const pieces = [
+    { rate: 16000, channels: [constant(1600, 0.5)], timestamp: 0.08 },
+    { rate: 16000, channels: [constant(1600, 0.5)], timestamp: 0.18 },
+  ];
+  const { load } = fakeLibrary({ pieces });
+  const { samples } = await readAudio(blob, { load });
+  assert.equal(samples.length, 3200);
+  assert.equal(samples[10], 16384);
 });
 
 test('a file the library cannot read, without audio, with audio the platform cannot decode, or in Vorbis, is left to the whole-file decode', async () => {

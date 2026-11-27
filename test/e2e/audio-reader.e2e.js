@@ -12,22 +12,44 @@ import { compareDecodes, fixture, madeInPage, setup, silentMp3, speechWav } from
 
 const { openApp } = setup();
 
-// What "the same" means: no shift at the start or at the end (so no drift), the same length within
-// 50 ms (an AAC encoder's padding at the end, which decodeAudioData drops, may be kept), and the
-// difference at least 35 dB below the signal (two resamplers of similar quality).
-function assertSame(name, r) {
+// The encoder's priming that a file marks only in iTunes' iTunSMPB tag (as afconvert and other Apple
+// encoders write M4A), in samples at the file's rate and at 16 kHz, or null. Mediabunny 1.66.2 does not
+// read that tag (1.66.5 does), so the priming of such a file is kept: its audio comes that much later
+// than in the whole-file decode, by the same amount on every platform.
+function itunesPriming(bytes) {
+  const at = bytes.indexOf('iTunSMPB');
+  if (at < 0) return null;
+  const words = bytes
+    .subarray(at, at + 200)
+    .toString('latin1')
+    .match(/(?: [0-9A-F]{8,16})+/)[0]
+    .trim()
+    .split(' ');
+  return Number.parseInt(words[1], 16);
+}
+
+// What "the same" means: no shift at the start or at the end (so no drift; for a file whose priming
+// only iTunSMPB marks, a shift of exactly that priming), the same length within 50 ms (an AAC encoder's
+// padding at the end, which decodeAudioData drops, may be kept), and the difference at least 35 dB
+// below the signal (two resamplers of similar quality). A failure prints what the library reported.
+function assertSame(name, r, { priming = null } = {}) {
+  const said = () =>
+    `${name}: in pieces ${r.piecesLength} samples, whole ${r.wholeLength}, shifted ${r.lagStart} at the start and ${r.lagEnd} at the end; the library reported ${JSON.stringify(r.source)}`;
   assert.ok(r.pieces, `${name} is read in pieces`);
-  assert.ok(Math.abs(r.piecesLength - r.wholeLength) <= 800, `${name}: ${r.piecesLength} against ${r.wholeLength}`);
+  const offset = priming && r.source ? Math.round((priming * 16000) / r.source.sampleRate) : 0;
+  const shift = r.lagStart === 0 ? 0 : offset;
+  assert.ok(Math.abs(r.piecesLength - shift - r.wholeLength) <= 800, said());
   if (r.silent) return;
-  assert.equal(r.lagStart, 0, `${name}: shifted at the start`);
-  assert.equal(r.lagEnd, 0, `${name}: shifted at the end`);
-  assert.ok(r.snrDb >= 35, `${name}: ${r.snrDb.toFixed(1)} dB`);
+  assert.ok(Math.abs(r.lagStart - shift) <= 1 && Math.abs(r.lagEnd - shift) <= 1, said());
+  assert.ok(r.snrDb >= 35, `${said()}; ${r.snrDb.toFixed(1)} dB`);
 }
 
 test('every format the import takes reads in pieces into the same audio as a whole-file decode', async () => {
   const { page, errors, close } = await openApp('', { apiKey: 'test-key' });
-  for (const name of ['speech.m4a', 'speech.mp4', 'speech.aac', 'speech.flac'])
-    assertSame(name, await compareDecodes(page, await fixture(name)));
+  for (const name of ['speech.m4a', 'speech.mp4', 'speech.aac', 'speech.flac']) {
+    const bytes = await fixture(name);
+    assertSame(name, await compareDecodes(page, bytes), { priming: itunesPriming(bytes) });
+  }
   assertSame('WAV, 44.1 kHz stereo', await compareDecodes(page, speechWav()));
   assertSame('WAV, 8 kHz mono', await compareDecodes(page, speechWav({ rate: 8000, channels: 1 })));
   const mp3 = await compareDecodes(page, silentMp3());

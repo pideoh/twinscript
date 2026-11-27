@@ -102,8 +102,10 @@ export const madeInPage = (page, wav, seconds = 1.5) =>
   );
 
 // Decodes `bytes` both ways in the page and compares them: { pieces (null: not read in pieces),
+// source (what the library reported: codec, first timestamp, first decoded sample, duration, rate),
 // wholeLength, piecesLength, lagStart, lagEnd (the shift that matches best near the start and near
-// the end, in 16 kHz samples), snrDb (the whole decode against the difference, over the middle) }.
+// the end, in 16 kHz samples), snrDb (the whole decode against the difference over the middle, at the
+// shift found at the start) }.
 export const compareDecodes = (page, bytes, type = '') =>
   page.evaluate(
     async ({ bytes, type }) => {
@@ -113,6 +115,7 @@ export const compareDecodes = (page, bytes, type = '') =>
       const pieces = await readAudio(blob);
       const whole = await decodeWhole(blob);
       if (!pieces) return { pieces: null, wholeLength: whole.samples.length };
+      const source = pieces.source;
       const a = whole.samples;
       const b = pieces.samples;
       const n = Math.min(a.length, b.length);
@@ -121,7 +124,7 @@ export const compareDecodes = (page, bytes, type = '') =>
       const lagAt = (from, to) => {
         let best = 0;
         let bestErr = Infinity;
-        for (let k = 0; k <= 400; k++) {
+        for (let k = 0; k <= 3200; k++) {
           const lag = k % 2 ? (k + 1) / 2 : k ? -k / 2 : 0;
           let e = 0;
           for (let i = from; i < to; i++) e += (a[i] - (b[i + lag] ?? 0)) ** 2;
@@ -129,18 +132,22 @@ export const compareDecodes = (page, bytes, type = '') =>
         }
         return best;
       };
+      const lagStart = lagAt(Math.floor(n * 0.05), Math.floor(n * 0.3));
+      const lagEnd = lagAt(Math.floor(n * 0.7), Math.floor(n * 0.95));
+      // The difference over the middle, at the shift found at the start.
       let err = 0;
       let sig = 0;
       for (let i = Math.floor(n * 0.1); i < Math.floor(n * 0.9); i++) {
-        err += (a[i] - b[i]) ** 2;
+        err += (a[i] - (b[i + lagStart] ?? 0)) ** 2;
         sig += a[i] ** 2;
       }
       return {
         pieces: true,
+        source,
         wholeLength: a.length,
         piecesLength: b.length,
-        lagStart: lagAt(Math.floor(n * 0.05), Math.floor(n * 0.3)),
-        lagEnd: lagAt(Math.floor(n * 0.7), Math.floor(n * 0.95)),
+        lagStart,
+        lagEnd,
         snrDb: sig ? 10 * Math.log10(sig / Math.max(err, 1e-9)) : null,
         silent: sig === 0 && b.every((v) => v === 0),
       };
