@@ -37,7 +37,7 @@ test('serves only the app files from app://rt/', async () => {
   assert.equal(await status('app/main.js'), 404);
 });
 
-test('an audio file chosen for import can be measured and decoded in the page, and the common formats are played', async () => {
+test('an audio file chosen for import can be measured and decoded in the page, whole and in pieces, and the common formats are played', async () => {
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
   const read = await page.evaluate(async () => {
@@ -84,10 +84,14 @@ test('an audio file chosen for import can be measured and decoded in the page, a
         'audio/webm; codecs="opus"',
       ].map((type) => [type, audio.canPlayType(type)]),
     );
-    return { metadata, decoded, plays };
+    // Read a piece at a time: the library is served from app://rt/ and needs nothing the policy blocks.
+    const { readAudio } = await import('./src/session/audio-reader.js');
+    const pieces = await readAudio(blob);
+    return { metadata, decoded, plays, pieces: pieces?.samples.length };
   });
   assert.equal(read.metadata, 2);
   assert.equal(read.decoded, 2);
+  assert.equal(read.pieces, 32000, 'read in pieces at 16 kHz');
   for (const [type, answer] of Object.entries(read.plays)) assert.ok(answer, `${type} is played`);
 });
 
