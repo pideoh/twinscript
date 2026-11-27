@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.16.0](https://github.com/pideoh/twinscript/compare/v0.15.0...v0.16.0) (2026-11-27)
+
+
+### Features
+
+* answer questions about a meeting from its transcript (logic and storage) ([#163](https://github.com/pideoh/twinscript/issues/163)) ([c925159](https://github.com/pideoh/twinscript/commit/c92515930cd4478fbaa22ffda10c43ac9957f8d5))
+* ask questions about a meeting ([#165](https://github.com/pideoh/twinscript/issues/165)) ([df07a6b](https://github.com/pideoh/twinscript/commit/df07a6bde6ec1ef46107fd22baa6e5741661d286))
+* show the transcript and the summary in tabs ([#164](https://github.com/pideoh/twinscript/issues/164)) ([78e2221](https://github.com/pideoh/twinscript/commit/78e22214a4fd05b16d7e77a6f58e14eb645b078e))
+
+
+### Bug Fixes
+
+* capture every app's sound as PC audio on Windows ([#153](https://github.com/pideoh/twinscript/issues/153)) ([24ed398](https://github.com/pideoh/twinscript/commit/24ed398479c8684f10f86283189fa25837cb4477)), closes [#152](https://github.com/pideoh/twinscript/issues/152)
+
 ## [0.15.0](https://github.com/pideoh/twinscript/compare/v0.14.0...v0.15.0) (2026-11-25)
 
 
