@@ -64,5 +64,8 @@
       "target": "zip",
       "icon": "icons/icon-512.png"
     }
+  },
+  "dependencies": {
+    "mediabunny": "1.66.5"
   }
 }
