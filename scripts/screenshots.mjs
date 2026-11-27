@@ -82,7 +82,9 @@ const shot = async (page, name) => {
   await page.screenshot({ path: join(out, `${name}.png`) });
   console.log(name);
 };
+// Opens the Summary tab and makes a summary.
 async function summarize(page) {
+  await page.click('#tabSummary');
   await page.click('#summarize');
   await page.waitForFunction(
     () =>
@@ -105,6 +107,11 @@ async function listen(page) {
 for (const scheme of ['light', 'dark']) {
   if (wanted(`desktop-${scheme}`) || wanted(`settings-${scheme}`) || wanted(`export-${scheme}`)) {
     const { page, close } = await open({ scheme });
+    if (wanted(`desktop-${scheme}`)) {
+      await page.click('#tabSummary');
+      await shot(page, `desktop-${scheme}-summary-empty`);
+      await page.click('#tabTranscript');
+    }
     await listen(page);
     if (wanted(`desktop-${scheme}`)) await shot(page, `desktop-${scheme}-listening`);
     await page.click('#toggle');
@@ -177,6 +184,7 @@ for (const scheme of ['light', 'dark']) {
   await listen(page);
   await page.click('#toggle');
   await page.waitForTimeout(400);
+  await page.click('#tabSummary');
   await part(page, '#summary', `summary-${scheme}-bar`);
   await summarize(page);
   await page.selectOption('#summaryTemplate', 'preset:minutes');

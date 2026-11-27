@@ -4,6 +4,7 @@
 //   gemini.js   the Gemini mocks (WebSocket, token, translation), MOCK_USAGE, translated
 //   targets.js  the translation mock for a third language, tagged, linesDone
 //   summary.js  the summary mock
+//   tabs.js     the tabs of the main area: the one shown, showing one
 //   storage.js  saved sessions read from IndexedDB
 //   pc-audio.js the getDisplayMedia stand-in
 //   speakers.js the recorded session and the speaker-label mocks
@@ -16,6 +17,7 @@ export * from './helpers/pc-audio.js';
 export * from './helpers/speakers.js';
 export * from './helpers/storage.js';
 export * from './helpers/summary.js';
+export * from './helpers/tabs.js';
 export * from './helpers/targets.js';
 export * from './helpers/translation-errors.js';
 export * from './helpers/updates.js';

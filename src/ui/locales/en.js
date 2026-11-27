@@ -43,6 +43,8 @@ export default {
   'caption.close': 'Close the caption window',
 
   // summary of a session
+  'tabs.label': 'Session content',
+  'tabs.transcript': 'Transcript',
   'summary.label': 'Session summary',
   'summary.title': 'Summary',
   'summary.none': 'Choose a template and summarize this session',

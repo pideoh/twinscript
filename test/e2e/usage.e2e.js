@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { listening, mockGemini, reload, saved, setup, translated } from './helpers.js';
+import { listening, mockGemini, reload, saved, setup, showTab, translated } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -89,6 +89,7 @@ test('a session shows its requests, tokens and estimated cost, and the totals ke
       })}\n\n`,
     }),
   );
+  await showTab(page, 'summary');
   await page.click('#summarize');
   await page.waitForFunction(() => document.querySelector('#summaryContent h2, #summaryContent h3'));
   await openUsage(page);

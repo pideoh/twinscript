@@ -12,6 +12,7 @@ import {
   seededAnswer,
   seedRecordedSession,
   setup,
+  showTab,
   storedSessions,
 } from './helpers.js';
 
@@ -130,6 +131,7 @@ test('a recorded session gets speaker labels on its lines; they can be renamed, 
 
   // A summary made now attributes the lines.
   const requests = await mockSummary(page, () => ({ body: '## 概要\n\n予算を確認した。' }));
+  await showTab(page, 'summary');
   await page.click('#summarize');
   await page.waitForFunction(() => document.querySelectorAll('#summaryHistory option').length === 1);
   const transcript = requests[0].contents[0].parts[0].text;
@@ -139,11 +141,13 @@ test('a recorded session gets speaker labels on its lines; they can be renamed, 
   assert.ok(await page.isHidden('#summaryStale'));
 
   // Labelling again asks first (not for the upload again) and replaces names and corrections.
+  await showTab(page, 'transcript');
   await page.click('#labelSpeakers');
   await labelled(page);
   assert.equal(asked.length, 2);
   assert.match(asked[1], /もう一度識別しますか/);
   assert.deepEqual(await lineSpeakers(page), ['話者1', '話者2', '話者1', '話者2']);
+  await showTab(page, 'summary');
   assert.ok(await page.isVisible('#summaryStale'), 'the summary was made before these labels');
   assert.equal(await page.getAttribute('#summaryStale', 'title'), 'この要約の作成後に話者が識別されました');
 
@@ -263,7 +267,7 @@ test('a session without a recording offers no speaker labels', async () => {
     });
   });
   await reload(page);
-  await page.waitForSelector('#summary:not([hidden])');
+  await page.waitForSelector('#summary:not([hidden])', { state: 'attached' });
   assert.ok(await page.isHidden('#speakerTools'));
   assert.deepEqual(errors, []);
   await close();
@@ -275,7 +279,7 @@ test('the demo offers no speaker labels and sends nothing to the speaker endpoin
   const { page, errors, close } = await openApp('?mock=1', { apiKey: 'test-key' });
   const service = await mockSpeakers(page);
   await seedRecordedSession(page);
-  await page.waitForSelector('#summary:not([hidden])');
+  await page.waitForSelector('#summary:not([hidden])', { state: 'attached' });
   assert.ok(await page.isHidden('#labelSpeakers'), 'no action to identify speakers');
   assert.ok(await page.isHidden('#speakerTools'));
   assert.deepEqual([service.uploads, service.analyses, service.deleted], [[], [], []]);

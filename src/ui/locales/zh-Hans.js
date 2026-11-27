@@ -42,6 +42,8 @@ export default {
   'caption.close': '关闭字幕窗口',
 
   // 会话摘要
+  'tabs.label': '会话内容',
+  'tabs.transcript': '转录文本',
   'summary.label': '会话摘要',
   'summary.title': '摘要',
   'summary.none': '选择模板，为本次会话生成摘要',

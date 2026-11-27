@@ -39,6 +39,7 @@ import { createTemplateEditor, createTemplateStore } from './ui/template-editor.
 import { createTranscriptView } from './ui/transcript-view.js';
 import { createUpdateNotice } from './ui/update-notice.js';
 import { createUsageDialog } from './ui/usage-dialog.js';
+import { createViews } from './ui/views.js';
 import { addTokens, emptyUsage } from './usage/usage.js';
 import { createUsageLog } from './usage/usage-log.js';
 
@@ -216,6 +217,7 @@ async function showSession(sess) {
   opening = null;
   reader.stop();
   current = sess;
+  views.handle({ type: 'opened' }); // first, so the transcript is on screen when it is scrolled
   try {
     localStorage.setItem('rt-current', sess.id);
   } catch {
@@ -349,7 +351,6 @@ const summaryPanel = createSummaryPanel({
   getLocale,
   settings,
   saveSettings,
-  storage: browserStorage,
   store,
   toast,
   errorText,
@@ -394,6 +395,9 @@ const speakerPanel = createSpeakerPanel({
   debug: DEBUG,
   demo: MOCK,
 });
+
+// The tabs of the main area (src/ui/views.js), and what each one's panel does when it is shown.
+const views = createViews({ els, onShow: { transcript: () => view.reveal(), summary: () => summaryPanel.render() } });
 
 // ---------- summary templates (settings dialog) ----------
 const templateEditor = createTemplateEditor({
@@ -489,6 +493,7 @@ async function start() {
   r.pacer = flow.pacer(r);
   run = r;
   setRunning(true);
+  views.handle({ type: 'started' });
   setStatus('connecting');
 
   const vocabulary = parseVocabulary(settings.vocabulary);

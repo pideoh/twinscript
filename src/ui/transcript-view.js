@@ -80,6 +80,9 @@ export function createTranscriptView({
   function nearBottom() {
     return els.log.scrollHeight - els.log.scrollTop - els.log.clientHeight < 120;
   }
+  // Whether the reader was at the newest line when the transcript was last on screen (its tab can be
+  // hidden while lines are added).
+  let nearWhenSeen = true;
   function keepBottom(wasNear) {
     if (wasNear) els.log.scrollTop = els.log.scrollHeight;
   }
@@ -219,6 +222,7 @@ export function createTranscriptView({
 
   // Offer a way back to the latest sentence while the user has scrolled up to re-read.
   function updateJump() {
+    if (els.log.clientHeight) nearWhenSeen = nearBottom();
     els.jump.hidden = nearBottom();
   }
   els.log.addEventListener('scroll', updateJump, { passive: true });
@@ -228,6 +232,11 @@ export function createTranscriptView({
 
   return {
     mount,
+    // The transcript is on screen again: at the newest line if the reader was there, else where it was.
+    reveal: () => {
+      keepBottom(nearWhenSeen);
+      updateJump();
+    },
     // Takes a segment off the page (the sentence in progress, when it is dropped).
     unmount: (seg) => seg.el.remove(),
     // Puts `seg` just above `other` (a sentence finished above the one in progress).
