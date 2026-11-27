@@ -13,10 +13,11 @@ export const RECORDED_LINES = [
 
 // Writes a stopped session with RECORDED_LINES and a 20-second recording (a quiet tone as a WAV file,
 // which the browser decodes like the app's own recordings) to IndexedDB the way the app stores it,
-// then reloads the page to show it. Returns the session's id.
-export async function seedRecordedSession(page, { lines = RECORDED_LINES, recordingMs = 20_000 } = {}) {
+// then reloads the page to show it. `extra`: more fields of the session record (speaker labels, …).
+// Returns the session's id.
+export async function seedRecordedSession(page, { lines = RECORDED_LINES, recordingMs = 20_000, extra = {} } = {}) {
   const id = await page.evaluate(
-    ({ lines, recordingMs }) => {
+    ({ lines, recordingMs, extra }) => {
       const rate = 8000;
       const n = (rate * recordingMs) / 1000;
       const bytes = new DataView(new ArrayBuffer(44 + n * 2));
@@ -52,6 +53,7 @@ export async function seedRecordedSession(page, { lines = RECORDED_LINES, record
         usage: { version: 1, transcription: {}, translation: {}, summary: {} },
         recordings: [{ id: 'rec-1', startedAt: now, elapsedStart: 0, durationMs: recordingMs, mime: 'audio/wav' }],
         segmentCount: lines.length,
+        ...extra,
       };
       return new Promise((resolve, reject) => {
         const open = indexedDB.open('twinscript');
@@ -71,7 +73,7 @@ export async function seedRecordedSession(page, { lines = RECORDED_LINES, record
         };
       });
     },
-    { lines, recordingMs },
+    { lines, recordingMs, extra },
   );
   await reload(page);
   await page.waitForFunction((n) => document.querySelectorAll('#log .seg').length === n, lines.length);

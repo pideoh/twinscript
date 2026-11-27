@@ -8,14 +8,19 @@
 //   questions keyPath ['sessionId', 'id']: every question asked about a session and its answer, one
 //             record each: { sessionId, id, question, answer, model, createdAt, truncated }.
 //   audio     auto-increment: recorded chunks { sessionId, recId, blob }.
+//   transcripts keyPath 'sessionId': the one transcript kept besides a session's own, once its
+//             transcript was rebuilt from the recording (src/session/rebuild.js): { sessionId, keptAt,
+//             segments: [segment records without sessionId and pos], speakerLabels? }. It is read
+//             only to put it back, and written together with the session it belongs to.
 // Version 1 kept the segments inside the session record; the upgrade to version 2 moves them out.
 // Version 3 adds `summaries`. A session saved by an earlier version may still hold its one
 // summary in the old shape (`summary`, structured JSON) in its record: it is left there and shown
 // by the app as the oldest entry of the session's summaries.
 // Version 4 adds `questions`; nothing else is moved or rewritten.
+// Version 5 adds `transcripts`; nothing else is moved or rewritten.
 
 const DB_NAME = 'twinscript';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 let dbPromise;
 
 // ---------- pure helpers (no IndexedDB; unit-tested) ----------
@@ -112,6 +117,7 @@ function upgrade(db, tx, oldVersion) {
   }
   if (oldVersion < 3) db.createObjectStore('summaries', { keyPath: ['sessionId', 'id'] });
   if (oldVersion < 4) db.createObjectStore('questions', { keyPath: ['sessionId', 'id'] });
+  if (oldVersion < 5) db.createObjectStore('transcripts', { keyPath: 'sessionId' });
 }
 
 // The stored form of a summary, and back.
@@ -135,6 +141,21 @@ export const questionRecord = (sessionId, { id, question, answer, model, created
 export function questionFromRecord(record) {
   const { sessionId, ...entry } = record;
   return entry;
+}
+
+// The stored form of a kept transcript ({ segments, speakerLabels, keptAt }), and back. Its
+// segments are stored as the segments store has them, without the key.
+export function keptRecord(sessionId, { segments, speakerLabels, keptAt }) {
+  return {
+    sessionId,
+    keptAt,
+    segments: segments.map((seg, pos) => segmentFromRecord(segmentRecord(sessionId, pos, seg))),
+    ...(speakerLabels && { speakerLabels }),
+  };
+}
+export function keptFromRecord(record) {
+  const { sessionId, ...kept } = record;
+  return { ...kept, speakerLabels: kept.speakerLabels ?? null };
 }
 
 // Called when the upgrade has to wait because another window of an earlier version still has the
@@ -216,6 +237,33 @@ export const store = {
     });
   },
 
+  // Writes the session record and all its segments in place of those stored, in one transaction with
+  // the transcript kept besides it: `kept` is put ({ segments, speakerLabels, keptAt }), deleted
+  // (null) or left as it is (undefined). Either all of it is written or none of it.
+  replaceTranscript(session, { kept } = {}) {
+    const { meta, segments } = splitSession(session);
+    if (!segments) return Promise.reject(new Error('the segments of the session are not loaded'));
+    written.set(session.id, segments);
+    return write(['sessions', 'segments', 'transcripts'], (tx) => {
+      tx.objectStore('sessions').put(meta);
+      const rows = tx.objectStore('segments');
+      rows.delete(rangeOf(session.id));
+      for (const record of segments) rows.put(record);
+      const transcripts = tx.objectStore('transcripts');
+      if (kept) transcripts.put(keptRecord(session.id, kept));
+      else if (kept === null) transcripts.delete(session.id);
+    }).catch((err) => {
+      written.delete(session.id);
+      throw err;
+    });
+  },
+
+  // The transcript kept besides a session's own, or null.
+  async loadKeptTranscript(sessionId) {
+    const record = await done((await open()).transaction('transcripts').objectStore('transcripts').get(sessionId));
+    return record ? keptFromRecord(record) : null;
+  },
+
   // A session's summaries, oldest first.
   async loadSummaries(sessionId) {
     const records = await done(
@@ -250,8 +298,9 @@ export const store = {
 
   deleteSession(id) {
     written.delete(id);
-    return write(['sessions', 'segments', 'summaries', 'questions', 'audio'], (tx) => {
+    return write(['sessions', 'segments', 'summaries', 'questions', 'transcripts', 'audio'], (tx) => {
       tx.objectStore('sessions').delete(id);
+      tx.objectStore('transcripts').delete(id);
       tx.objectStore('segments').delete(rangeOf(id));
       tx.objectStore('summaries').delete(rangeOf(id));
       tx.objectStore('questions').delete(rangeOf(id));

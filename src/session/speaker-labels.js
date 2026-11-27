@@ -1,6 +1,6 @@
 // A session's speaker labels as the app shows and edits them: whether it has any, the name shown
-// for a speaker, when a session can be labelled, how a renamed speaker's name is cleaned, and how
-// the speakers found are numbered. Telling the speakers apart is src/session/speakers.js. Pure,
+// for a speaker, when a session can be labelled, how a renamed speaker's name is cleaned, how
+// the speakers found are numbered, and the user's agreement to upload recordings for it. Telling the speakers apart is src/session/speakers.js. Pure,
 // DOM-free.
 //
 // A session with labels has `speakerLabels: { speakers: [{ id, name }], madeAt, uncertain, model }`
@@ -39,4 +39,24 @@ export function numberByFirstLine(ids) {
     segmentSpeakers: ids.map((id) => (id ? renumber.get(id) : undefined)),
     speakers: order.map((_, i) => ({ id: `s${i + 1}`, name: '' })),
   };
+}
+
+// Whether the user agreed that a session's recording is uploaded to the API to be analyzed, which is
+// asked once. Labelling speakers and rebuilding a transcript (src/ui/rebuild-panel.js) upload it the
+// same way and share the agreement. storage: a Storage-like object; one that throws (private mode)
+// means asking every time.
+export const RECORDING_CONSENT_KEY = 'rt-speakers-consent';
+export function hasRecordingConsent(storage) {
+  try {
+    return storage.getItem(RECORDING_CONSENT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+export function giveRecordingConsent(storage) {
+  try {
+    storage.setItem(RECORDING_CONSENT_KEY, '1');
+  } catch {
+    /* private mode */
+  }
 }

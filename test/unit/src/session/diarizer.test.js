@@ -81,7 +81,7 @@ test('an answer gives its status, its words and what it used', () => {
   };
   const read = readAnswer(answer);
   assert.equal(read.status, 'incomplete');
-  assert.deepEqual(read.words, [{ startMs: 1000, endMs: 1200, label: 'spk:0' }]);
+  assert.deepEqual(read.words, [{ startMs: 1000, endMs: 1200, label: 'spk:0', text: '' }]);
   assert.deepEqual(addTokens(emptyUsage(), 'diarization', MODEL, read.usage).diarization, {
     [MODEL]: { requests: 1, inputTokens: 4500, outputTokens: 900 },
   });

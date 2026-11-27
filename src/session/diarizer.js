@@ -214,8 +214,10 @@ export class GeminiDiarizer {
  * 'upload' | 'analyze', part, parts }); onUsage(usageMetadata, model) for every answer; onPart(report)
  * with what each part found (no speech text). A part whose answer is cut off ('incomplete') is tried
  * once more at half the length; a second cut-off is an error. Every upload is deleted, also when a
- * request fails or `signal` aborts.
- * Resolves with { speakers: [{ id, name }], words: [{ startMs, endMs, speaker }], uncertain }.
+ * request fails or `signal` aborts. requireSpeakers: false accepts a recording in which no word could
+ * be given a speaker (for a transcript, which needs the words more than the speakers).
+ * Resolves with { speakers: [{ id, name }], words: [{ startMs, endMs, speaker, text, space? }], uncertain },
+ * the words in audio time; speaker null: unknown.
  */
 export async function labelSpeakers({
   pieces,
@@ -227,6 +229,7 @@ export async function labelSpeakers({
   onPart = () => {},
   maxMs = PART_MAX_MS,
   overlapMs = OVERLAP_MS,
+  requireSpeakers = true,
 }) {
   const totalMs = Math.floor(piecesMs(pieces, rate));
   if (totalMs <= 0) throw new MessageError('error.speakersNoAudio');
@@ -302,7 +305,9 @@ export async function labelSpeakers({
     if (part.endMs >= totalMs) break;
     startMs = part.endMs - overlapMs;
   }
-  if (!words.some((w) => w.speaker != null)) throw new MessageError('error.speakersNone');
+  if (requireSpeakers ? !words.some((w) => w.speaker != null) : !words.length) {
+    throw new MessageError('error.speakersNone');
+  }
   const numbered = numberSpeakers(words);
   return { speakers: numbered.speakers, words: numbered.words, uncertain };
 }

@@ -53,6 +53,7 @@ export default {
   'summary.stale': 'Outdated',
   'summary.staleHelp': 'Speech was added after this summary was generated',
   'summary.staleSpeakersHelp': 'The speakers were labeled after this summary was generated',
+  'summary.staleTranscriptHelp': 'The transcript was replaced after this summary was generated',
   'summary.truncated': 'This summary covers only part of a long transcript.',
   'summary.overview': 'Overview',
   'summary.keyPoints': 'Key points',
@@ -99,6 +100,8 @@ export default {
   'questions.deleteConfirm': 'Delete the question "{question}" and its answer?',
   'questions.showLine': 'Show {time} in the transcript',
   'questions.failed': 'Could not answer: {message}',
+  'questions.transcriptChanged':
+    'The transcript has changed since this answer: the times it cites may no longer point at the same lines.',
   'speakers.title': 'Speakers',
   'speakers.lineSpeaker': 'Speaker of this line',
   'speakers.names': 'Names',
@@ -123,6 +126,38 @@ export default {
   'speakers.doneUncertain': 'Speakers labeled: {count}. Parts could not be matched with certainty; check the lines.',
   'speakers.cancelled': 'Speaker labeling was cancelled.',
   'speakers.madeAt': 'Labeled from the recording on {date}.',
+  'rebuild.action': 'Rebuild from recording',
+  'rebuild.cancel': 'Cancel',
+  'rebuild.restore': 'Restore the transcript made while listening',
+  'rebuild.title': 'Rebuild the transcript from the recording',
+  'rebuild.intro':
+    'The recording is transcribed again, with speakers, and the transcript is made anew from it. What changes:',
+  'rebuild.wording':
+    'The lines are made again from the recording: their wording, their number and their times will differ from the transcript made while listening.',
+  'rebuild.translations': 'Every line is translated again.',
+  'rebuild.speakers':
+    'Speakers are labeled again. Names you gave are kept where the speaker can be matched with certainty; otherwise the default name is shown.',
+  'rebuild.keep':
+    'The transcript made while listening is kept, with its translations and speakers, and can be restored.',
+  'rebuild.replace':
+    'The transcript made while listening stays kept and can be restored; the transcript rebuilt earlier is replaced.',
+  'rebuild.stale': 'Summaries and answers made earlier are marked as made from an earlier transcript.',
+  'rebuild.cost':
+    'It costs one more pass over the recording with the transcription model, and the translation of every line.',
+  'rebuild.upload':
+    'The recording is uploaded to Google (Gemini API) in parts, and each upload is deleted as soon as it has been analyzed.',
+  'rebuild.cancelDialog': 'Cancel',
+  'rebuild.confirm': 'Rebuild',
+  'rebuild.transcribing': 'Transcribing part {part} of {parts}…',
+  'rebuild.translating': 'Translating: {done} of {total} lines done…',
+  'rebuild.done': 'The transcript was rebuilt from the recording: {count} lines.',
+  'rebuild.doneFailed':
+    'The transcript was rebuilt from the recording: {count} lines. {failed} of them could not be translated.',
+  'rebuild.cancelled': 'Rebuilding the transcript was cancelled. Nothing was changed.',
+  'rebuild.restoreConfirm':
+    'Restore the transcript made while listening? The rebuilt transcript, its translations and its speakers are dropped.',
+  'rebuild.restoreMissing': 'The transcript made while listening was not found.',
+  'rebuild.restored': 'The transcript made while listening was restored.',
   'template.quick.name': 'Quick summary',
   'template.quick.description': 'Overview, key points, decisions and action items',
   'template.executive.name': 'Executive summary',
@@ -319,6 +354,8 @@ export default {
   'toast.demo': 'Demo mode: no real speech recognition or translation',
   'toast.summaryFailed': 'Could not summarize: {message}',
   'toast.speakersFailed': 'Could not label the speakers: {message}',
+  'toast.rebuildFailed': 'Could not rebuild the transcript: {message} Nothing was changed.',
+  'toast.restoreFailed': 'Could not restore the transcript: {message}',
 
   // errors reported by audio.js, transcriber.js and translator.js
   'error.windowBlocked': 'The window was blocked',

@@ -816,32 +816,40 @@ input[type="range"] {
 .summary-options .select-wrap {
   flex: 0 1 auto;
 }
-/* Speaker labels: their actions and progress, a toolbar above the transcript. */
-.speaker-tools {
-  flex: none;
+/* A toolbar above the transcript: the actions on it (speaker labels, rebuilding it from the
+   recording) and their progress, one group each. It is not shown while no group is. */
+.transcript-tools,
+.tool-group {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--base-size-8);
   min-width: 0;
+}
+.transcript-tools {
+  flex: none;
   padding: var(--base-size-8) var(--base-size-16) 0;
 }
-.speaker-tools[hidden],
-.speaker-tools .btn[hidden] {
+.transcript-tools:not(:has(> .tool-group:not([hidden]))),
+.tool-group[hidden],
+.tool-group .btn[hidden] {
   display: none;
 }
 .summarize .spinner,
-.label-speakers .spinner {
+.label-speakers .spinner,
+.rebuild .spinner {
   display: none;
   flex: none;
 }
 .summarize[aria-busy="true"] .icon-rest,
-.label-speakers[aria-busy="true"] .icon-rest {
+.label-speakers[aria-busy="true"] .icon-rest,
+.rebuild[aria-busy="true"] .icon-rest {
   display: none;
 }
 .summarize[aria-busy="true"] .spinner,
-.label-speakers[aria-busy="true"] .spinner {
+.label-speakers[aria-busy="true"] .spinner,
+.rebuild[aria-busy="true"] .spinner {
   display: inline-block;
   animation: spin 1s linear infinite;
 }
@@ -852,7 +860,8 @@ input[type="range"] {
 }
 @media (prefers-reduced-motion: reduce) {
   .summarize[aria-busy="true"] .spinner,
-  .label-speakers[aria-busy="true"] .spinner {
+  .label-speakers[aria-busy="true"] .spinner,
+  .rebuild[aria-busy="true"] .spinner {
     animation-duration: 3s;
   }
 }
@@ -1593,6 +1602,19 @@ body.running #log .seg .tgt {
   display: grid;
   gap: var(--stack-gap-normal);
   padding: var(--stack-padding-normal);
+}
+/* What rebuilding a transcript changes, listed in its confirmation. */
+.rebuild-intro,
+.rebuild-changes {
+  margin: 0;
+}
+.rebuild-changes {
+  display: grid;
+  gap: var(--base-size-8);
+  padding-left: var(--base-size-20);
+}
+.rebuild-changes li[hidden] {
+  display: none;
 }
 .dialog-footer {
   display: flex;

@@ -4,6 +4,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  keptFromRecord,
+  keptRecord,
   questionFromRecord,
   questionRecord,
   segmentChanges,
@@ -242,7 +244,7 @@ const readAll = async (indexedDB, name) => {
   const db = await opened(indexedDB.open('twinscript'));
   return opened(db.transaction(name).objectStore(name).getAll());
 };
-const STORES_V4 = ['audio', 'questions', 'segments', 'sessions', 'summaries'];
+const STORES_V5 = ['audio', 'questions', 'segments', 'sessions', 'summaries', 'transcripts'];
 
 // What version 3 of the app left on disk: a session, its segments, a summary and a recording chunk.
 const V3 = {
@@ -276,19 +278,20 @@ const withFakeDb = (fn) => {
   return withGlobals({ indexedDB: fake.indexedDB, IDBKeyRange: fake.IDBKeyRange }, () => fn(fake.indexedDB));
 };
 
-test('saved sessions of version 3 open at version 4 with a store for questions and nothing else changed', () =>
+test('saved sessions of version 3 open at version 5 with stores for questions and kept transcripts and nothing else changed', () =>
   withFakeDb(async (indexedDB) => {
     await seedVersion3(indexedDB);
     const store = await freshStore();
     assert.deepEqual(await store.listSessions(), [V3.session]);
 
     const db = await opened(indexedDB.open('twinscript'));
-    assert.equal(db.version, 4);
-    assert.deepEqual([...db.objectStoreNames], STORES_V4);
+    assert.equal(db.version, 5);
+    assert.deepEqual([...db.objectStoreNames], STORES_V5);
     assert.deepEqual(await readAll(indexedDB, 'segments'), V3.segments);
     assert.deepEqual(await readAll(indexedDB, 'summaries'), [V3.summary]);
     assert.deepEqual(await readAll(indexedDB, 'audio'), [V3.audio]);
     assert.deepEqual(await readAll(indexedDB, 'questions'), []);
+    assert.deepEqual(await readAll(indexedDB, 'transcripts'), []);
     assert.deepEqual(await store.loadSegments('s1'), V3.segments.map(segmentFromRecord));
     assert.deepEqual(await store.loadSummaries('s1'), [summaryFromRecord(V3.summary)]);
     assert.deepEqual(await store.getAudioChunks('s1', 'r1'), ['chunk']);
@@ -346,11 +349,74 @@ test('deleting a session deletes its questions with its segments, summaries and 
     assert.deepEqual(await store.loadQuestions('s2'), [entry], "another session's questions stay");
   }));
 
-test('a new install starts at version 4 with every store', () =>
+test('a new install starts at version 5 with every store', () =>
   withFakeDb(async (indexedDB) => {
     const store = await freshStore();
     assert.deepEqual(await store.listSessions(), []);
     const db = await opened(indexedDB.open('twinscript'));
-    assert.equal(db.version, 4);
-    assert.deepEqual([...db.objectStoreNames], STORES_V4);
+    assert.equal(db.version, 5);
+    assert.deepEqual([...db.objectStoreNames], STORES_V5);
+  }));
+
+// ---------- a kept transcript ----------
+
+const live = [
+  { id: 'a', at: 10, elapsed: 0, src: 'Hello.', tgt: 'こんにちは。', speaker: 's1', el: 'node', rev: 2 },
+  { id: 'b', at: 20, elapsed: 65_000, src: 'Ship it.', tgt: '出荷します。' },
+];
+const liveLabels = { speakers: [{ id: 's1', name: 'Aiko' }], madeAt: 3, uncertain: false, model: 'm' };
+const rebuiltLines = [{ id: 'n1', at: 10, elapsed: 0, src: 'Hello, ship it.', tgt: 'こんにちは、出荷して。' }];
+
+test('a kept transcript is stored as its segments are, without their screen state, and read back', () => {
+  const record = keptRecord('s1', { segments: live, speakerLabels: liveLabels, keptAt: 9 });
+  assert.deepEqual(record, {
+    sessionId: 's1',
+    keptAt: 9,
+    segments: [
+      { id: 'a', at: 10, elapsed: 0, src: 'Hello.', tgt: 'こんにちは。', speaker: 's1' },
+      { id: 'b', at: 20, elapsed: 65_000, src: 'Ship it.', tgt: '出荷します。' },
+    ],
+    speakerLabels: liveLabels,
+  });
+  assert.deepEqual(keptFromRecord(record), { keptAt: 9, segments: record.segments, speakerLabels: liveLabels });
+  assert.equal(keptFromRecord(keptRecord('s1', { segments: [], speakerLabels: null, keptAt: 1 })).speakerLabels, null);
+});
+
+test('replacing a transcript writes the session and all its new segments together with the one kept, which is loaded only when asked', () =>
+  withFakeDb(async (indexedDB) => {
+    await seedVersion3(indexedDB);
+    const store = await freshStore();
+    const [meta] = await store.listSessions();
+    const sess = { ...meta, segments: await store.loadSegments('s1'), recordings: [] };
+    const kept = { segments: sess.segments, speakerLabels: liveLabels, keptAt: 9 };
+    await store.replaceTranscript({ ...sess, segments: rebuiltLines, rebuilt: { madeAt: 9 } }, { kept });
+    assert.deepEqual(await store.loadSegments('s1'), rebuiltLines, 'the two old segments are gone');
+    assert.equal((await store.listSessions())[0].segmentCount, 1);
+    assert.deepEqual((await store.listSessions())[0].rebuilt, { madeAt: 9 });
+    const loaded = await store.loadKeptTranscript('s1');
+    assert.deepEqual(loaded.segments, V3.segments.map(segmentFromRecord));
+    assert.deepEqual(loaded.speakerLabels, liveLabels);
+    assert.equal(await store.loadKeptTranscript('s2'), null);
+
+    // Rebuilt again: the kept one stays as it is.
+    await store.replaceTranscript({ ...sess, segments: rebuiltLines.slice(0, 1) });
+    assert.deepEqual((await store.loadKeptTranscript('s1')).segments, loaded.segments);
+
+    // Put back: the kept one is gone.
+    await store.replaceTranscript({ ...sess, segments: loaded.segments }, { kept: null });
+    assert.deepEqual(await store.loadSegments('s1'), loaded.segments);
+    assert.equal(await store.loadKeptTranscript('s1'), null);
+    await assert.rejects(store.replaceTranscript({ ...meta }), /not loaded/);
+  }));
+
+test('deleting a session deletes its kept transcript', () =>
+  withFakeDb(async (indexedDB) => {
+    await seedVersion3(indexedDB);
+    const store = await freshStore();
+    const sess = { ...V3.session, segments: rebuiltLines, recordings: [] };
+    await store.replaceTranscript(sess, { kept: { segments: live, speakerLabels: null, keptAt: 1 } });
+    await store.replaceTranscript({ ...sess, id: 's2' }, { kept: { segments: live, speakerLabels: null, keptAt: 1 } });
+    await store.deleteSession('s1');
+    assert.equal(await store.loadKeptTranscript('s1'), null);
+    assert.ok(await store.loadKeptTranscript('s2'), "another session's stays");
   }));

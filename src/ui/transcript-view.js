@@ -11,6 +11,7 @@
 // single translation. The rules for which code leads a line are the pure functions exported below.
 
 import { formatElapsed } from '../session/exporter.js';
+import { hasLabels } from '../session/speaker-labels.js';
 import { languageByScript, sourceByScript } from '../translation/script-hint.js';
 import { LANGS, langTag as tagAmong } from './langs.js';
 
@@ -251,8 +252,20 @@ export function createTranscriptView({
     return true;
   }
 
+  // Puts all the lines of `sess` on the page in place of those there (a session opened, or its
+  // transcript replaced).
+  function showAll(sess) {
+    for (const node of els.log.querySelectorAll('.seg')) node.remove();
+    els.log.classList.toggle('has-speakers', hasLabels(sess));
+    for (const seg of sess.segments) mount(seg);
+    els.empty.hidden = sess.segments.length > 0;
+  }
+
   return {
     mount,
+    showAll,
+    // Shows that a line's translation failed: its line for target `code`, or its single translation.
+    showError: (seg, code, text) => (code ? setLine(seg, code, text, 'error') : setText(seg, 'tgt', text, 'error')),
     // The transcript is on screen again: at the newest line if the reader was there, else where it was.
     reveal: () => {
       keepBottom(nearWhenSeen);

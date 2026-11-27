@@ -290,7 +290,7 @@ test('the folders under src/ are exactly the ones the desktop app serves', async
 
 // 7
 // Lower this when app.js shrinks; never raise it.
-const APP_MAX_LINES = 750;
+const APP_MAX_LINES = 746;
 
 test('src/app.js does not grow', async () => {
   const text = await read(join(ROOT, 'src/app.js'));

@@ -24,7 +24,7 @@ export async function decodeRecording(blob, rate = SAMPLE_RATE) {
  * Decodes every recording of `sess` that has audio, in order. Each is decoded on its own and kept as
  * 16 kHz mono samples (about 115 MB an hour); a recording that cannot be read is left out (its lines
  * get no speaker). getAudioChunks(sessionId, recId): its stored chunks; signal: stops between
- * recordings. Resolves with [{ elapsedStart, samples, durationMs }]; rejects with
+ * recordings. Resolves with [{ elapsedStart, startedAt, samples, durationMs }]; rejects with
  * MessageError('error.speakersNoAudio') when none could be read.
  */
 export async function decodeRecordings(sess, { getAudioChunks, signal, decode = decodeRecording }) {
@@ -35,7 +35,8 @@ export async function decodeRecordings(sess, { getAudioChunks, signal, decode = 
     if (!chunks.length) continue;
     try {
       const audio = await decode(new Blob(chunks, { type: rec.mime }));
-      if (audio.samples.length) decoded.push({ elapsedStart: rec.elapsedStart ?? 0, ...audio });
+      if (audio.samples.length)
+        decoded.push({ elapsedStart: rec.elapsedStart ?? 0, startedAt: rec.startedAt, ...audio });
     } catch {
       /* a recording that cannot be decoded: its lines get no speaker */
     }

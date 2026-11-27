@@ -12,6 +12,10 @@
 // the model gives the words of a speaker's clip is that speaker in the part. Where that is not
 // clear (a clip's words split between labels, two clips with one label), the speakers concerned are
 // left unknown in that part rather than guessed. The overlap is only a cross-check.
+//
+// Words keep their text (in memory only), so the same pass can also make a new transcript
+// (src/session/recording-transcript.js). A word the model gave no speaker is kept with no label: it
+// is never matched to a speaker, but its text is not lost.
 
 export const SAMPLE_RATE = 16_000;
 export const PART_MAX_MS = 25 * 60_000; // of the recording, per request (the service takes 30 minutes)
@@ -46,33 +50,72 @@ export function parseSeconds(value) {
   return Number.NaN;
 }
 
+// Only punctuation and spaces: what may follow a word in the answer's text before the next word.
+const BETWEEN_WORDS = /^[\s\p{P}]*$/u;
+
 /**
- * The words of an answer, wherever they are in it: every object of type "word_info" with a speaker
- * and readable times, as { startMs, endMs, label }, in order. Their text is not kept.
+ * The words of an answer, wherever they are in it: every object of type "word_info" with readable
+ * times, as { startMs, endMs, label, text }, in order; label is null for a word given no speaker.
+ * Where a word's start_index / end_index point at its own text in the text it annotates, the
+ * punctuation that follows it there is added to its text and `space` tells whether a space follows
+ * (the word annotations may carry neither, so the text is not relied on for it).
  */
 export function wordsFromAnswer(answer) {
   const words = [];
   const seen = new Set();
-  const visit = (node, depth) => {
+  const visit = (node, depth, source) => {
     if (!node || typeof node !== 'object' || depth > 64 || seen.has(node)) return;
     seen.add(node);
     if (Array.isArray(node)) {
-      for (const item of node) visit(item, depth + 1);
+      for (const item of node) visit(item, depth + 1, source);
       return;
     }
     if (node.type === 'word_info') {
       const startMs = parseSeconds(node.start_offset ?? node.startOffset);
       const endMs = parseSeconds(node.end_offset ?? node.endOffset);
       const label = typeof node.speaker === 'string' ? node.speaker.trim() : '';
-      if (label && Number.isFinite(startMs) && startMs >= 0) {
-        words.push({ startMs, endMs: Number.isFinite(endMs) && endMs >= startMs ? endMs : startMs, label });
+      if (Number.isFinite(startMs) && startMs >= 0) {
+        const text = typeof node.text === 'string' ? node.text : '';
+        const at = node.start_index ?? node.startIndex;
+        const to = node.end_index ?? node.endIndex;
+        const placed = source && Number.isInteger(at) && Number.isInteger(to) && text && source.slice(at, to) === text;
+        words.push({
+          startMs,
+          endMs: Number.isFinite(endMs) && endMs >= startMs ? endMs : startMs,
+          label: label || null,
+          text,
+          ...(placed && { source, at, to }),
+        });
       }
       return;
     }
-    for (const value of Object.values(node)) visit(value, depth + 1);
+    // A text with word annotations: the words' indexes point into it.
+    const text = typeof node.text === 'string' && Array.isArray(node.annotations) ? node.text : source;
+    for (const value of Object.values(node)) visit(value, depth + 1, text);
   };
-  visit(answer, 0);
-  return words.sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs);
+  visit(answer, 0, null);
+  attachPunctuation(words);
+  return words.sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs).map(({ source, at, to, ...word }) => word);
+}
+
+// Adds to each placed word the punctuation between it and the next word of the same text.
+function attachPunctuation(words) {
+  const bySource = new Map();
+  for (const w of words) {
+    if (!w.source) continue;
+    if (!bySource.has(w.source)) bySource.set(w.source, []);
+    bySource.get(w.source).push(w);
+  }
+  for (const [source, list] of bySource) {
+    list.sort((a, b) => a.at - b.at);
+    list.forEach((w, i) => {
+      const next = list[i + 1];
+      const gap = source.slice(w.to, next && next.at >= w.to ? next.at : source.length);
+      if (!BETWEEN_WORDS.test(gap)) return;
+      w.text += gap.trimEnd().replace(/\s+/g, '');
+      w.space = /\s/.test(gap) || !next;
+    });
+  }
 }
 
 /** What one answer used, shaped like usageMetadata (src/usage/usage.js). */
@@ -229,7 +272,9 @@ const tally = (counts, key) => counts.set(key, (counts.get(key) ?? 0) + 1);
 export function resolvePart(words, layout, part, { previous = [], newSpeaker, overlapMs = OVERLAP_MS } = {}) {
   const clips = layout.entries.map((entry) => {
     const counts = new Map();
-    for (const w of words) if (mid(w) >= entry.startMs && mid(w) <= entry.endMs) tally(counts, w.label);
+    for (const w of words) {
+      if (w.label != null && mid(w) >= entry.startMs && mid(w) <= entry.endMs) tally(counts, w.label);
+    }
     const { top, best, total } = majority(counts);
     const share = total ? best / total : 0;
     const reason = !total ? 'empty' : share < MIN_CLIP_SHARE ? 'split' : null;
@@ -248,7 +293,7 @@ export function resolvePart(words, layout, part, { previous = [], newSpeaker, ov
   const inPart = words.filter((w) => mid(w) >= layout.refMs);
   const added = [];
   for (const w of inPart) {
-    if (w.label in mapping) continue;
+    if (w.label == null || w.label in mapping) continue;
     if (doubtful.has(w.label)) {
       mapping[w.label] = null;
     } else {
@@ -263,15 +308,16 @@ export function resolvePart(words, layout, part, { previous = [], newSpeaker, ov
     .map((w) => ({
       startMs: w.startMs + shift,
       endMs: w.endMs + shift,
-      speaker: mapping[w.label],
+      speaker: w.label == null ? null : mapping[w.label],
       label: w.label,
+      ...('text' in w && { text: w.text, space: w.space }),
     }))
     .filter((w) => mid(w) >= part.startMs && mid(w) <= part.endMs);
 
   const overlap = checkOverlap(previous, placed, part.startMs, Math.min(part.endMs, part.startMs + overlapMs), mapping);
   const uncertain = clips.some((c) => !c.ok) || overlap.agreed === false;
   return {
-    words: placed.map(({ startMs, endMs, speaker }) => ({ startMs, endMs, speaker })),
+    words: placed.map(({ label, ...word }) => clean(word)),
     mapping,
     added,
     clips: clips.map(({ labels, ...clip }) => clip),
@@ -279,6 +325,12 @@ export function resolvePart(words, layout, part, { previous = [], newSpeaker, ov
     uncertain,
   };
 }
+
+// A word without the fields it does not have (`space` is only known for some).
+const clean = (word) => {
+  if (word.space === undefined) delete word.space;
+  return word;
+};
 
 /**
  * The cross-check on the overlap [fromMs, toMs): for each label of this part with enough words there,
@@ -290,7 +342,7 @@ export function checkOverlap(previous, placed, fromMs, toMs, mapping) {
   const earlier = previous.filter((w) => w.speaker != null && w.endMs > fromMs && w.startMs < toMs);
   const byLabel = new Map();
   for (const w of placed) {
-    if (mid(w) < fromMs || mid(w) >= toMs) continue;
+    if (w.label == null || mid(w) < fromMs || mid(w) >= toMs) continue;
     const m = mid(w);
     const match = earlier.find((p) => p.startMs <= m && m <= p.endMs) ?? nearest(earlier, m);
     if (!match) continue;
