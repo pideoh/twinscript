@@ -8,20 +8,22 @@
 //     translation:   { [model]: { requests, inputTokens, outputTokens } },
 //     summary:       { [model]: { requests, inputTokens, outputTokens } },
 //     diarization:   { [model]: { requests, inputTokens, outputTokens } },  (speaker labels)
+//     question:      { [model]: { requests, inputTokens, outputTokens } },  (questions about a meeting)
 //   }
-// A record written before `diarization` existed reads as having none.
+// A record written before `diarization` or `question` existed reads as having none of it; a new kind
+// keeps the version, since an older record is still read correctly.
 // Output tokens include thinking tokens, which are billed as output.
 
 export const USAGE_VERSION = 1;
 
 /** Kinds counted in tokens; transcription is counted in listening time. */
-export const TOKEN_KINDS = ['translation', 'summary', 'diarization'];
+export const TOKEN_KINDS = ['translation', 'summary', 'diarization', 'question'];
 
 const KINDS = ['transcription', ...TOKEN_KINDS];
 
 /** A record with nothing used. */
 export function emptyUsage() {
-  return { version: USAGE_VERSION, transcription: {}, translation: {}, summary: {}, diarization: {} };
+  return { version: USAGE_VERSION, transcription: {}, translation: {}, summary: {}, diarization: {}, question: {} };
 }
 
 function count(value) {
@@ -46,7 +48,7 @@ export function usageFromMetadata(usageMetadata) {
   };
 }
 
-/** Adds one request of `kind` ('translation', 'summary' or 'diarization') to `model`, with the tokens in `usageMetadata`. */
+/** Adds one request of `kind` ('translation', 'summary', 'diarization' or 'question') to `model`, with the tokens in `usageMetadata`. */
 export function addTokens(usage, kind, model, usageMetadata) {
   if (!TOKEN_KINDS.includes(kind)) throw new TypeError(`Unknown token kind: ${kind}`);
   checkModel(model);

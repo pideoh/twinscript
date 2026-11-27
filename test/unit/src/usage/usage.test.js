@@ -14,7 +14,14 @@ const LITE = 'gemini-3.5-flash-lite';
 
 test('a new usage record is empty, versioned and plain JSON', () => {
   const usage = emptyUsage();
-  assert.deepEqual(usage, { version: USAGE_VERSION, transcription: {}, translation: {}, summary: {}, diarization: {} });
+  assert.deepEqual(usage, {
+    version: USAGE_VERSION,
+    transcription: {},
+    translation: {},
+    summary: {},
+    diarization: {},
+    question: {},
+  });
   assert.deepEqual(JSON.parse(JSON.stringify(usage)), usage);
 });
 
@@ -76,6 +83,7 @@ test('sessions add up to a total, including partial and stored records', () => {
     },
     summary: {},
     diarization: {},
+    question: {},
   });
   assert.deepEqual(addUsage(a, undefined), a);
   assert.deepEqual(addUsage({ translation: { [LITE]: { requests: 2 } } }, {}).translation[LITE], {
@@ -95,4 +103,14 @@ test('speaker labels are counted as a kind of their own, and records from before
   });
   assert.deepEqual(usage.diarization, { 'gemini-3.5-transcribe': { requests: 1, inputTokens: 900, outputTokens: 80 } });
   assert.deepEqual(addUsage(old, {}).diarization, {});
+});
+
+test('questions about a meeting are counted as a kind of their own, and records from before them read as having none', () => {
+  const old = { version: USAGE_VERSION, transcription: {}, translation: {}, summary: {}, diarization: {} };
+  const usage = addTokens(old, 'question', LITE, { promptTokenCount: 20_000, candidatesTokenCount: 150 });
+  assert.deepEqual(usage.question, { [LITE]: { requests: 1, inputTokens: 20_000, outputTokens: 150 } });
+  assert.deepEqual(addUsage(old, {}).question, {});
+  assert.equal(usage.version, USAGE_VERSION, 'a new kind keeps the record version');
+  const twice = addUsage(usage, addTokens(emptyUsage(), 'question', LITE, { promptTokenCount: 1 }));
+  assert.deepEqual(twice.question[LITE], { requests: 2, inputTokens: 20_001, outputTokens: 150 });
 });

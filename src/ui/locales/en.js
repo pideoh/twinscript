@@ -318,6 +318,8 @@ export default {
   'error.summarize': 'Summary error ({status}): {message}',
   'error.summaryRateLimit': 'The API rate limit was reached. Try again in a minute.',
   'error.summaryInvalid': 'The response could not be read as a summary. Try again.',
+  'error.ask': 'Question error ({status}): {message}',
+  'error.noAnswer': 'No answer came back. Try again.',
   'error.speakersUpload': 'Upload error ({status}): {message}',
   'error.speakersAnalyze': 'Speaker analysis error ({status}): {message}',
   'error.speakersRateLimit': 'The API rate limit was reached. Try again in a minute.',

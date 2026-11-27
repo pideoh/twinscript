@@ -118,10 +118,11 @@ function tokenTotals(entries) {
 
 /**
  * What the screen shows of one usage record:
- *   { listeningMs, translation, summary, diarization, requests, inputTokens, outputTokens, cost, unpriced }
- * translation, summary and diarization (speaker labels) are { requests, inputTokens, outputTokens } over all
- * models; requests and the token counts are their sums. cost has the parts transcription, translation,
- * summary, diarization and total, each
+ *   { listeningMs, translation, summary, diarization, question, requests, inputTokens, outputTokens, cost,
+ *     unpriced }
+ * translation, summary, diarization (speaker labels) and question (questions about a meeting) are
+ * { requests, inputTokens, outputTokens } over all models; requests and the token counts are their sums.
+ * cost has the parts transcription, translation, summary, diarization, question and total, each
  * { usd, noPrice, partial } (see costPart). unpriced: the models used that have no price.
  */
 export function usageView(usage, prices) {

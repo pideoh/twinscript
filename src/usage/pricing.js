@@ -37,7 +37,7 @@ export const PRICES = {
 export const PRICE_FIELDS = ['input', 'output', 'inputPerMinute', 'outputPerMinute'];
 
 /** The kinds of usage, in the order a breakdown lists them. */
-export const COST_KINDS = ['transcription', 'translation', 'summary', 'diarization'];
+export const COST_KINDS = ['transcription', 'translation', 'summary', 'diarization', 'question'];
 
 const TOKENS_PER_PRICE_UNIT = 1_000_000;
 const MS_PER_MINUTE = 60_000;
@@ -94,7 +94,7 @@ function tokenCost(prices, inputTokens, outputTokens) {
 
 /**
  * What a usage record (src/usage/usage.js) cost under a price table. Returns
- *   { currency, transcription, translation, summary, diarization, total }
+ *   { currency, transcription, translation, summary, diarization, question, total }
  * where each part is { usd, unpriced, byModel }:
  *   usd       the cost of the usage whose model has a price;
  *   unpriced  the models that were used but have no price ("no price", not zero). When it is not empty,

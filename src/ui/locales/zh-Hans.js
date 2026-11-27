@@ -301,6 +301,8 @@ export default {
   'error.summarize': '摘要错误（{status}）：{message}',
   'error.summaryRateLimit': '已达到 API 的速率限制，请约 1 分钟后重试。',
   'error.summaryInvalid': '无法将响应读取为摘要，请重试。',
+  'error.ask': '提问错误（{status}）：{message}',
+  'error.noAnswer': '未返回回答，请重试。',
   'error.speakersUpload': '上传错误（{status}）：{message}',
   'error.speakersAnalyze': '说话人分析错误（{status}）：{message}',
   'error.speakersRateLimit': '已达到 API 的速率限制，请约 1 分钟后重试。',
