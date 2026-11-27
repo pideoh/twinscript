@@ -20,12 +20,11 @@
 
 import { UtteranceTracker } from '../speech/segmenter.js';
 import { langName } from '../ui/langs.js';
+import { recentHistory as historyOf, perTarget, targetCodes } from './line-targets.js';
 import { createPacer } from './pacer.js';
 import { readAloudInEffect, readAloudLanguages } from './read-aloud.js';
-import { languageByScript, scriptsDiffer, sourceByScript, targetByScript, targetLanguages } from './script-hint.js';
+import { languageByScript, scriptsDiffer, sourceByScript, targetByScript } from './script-hint.js';
 import { passes, RateLimitError } from './translator.js';
-
-const HISTORY_LINES = 3;
 
 // A run `r` (made by the app's start()) carries what the translator was given: { session, langs:
 // [{ code, name }] (two or three), otherInto, translator, pacer, tracker }; the flow makes its
@@ -98,7 +97,7 @@ export function createFlow({
         interval: () => settings.interimInterval,
       },
       translate: (text, context) =>
-        r.langs.length > 2 || intoSeveral(r, text)
+        perTarget(r.langs, text, r.otherInto)
           ? translateInterimLines(r, live, text, context)
           : r.translator.translate(text, { history: recentHistory(r), previous: context.previous?.() }),
       show: (out) => {
@@ -141,25 +140,8 @@ export function createFlow({
     const limited = results.find((x) => x.status === 'rejected' && x.reason instanceof RateLimitError);
     if (limited) throw limited.reason;
   }
-  // The codes of the languages a sentence goes into: the selected ones other than the one it was
-  // spoken in (source: an English name or 'other'), in the order of the selects, narrowed by the
-  // setting for other languages.
-  const targetsFor = (r, source) =>
-    targetLanguages(
-      r.langs.map((l) => l.name),
-      source,
-      r.otherInto,
-    ).map((name) => r.langs.find((l) => l.name === name).code);
-  // With two languages, a sentence whose writing system shows it is in neither goes into both, one
-  // tagged line each, unless the setting picks one of them. Everything else takes one request with
-  // the rules for two languages, which never asks the model which language it is.
-  const intoSeveral = (r, text) =>
-    r.langs.length === 2 &&
-    sourceByScript(
-      text,
-      r.langs.map((l) => l.name),
-    ) === 'other' &&
-    targetsFor(r, 'other').length > 1;
+  // The codes of the languages a sentence goes into (src/translation/line-targets.js).
+  const targetsFor = (r, source) => targetCodes(r.langs, source, r.otherInto);
 
   function finalize(r, text) {
     const seg = live;
@@ -181,12 +163,7 @@ export function createFlow({
   }
 
   // lang: with a third language, the target whose own earlier translations are wanted.
-  function recentHistory(r, lang) {
-    return r.session.segments
-      .filter((x) => x.tgt)
-      .slice(-HISTORY_LINES)
-      .map(({ src, tgt, tgts }) => ({ src, tgt: (lang && tgts?.find((x) => x.lang === lang)?.text) || tgt }));
-  }
+  const recentHistory = (r, lang) => historyOf(r.session.segments, lang);
 
   // What the pacer handed over when the sentence was finished, only for its first final
   // translation: a corrected text is translated afresh. { previous, settled, pending }: previous(line)
@@ -204,7 +181,7 @@ export function createFlow({
   const settledAnswers = ({ settled, pending }) => settled ?? pending ?? null;
 
   async function translateFinal(r, seg) {
-    if (r.langs.length > 2 || intoSeveral(r, seg.src)) return translateFinalLines(r, seg);
+    if (perTarget(r.langs, seg.src, r.otherInto)) return translateFinalLines(r, seg);
     const handover = takeHandover(seg);
     const previous = handover.previous?.();
     const history = recentHistory(r);

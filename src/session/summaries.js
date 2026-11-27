@@ -7,6 +7,7 @@
 // earlier version may have `summary`, its one summary in another shape; it is listed first, and
 // stays on disk as it was until it is deleted.
 
+import { madeBeforeChange } from './rebuild.js';
 import { hasLabels } from './speaker-labels.js';
 import { legacySummaryToMarkdown } from './summarizer.js';
 import { DEFAULT_TEMPLATE, LENGTHS } from './summary-templates.js';
@@ -45,13 +46,17 @@ export function summariesOf(sess, toEntry) {
 // The summary on screen: the one with the id the user chose, else the latest; null for none.
 export const shownSummary = (list, chosenId) => list.find((s) => s.id === chosenId) ?? list.at(-1) ?? null;
 
-// Whether the summary shown is out of date: speech was added after it, or the speakers were
-// labelled after it. `speakersOnly`: only the labels are newer, not the speech.
+// Whether the summary shown is out of date: speech was added after it, the speakers were labelled
+// after it, or the transcript was replaced after it (rebuilt from the recording, or put back: see
+// src/session/rebuild.js). `replaced`: the transcript it was made from is not the one shown;
+// `speakersOnly`: only the labels are newer, not the speech.
 export function staleness(sess, shown) {
+  const replaced = !!shown && madeBeforeChange(sess, shown.createdAt);
   const relabeled = !!shown && hasLabels(sess) && sess.speakerLabels.madeAt > shown.createdAt;
   return {
-    stale: !(!shown || (sess.segments.length <= shown.segmentCount && !relabeled)),
-    speakersOnly: relabeled && sess.segments.length <= (shown?.segmentCount ?? 0),
+    stale: replaced || !(!shown || (sess.segments.length <= shown.segmentCount && !relabeled)),
+    speakersOnly: !replaced && relabeled && sess.segments.length <= (shown?.segmentCount ?? 0),
+    replaced,
   };
 }
 

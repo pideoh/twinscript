@@ -128,10 +128,13 @@ export function createSummaryPanel({
     els.summarize.setAttribute('aria-disabled', String(!!summarizing || !!getRun()));
     els.summaryStatus.textContent = busy ? t('summary.working') : '';
     els.summaryMeta.textContent = busy || list.length ? '' : t('summary.none');
-    // Outdated: speech was added after the summary, or the speakers were labelled after it.
-    const { stale, speakersOnly } = staleness(sess, shown);
+    // Outdated: speech was added after the summary, the speakers were labelled after it, or the
+    // transcript was replaced (rebuilt or put back) after it.
+    const { stale, speakersOnly, replaced } = staleness(sess, shown);
     els.summaryStale.hidden = !stale;
-    els.summaryStale.title = t(speakersOnly ? 'summary.staleSpeakersHelp' : 'summary.staleHelp');
+    els.summaryStale.title = t(
+      replaced ? 'summary.staleTranscriptHelp' : speakersOnly ? 'summary.staleSpeakersHelp' : 'summary.staleHelp',
+    );
     els.summaryBody.hidden = !busy && !shown;
     els.summaryHistoryBar.hidden = !shown;
     if (shown) {

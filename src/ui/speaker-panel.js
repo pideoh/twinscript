@@ -10,11 +10,13 @@
 
 import { MODEL as DIARIZE_MODEL, GeminiDiarizer, labelSpeakers } from '../session/diarizer.js';
 import { formatDateTime, formatElapsed } from '../session/exporter.js';
-import { decodeRecording } from '../session/speaker-audio.js';
+import { decodeRecordings } from '../session/speaker-audio.js';
 import {
   canLabel,
   cleanSpeakerName,
+  giveRecordingConsent,
   hasLabels,
+  hasRecordingConsent,
   MAX_SPEAKER_NAME,
   speakerName as nameOf,
   numberByFirstLine,
@@ -22,9 +24,6 @@ import {
 import { assignSpeakers, recordingTimeline } from '../session/speakers.js';
 import { RateLimitError } from '../translation/translator.js';
 import { addTokens, emptyUsage } from '../usage/usage.js';
-import { MessageError } from './message-error.js';
-
-const SPEAKERS_CONSENT_KEY = 'rt-speakers-consent';
 
 // els: the page's elements; t: i18n; octicon(name): an icon; store: the session store
 // (getAudioChunks); storage: a Storage-like object (getItem / setItem) for the consent;
@@ -34,7 +33,9 @@ const SPEAKERS_CONSENT_KEY = 'rt-speakers-consent';
 // markDirty(sess): saves it soon; isDeleted(sess): the user deleted it (labels that arrive after
 // that are dropped quietly); recordUsage(sess, usage): counts what a request used;
 // renderSummary(): redraws the summary panel, which redraws the speaker tools too (renderTools);
-// debug: logs how the parts were matched; demo: the demo (?mock=1), where speakers are not labelled.
+// debug: logs how the parts were matched; demo: the demo (?mock=1), where speakers are not labelled;
+// isRebuilding(sess): the transcript of `sess` is being rebuilt (null: any session's), while which
+// nothing here changes it.
 export function createSpeakerPanel({
   els,
   t,
@@ -54,6 +55,7 @@ export function createSpeakerPanel({
   renderSummary,
   debug = false,
   demo = false,
+  isRebuilding = () => false,
 }) {
   let labeling = null; // { session, controller, text } while speakers are being labelled
   let speakerEditing = null; // { session, seg } while the editor is open; seg null when opened from the bar
@@ -90,13 +92,14 @@ export function createSpeakerPanel({
     const sess = getCurrent();
     const busy = labeling?.session === sess;
     const ready = canLabel(sess, !!getRun(), demo);
+    const rebuilding = isRebuilding(null);
     // The toolbar above the transcript; it steps aside while listening.
     els.speakerTools.hidden = !!getRun() || (!busy && !ready && !hasLabels(sess));
     els.labelSpeakers.hidden = !busy && !ready;
     els.labelSpeakers.setAttribute('aria-busy', String(busy));
-    els.labelSpeakers.setAttribute('aria-disabled', String(!!labeling));
+    els.labelSpeakers.setAttribute('aria-disabled', String(!!labeling || rebuilding));
     els.cancelSpeakers.hidden = !busy;
-    els.editSpeakers.hidden = busy || !hasLabels(sess);
+    els.editSpeakers.hidden = busy || !hasLabels(sess) || isRebuilding(sess);
     els.speakersStatus.textContent = busy ? labeling.text : '';
   }
   function setLabelingText(text) {
@@ -106,23 +109,15 @@ export function createSpeakerPanel({
 
   // Whether the user agreed that recordings are uploaded for this; asked once.
   function speakersConsented() {
-    try {
-      if (storage.getItem(SPEAKERS_CONSENT_KEY) === '1') return true;
-    } catch {
-      /* private mode: ask every time */
-    }
+    if (hasRecordingConsent(storage)) return true;
     if (!confirm(t('speakers.consent'))) return false;
-    try {
-      storage.setItem(SPEAKERS_CONSENT_KEY, '1');
-    } catch {
-      /* private mode */
-    }
+    giveRecordingConsent(storage);
     return true;
   }
 
   els.labelSpeakers.onclick = async () => {
     const sess = getCurrent();
-    if (labeling || !canLabel(sess, !!getRun(), demo)) return;
+    if (labeling || isRebuilding(null) || !canLabel(sess, !!getRun(), demo)) return;
     if (!getApiKey()) {
       toast(t('toast.apiKeyFirst'), 6000, 'warning');
       return openSettings();
@@ -134,21 +129,10 @@ export function createSpeakerPanel({
     renderSpeakerTools();
     flushSaves(); // so the lengths of the recordings are on disk
     try {
-      // Each recording is decoded on its own and kept as 16 kHz mono samples (about 115 MB an hour).
-      const decoded = [];
-      for (const rec of sess.recordings) {
-        const chunks = await store.getAudioChunks(sess.id, rec.id).catch(() => []);
-        controller.signal.throwIfAborted();
-        if (!chunks.length) continue;
-        try {
-          const audio = await decodeRecording(new Blob(chunks, { type: rec.mime }));
-          if (audio.samples.length) decoded.push({ elapsedStart: rec.elapsedStart ?? 0, ...audio });
-        } catch {
-          /* a recording that cannot be decoded: its lines get no speaker */
-        }
-        controller.signal.throwIfAborted();
-      }
-      if (!decoded.length) throw new MessageError('error.speakersNoAudio');
+      const decoded = await decodeRecordings(sess, {
+        getAudioChunks: (...args) => store.getAudioChunks(...args),
+        signal: controller.signal,
+      });
       const timeline = recordingTimeline(decoded);
       const result = await labelSpeakers({
         pieces: decoded,
@@ -197,7 +181,7 @@ export function createSpeakerPanel({
   // The editor: the names of the session's speakers and, when opened from a line, that line's speaker.
   function openSpeakerEditor(seg = null) {
     const sess = getCurrent();
-    if (!hasLabels(sess) || labeling?.session === sess || getRun()) return;
+    if (!hasLabels(sess) || labeling?.session === sess || isRebuilding(sess) || getRun()) return;
     const list = sess.speakerLabels.speakers;
     speakerEditing = { session: sess, seg };
     els.speakerLine.hidden = !seg;
@@ -242,7 +226,7 @@ export function createSpeakerPanel({
   els.editSpeakers.onclick = () => openSpeakerEditor();
   els.speakerSave.onclick = () => {
     const { session: sess, seg } = speakerEditing ?? {};
-    if (!sess || !hasLabels(sess)) return els.speakerDialog.close();
+    if (!sess || !hasLabels(sess) || isRebuilding(sess)) return els.speakerDialog.close();
     for (const input of els.speakerNames.querySelectorAll('input')) {
       const speaker = sess.speakerLabels.speakers.find((s) => s.id === input.dataset.id);
       if (speaker) speaker.name = cleanSpeakerName(input.value);
@@ -261,6 +245,8 @@ export function createSpeakerPanel({
   });
 
   return {
+    // Whether speakers are being labelled (for any session).
+    isLabeling: () => !!labeling,
     speakerName,
     showSpeaker,
     render: renderSpeakers,

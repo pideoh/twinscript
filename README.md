@@ -25,6 +25,7 @@ down and shows the translation beside it. The interface is available in English,
 - Summarizes a session with a template, at the length and in the language you choose.
 - Answers questions about the meeting, citing the lines of the transcript it relies on.
 - Tells the speakers apart from the recording and labels each line with who said it.
+- Makes the transcript again from the recording, with speakers and translations, keeping the one made while listening.
 
 **How it is built**
 
@@ -194,6 +195,30 @@ they first speak. Only sessions with a recording can be labeled.
   without a label in that part rather than guessed, and the editor says so.
 - Labeling again replaces the labels, names and corrections, after asking.
 
+### Rebuilding the transcript from the recording
+
+The transcript made while listening is made fast, and keeps what the live model misheard or missed. After a session
+with a recording, "Rebuild from recording" (next to the speaker tools) transcribes the recording again with the model
+that transcribes after the fact (`gemini-3.5-transcribe`) and makes the session's lines anew from it: sentence-sized
+lines with their times and their speakers, each translated again into the session's languages.
+
+- Before it starts, the app says what changes: the wording, number and times of the lines; every line is translated
+  again; speakers are labeled again; summaries and answers made earlier are marked as made from an earlier
+  transcript; it costs one more pass over the recording and the translations; the recording is uploaded for it.
+- The recording is sent in parts and deleted from the Gemini API after each analysis, as for speaker labels; agreeing
+  here also covers speaker labels, and the reverse.
+- Progress is shown (uploading and transcribing part 1 of n, then the lines translated so far) and it can be
+  cancelled. Meanwhile the rest of the session can be read, but its speakers cannot be edited and listening to it
+  cannot be started. A cancelled or failed rebuild leaves the session as it was.
+- The new lines replace the old ones all at once, when they and their translations are ready. A line whose translation
+  failed shows its error, as while listening.
+- Speaker names you gave are kept for a speaker who can be matched with certainty to one of the earlier lines'
+  speakers; otherwise the default name is shown.
+- The transcript made while listening is kept, with its translations and speakers. "Restore the transcript made while
+  listening" puts it back and drops the rebuilt one. Rebuilding a rebuilt transcript keeps the one made while
+  listening and replaces only the rebuilt one.
+- The session's title, recording and earlier usage stay as they are; what the rebuild used is added.
+
 ## How it translates (modeled on simultaneous interpreting)
 
 A simultaneous interpreter does not translate word by word, does not take back what has been said, and relies on the
@@ -219,7 +244,7 @@ Everything else is stored on your computer, inside the app, and is not synced an
 | --- | --- | --- |
 | The audio you chose to capture, and the recognized text | Gemini API | While listening, for transcription and translation |
 | The session's transcript (for questions, also its summaries and the earlier questions and answers) | Gemini API | When you make a summary or ask a question |
-| The session's recording, deleted after the analysis | Gemini API (Files API) | When you label speakers |
+| The session's recording, deleted after the analysis | Gemini API (Files API) | When you label speakers or rebuild the transcript |
 | A request for the number of the latest version; nothing about you or your sessions | GitHub | Desktop app, at most once a day, unless "Check for new versions" is off |
 
 The API key is stored on your computer, encrypted by the operating system (the Keychain on macOS, DPAPI on Windows).
@@ -244,6 +269,7 @@ Google Cloud billing), what you send is not used for training, and the prices ar
 | Transcription | about $0.009 per minute (about $0.54 per hour) |
 | Translation | a small token fee per request. A sentence translated into several languages takes one request per language: every sentence with a third language, and speech in a language you did not select when it goes into all of them |
 | Speaker labels (`gemini-3.5-transcribe`) | $2.00 per 1M input tokens (about $0.003 per minute of audio) and $12.00 per 1M output tokens for the transcript with word times. The audio sent is somewhat longer than the recording: each part after the first starts with clips of the known speakers, and parts of a long recording overlap by a minute |
+| Rebuilding a transcript | the price of speaker labels for the pass over the recording, plus a translation request for every line (one per target language where a line has several) |
 | Summaries and questions | the translation model's token fee; one request each, its input mostly the session's transcript, so a long meeting costs more per question than a short one |
 
 These are the prices at the time of writing; Google's [pricing page](https://ai.google.dev/gemini-api/docs/pricing) has the current ones.
@@ -255,7 +281,8 @@ screen (listening time, translation, summary, speaker-label and question request
 this month, last month and everything recorded, and each saved session.
 
 - Listening time is counted while the transcription is connected; translations, summaries, speaker labels and
-  questions by the tokens the API reports for each request. A session without a usage record shows "Not recorded".
+  questions by the tokens the API reports for each request. A rebuilt transcript is counted as speaker labels (the pass
+  over the recording) and translation (its lines), also when it is cancelled or fails after requests were made. A session without a usage record shows "Not recorded".
 - The totals are kept in the app per day (the last 400 days) and stay when a session is deleted. The demo (`?mock=1`)
   shows made-up usage for its sessions and never adds it to the totals.
 - Amounts are estimates at the paid-tier prices listed in the app, with the date they were taken. With a free key
@@ -265,8 +292,12 @@ this month, last month and everything recorded, and each saved session.
 
 ## Limitations
 
-- Speaker labels and questions work only after a session, not while listening. Answers come from the transcript, so
-  what was misheard is answered as heard; check a cited line when it matters.
+- Speaker labels, rebuilding the transcript and questions work only after a session, not while listening. Answers
+  come from the transcript, so what was misheard is answered as heard; check a cited line when it matters.
+- A rebuilt transcript is only as good as the recording: speech that was not recorded (recording turned off, a part
+  that cannot be decoded) is missing from it. Its translations use the setting for other languages as it is when the
+  rebuild starts.
+- After a transcript is rebuilt or restored, a time cited in an earlier answer may no longer point at the same line.
 - A transcription session lasts at most 10 minutes, so the app switches to a new connection in the background, at a pause in speech.
 - When the free tier hits its rate limit, translation of sentences in progress pauses for a minute; finished sentences are still translated.
 - With a third language, the language of a sentence is told from its writing system. Languages that share it with
@@ -283,7 +314,7 @@ this month, last month and everything recorded, and each saved session.
 | Transcription (streaming, with interim results) | Gemini Live API `gemini-3.5-transcribe-live` |
 | Translation (streaming) | `gemini-3.5-flash-lite` (can be changed in settings) |
 | Summaries and questions about a meeting | the translation model |
-| Speaker labels (after a session, from its recording) | `gemini-3.5-transcribe` |
+| Speaker labels and rebuilt transcripts (after a session, from its recording) | `gemini-3.5-transcribe` |
 
 The app is built with web technology and packaged with Electron.
 
@@ -301,7 +332,7 @@ npm run test:app   # desktop app smoke tests; they open real windows
 ```
 
 The Gemini API is mocked in all the tests, so no API key is needed. `http://localhost:5173/?mock=1` is a demo mode
-that needs no API key either; it has no speaker labels (they need the real service). In a browser, PC audio comes from
+that needs no API key either; it has no speaker labels and no rebuilding of transcripts (they need the real service). In a browser, PC audio comes from
 sharing a tab or screen with its audio, and an API key entered there is kept in memory only, until the page is closed.
 
 ## Questions, ideas and plans

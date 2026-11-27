@@ -70,7 +70,7 @@ test('times in the answer are read in every form the service may use', () => {
     assert.ok(Number.isNaN(parseSeconds(bad)), String(bad));
 });
 
-test('word annotations are found wherever they are in the answer, without their text', () => {
+test('word annotations are found wherever they are in the answer, with their text', () => {
   const answer = {
     status: 'completed',
     steps: [
@@ -92,20 +92,75 @@ test('word annotations are found wherever they are in the answer, without their 
     other: { type: 'word_info', speaker: 'spk:0', start_offset: '3s' },
   };
   assert.deepEqual(wordsFromAnswer(answer), [
-    word(500, 1000, 'spk:0'),
-    word(2000, 2500, 'spk:1'),
-    word(3000, 3000, 'spk:0'),
+    { ...word(500, 1000, 'spk:0'), text: 'a' },
+    { ...word(2000, 2500, 'spk:1'), text: 'b' },
+    { ...word(3000, 3000, 'spk:0'), text: '' },
   ]);
 });
 
-test('word annotations without a speaker or a readable start are left out', () => {
+test('a word without a speaker is kept with no label; one without a readable start is left out', () => {
   const answer = [
-    { type: 'word_info', start_offset: '1s', end_offset: '2s' },
+    { type: 'word_info', text: 'x', start_offset: '1s', end_offset: '2s' },
     { type: 'word_info', speaker: 'spk:0', start_offset: 'soon', end_offset: '2s' },
     { type: 'word_info', speaker: 'spk:0', start_offset: '4s', end_offset: '3s' },
   ];
-  assert.deepEqual(wordsFromAnswer(answer), [word(4000, 4000, 'spk:0')]);
+  assert.deepEqual(wordsFromAnswer(answer), [
+    { ...word(1000, 2000, null), text: 'x' },
+    { ...word(4000, 4000, 'spk:0'), text: '' },
+  ]);
   assert.deepEqual(wordsFromAnswer(null), []);
+});
+
+test('punctuation that follows a word in the annotated text joins the word, with whether a space follows', () => {
+  const text = 'Hello, world. 今日は 晴れ。';
+  const at = (w) => text.indexOf(w);
+  const info = (w, s) => ({
+    type: 'word_info',
+    text: w,
+    speaker: 'spk:0',
+    start_offset: `${s}s`,
+    end_offset: `${s + 0.5}s`,
+    start_index: at(w),
+    end_index: at(w) + w.length,
+  });
+  const answer = {
+    content: [
+      { type: 'text', text, annotations: [info('Hello', 0), info('world', 1), info('今日は', 2), info('晴れ', 3)] },
+    ],
+  };
+  assert.deepEqual(
+    wordsFromAnswer(answer).map((w) => [w.text, w.space]),
+    [
+      ['Hello,', true],
+      ['world.', true],
+      ['今日は', true],
+      ['晴れ。', true],
+    ],
+  );
+  // Indexes that do not point at the word's own text are not trusted.
+  const off = { content: [{ type: 'text', text, annotations: [{ ...info('Hello', 0), start_index: 3 }] }] };
+  assert.deepEqual(
+    wordsFromAnswer(off).map((w) => [w.text, w.space]),
+    [['Hello', undefined]],
+  );
+});
+
+test('words given no speaker take part in no match, keep their text and stay unknown', () => {
+  const words = [
+    { startMs: 0, endMs: 400, label: 'spk:0', text: 'one' },
+    { startMs: 500, endMs: 900, label: null, text: 'two' },
+    { startMs: 1000, endMs: 1400, label: 'spk:0', text: 'three' },
+  ];
+  const result = resolvePart(words, referenceLayout([]), { startMs: 0, endMs: MIN }, { newSpeaker: () => 'p1' });
+  assert.deepEqual(result.mapping, { 'spk:0': 'p1' });
+  assert.deepEqual(
+    result.words.map((w) => [w.text, w.speaker]),
+    [
+      ['one', 'p1'],
+      ['two', null],
+      ['three', 'p1'],
+    ],
+  );
 });
 
 // ---------- parts ----------

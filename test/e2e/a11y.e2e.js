@@ -7,9 +7,11 @@ import { createRequire } from 'node:module';
 import { test } from 'node:test';
 import {
   mockGemini,
+  mockLineTranslation,
   mockQuestions,
   mockSpeakers,
   mockSummary,
+  rebuildAnswer,
   seededAnswer,
   seedRecordedSession,
   setup,
@@ -184,6 +186,35 @@ for (const colorScheme of ['light', 'dark']) {
     await page.click('#editSpeakers');
     await page.waitForSelector('#speakerDialog[open]');
     await assertAccessible(page, 'speaker editor');
+    assert.deepEqual(errors, []);
+    await close();
+  });
+
+  test(`rebuilding a transcript, its confirmation, its progress and restoring pass the accessibility checks in the ${colorScheme} theme`, async () => {
+    const { page, errors, close } = await openApp('', { apiKey: 'test-key' }, undefined, { colorScheme });
+    await seedRecordedSession(page);
+    page.on('dialog', (dialog) => dialog.accept());
+    let release;
+    const held = new Promise((r) => {
+      release = r;
+    });
+    await mockSpeakers(page, {
+      analyze: async () => {
+        await held;
+        return { body: rebuildAnswer() };
+      },
+    });
+    await mockLineTranslation(page);
+    await assertAccessible(page, 'a recorded session, with the action to rebuild its transcript');
+    await page.click('#rebuild');
+    await page.waitForSelector('#rebuildDialog[open]');
+    await assertAccessible(page, 'the confirmation of a rebuild');
+    await page.click('#rebuildConfirm');
+    await page.waitForSelector('#cancelRebuild:not([hidden])');
+    await assertAccessible(page, 'a rebuild in progress');
+    release();
+    await page.waitForSelector('#restoreTranscript:not([hidden])');
+    await assertAccessible(page, 'a rebuilt transcript, with the action to restore the one made while listening');
     assert.deepEqual(errors, []);
     await close();
   });

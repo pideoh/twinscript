@@ -1,6 +1,7 @@
 // Decodes a session's recordings for speaker labels: each recording (its chunks as one blob) at
 // 16 kHz, mixed to mono, as 16-bit samples. The browser's decoder does the resampling. The thin
 // layer over speakers.js that needs Web Audio; everything else about the audio is there.
+import { MessageError } from '../ui/message-error.js';
 import { SAMPLE_RATE } from './speakers.js';
 
 /** Resolves with { samples: Int16Array, durationMs } for one recording. */
@@ -17,4 +18,30 @@ export async function decodeRecording(blob, rate = SAMPLE_RATE) {
     samples[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
   }
   return { samples, durationMs: (samples.length * 1000) / rate };
+}
+
+/**
+ * Decodes every recording of `sess` that has audio, in order. Each is decoded on its own and kept as
+ * 16 kHz mono samples (about 115 MB an hour); a recording that cannot be read is left out (its lines
+ * get no speaker). getAudioChunks(sessionId, recId): its stored chunks; signal: stops between
+ * recordings. Resolves with [{ elapsedStart, startedAt, samples, durationMs }]; rejects with
+ * MessageError('error.speakersNoAudio') when none could be read.
+ */
+export async function decodeRecordings(sess, { getAudioChunks, signal, decode = decodeRecording }) {
+  const decoded = [];
+  for (const rec of sess.recordings) {
+    const chunks = await getAudioChunks(sess.id, rec.id).catch(() => []);
+    signal?.throwIfAborted();
+    if (!chunks.length) continue;
+    try {
+      const audio = await decode(new Blob(chunks, { type: rec.mime }));
+      if (audio.samples.length)
+        decoded.push({ elapsedStart: rec.elapsedStart ?? 0, startedAt: rec.startedAt, ...audio });
+    } catch {
+      /* a recording that cannot be decoded: its lines get no speaker */
+    }
+    signal?.throwIfAborted();
+  }
+  if (!decoded.length) throw new MessageError('error.speakersNoAudio');
+  return decoded;
 }

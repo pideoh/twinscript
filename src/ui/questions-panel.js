@@ -7,13 +7,15 @@
 // sent, and Stop cancels it. An answer that is cancelled or fails is not saved; the question goes
 // back to the field (unless something new was typed there) and a failure is said at the turn. An
 // answer that arrives after its session was deleted is dropped quietly. While listening, nothing is
-// asked. Times an answer cites become buttons that show that line of the transcript, made from the
-// rendered text (outside code and links), so the Markdown renderer stays as it is. The rules are the
-// pure functions exported first; the factory reads the page and calls them.
+// asked. An answer made before the transcript was replaced (src/session/rebuild.js) says so. Times
+// an answer cites become buttons that show that line of the transcript, made from the rendered text
+// (outside code and links), so the Markdown renderer stays as it is. The rules are the pure
+// functions exported first; the factory reads the page and calls them.
 
 import { MockAsker } from '../debug/mock.js';
 import { askLines, cleanQuestion, GeminiAsker, segmentAt, splitTimes } from '../session/ask.js';
 import { markdownToHtml } from '../session/markdown.js';
+import { madeBeforeChange } from '../session/rebuild.js';
 import { hasFinished } from '../session/summaries.js';
 import { addTokens, emptyUsage } from '../usage/usage.js';
 import { langName } from './langs.js';
@@ -174,6 +176,11 @@ export function createQuestionsPanel({
     fillAnswer(answer, turn.answer, sess);
     body.append(answer);
     if (turn.truncated) body.append(note(t('questions.truncated'), 'summary-note turn-truncated'));
+    // Made from another transcript than the one shown (rebuilt or put back since): cited times may
+    // not point at the same lines.
+    if (!isPending && madeBeforeChange(sess, turn.createdAt)) {
+      body.append(note(t('questions.transcriptChanged'), 'summary-note turn-outdated'));
+    }
     if (turn.error) body.append(note(turn.error, 'turn-error'));
     const status = note(t('questions.answering'));
     status.hidden = !isPending || !!turn.answer || !!turn.error;

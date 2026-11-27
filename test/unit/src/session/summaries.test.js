@@ -78,20 +78,32 @@ const segments = (n) => Array.from({ length: n }, (_, i) => ({ src: `line ${i}` 
 
 test('a summary is out of date once speech is added after it', () => {
   const shown = made('a', 10, 2);
-  assert.deepEqual(staleness({ segments: segments(2) }, shown), { stale: false, speakersOnly: false });
-  assert.deepEqual(staleness({ segments: segments(3) }, shown), { stale: true, speakersOnly: false });
+  assert.deepEqual(staleness({ segments: segments(2) }, shown), { stale: false, speakersOnly: false, replaced: false });
+  assert.deepEqual(staleness({ segments: segments(3) }, shown), { stale: true, speakersOnly: false, replaced: false });
 });
 
 test('a summary is out of date once the speakers are labelled after it, which is said apart', () => {
   const shown = made('a', 10, 2);
   const labelledAt = (madeAt, n) => ({ segments: segments(n), speakerLabels: { speakers: [], madeAt } });
-  assert.deepEqual(staleness(labelledAt(20, 2), shown), { stale: true, speakersOnly: true });
-  assert.deepEqual(staleness(labelledAt(20, 3), shown), { stale: true, speakersOnly: false });
-  assert.deepEqual(staleness(labelledAt(5, 2), shown), { stale: false, speakersOnly: false });
+  assert.deepEqual(staleness(labelledAt(20, 2), shown), { stale: true, speakersOnly: true, replaced: false });
+  assert.deepEqual(staleness(labelledAt(20, 3), shown), { stale: true, speakersOnly: false, replaced: false });
+  assert.deepEqual(staleness(labelledAt(5, 2), shown), { stale: false, speakersOnly: false, replaced: false });
+});
+
+test('a summary made before the transcript was rebuilt or put back is out of date, which is said apart', () => {
+  const shown = made('a', 10, 2);
+  const replacedAt = (time, n = 2) => ({
+    segments: segments(n),
+    transcriptChangedAt: time,
+    speakerLabels: { speakers: [], madeAt: time },
+  });
+  assert.deepEqual(staleness(replacedAt(20), shown), { stale: true, speakersOnly: false, replaced: true });
+  assert.deepEqual(staleness(replacedAt(20, 1), shown), { stale: true, speakersOnly: false, replaced: true });
+  assert.deepEqual(staleness(replacedAt(5), shown), { stale: false, speakersOnly: false, replaced: false });
 });
 
 test('without a summary nothing is out of date', () => {
-  assert.deepEqual(staleness({ segments: segments(3) }, null), { stale: false, speakersOnly: false });
+  assert.deepEqual(staleness({ segments: segments(3) }, null), { stale: false, speakersOnly: false, replaced: false });
 });
 
 test('a summary can be written in the session languages and the display language, each once', () => {

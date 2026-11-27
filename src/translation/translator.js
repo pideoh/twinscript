@@ -234,3 +234,21 @@ export class GeminiTranslator {
     }
   }
 }
+
+// The translator for a session's languages. langs: [{ code, name }], two or three, in the order of the
+// selects; otherInto: the setting for speech in none of them ('A', 'B', 'C' or 'all'). For the rules
+// of two languages 'all' gives the first language there, as before; speech that its writing system
+// shows to be neither language never reaches those rules with 'all'.
+export function translatorFor({ apiKey, model, langs, otherInto, glossary, onUsage }) {
+  const [langA, langB, langC] = langs;
+  return new GeminiTranslator({
+    apiKey,
+    model,
+    onUsage,
+    langA: langA.name,
+    langB: langB.name,
+    langC: langC?.name,
+    glossary,
+    otherInto: (otherInto === 'B' ? langB : langA).name,
+  });
+}

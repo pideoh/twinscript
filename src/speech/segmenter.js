@@ -5,6 +5,8 @@
 // so finished sentences are split off the interim text here. Final results may also be
 // missing or arrive after the next utterance has started; neither may lose text. Nor may a revision
 // of words that were already split off: the next cut is found in the revised text (committedEnd).
+// The rules for where a sentence ends (findSplit) and which characters are written without spaces
+// (CJK) are also used to make lines of a recording's words (src/session/recording-transcript.js).
 
 const MIN_SPLIT_CHARS = 10; // shorter sentences are merged with the next one
 const MAX_LIVE_CHARS = 180; // force a split at a clause boundary beyond this
@@ -14,7 +16,7 @@ const newUtterance = () => ({ committed: '', prevRest: '', full: '' });
 const normalize = (t) => t.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
 
 // Interim results often come with a space between every Japanese word; drop those.
-const CJK = '\\u3000-\\u30ff\\u3400-\\u9fff\\uff00-\\uffef';
+export const CJK = '\\u3000-\\u30ff\\u3400-\\u9fff\\uff00-\\uffef';
 const CJK_GAP = new RegExp(`(?<=[${CJK}])\\s+(?=[${CJK}])`, 'g');
 const tidy = (text) => text.replace(CJK_GAP, '');
 
@@ -99,8 +101,10 @@ function closestMatchEnd(pattern, span) {
   return best;
 }
 
-// Index at which `rest` can be split into a finished segment + remainder, or 0.
-function findSplit(rest) {
+// Index at which `rest` can be split into a finished segment + remainder, or 0: after the first
+// sentence end that leaves at least MIN_SPLIT_CHARS before it and text after it, else, beyond
+// MAX_LIVE_CHARS, at a clause boundary or a space.
+export function findSplit(rest) {
   for (const m of rest.matchAll(SENTENCE_END)) {
     const end = m.index + m[0].length;
     if (end >= MIN_SPLIT_CHARS && rest.slice(end).trim()) return end;

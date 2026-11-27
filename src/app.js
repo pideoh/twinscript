@@ -12,7 +12,6 @@ import { createTrace } from './debug/trace.js';
 import { MODEL as DIARIZE_MODEL } from './session/diarizer.js';
 import { formatElapsed } from './session/exporter.js';
 import { createSessionSaver, isEmpty, blankSession as newSession } from './session/session-save.js';
-import { hasLabels } from './session/speaker-labels.js';
 import { AudioCapture, appPlatform, inMacDesktopApp } from './speech/audio.js';
 import { canRecord, Recorder } from './speech/recorder.js';
 import { GeminiLiveTranscriber } from './speech/transcriber.js';
@@ -23,24 +22,28 @@ import { store } from './storage/store.js';
 import { createFlow } from './translation/flow.js';
 import { DEFAULT_STRATEGY, strategyNamed } from './translation/pacer.js';
 import { ReadAloud } from './translation/read-aloud.js';
-import { GeminiTranslator } from './translation/translator.js';
+import { translatorFor } from './translation/translator.js';
 import { createCaptionWindow } from './ui/caption-window.js';
+import { download } from './ui/download.js';
 import { readElements } from './ui/elements.js';
 import { createExportDialog } from './ui/export-dialog.js';
 import { applyTranslations, getLocale, t } from './ui/i18n.js';
 import { octicon } from './ui/icons.js';
 import { LANGS } from './ui/langs.js';
 import { createQuestionsPanel } from './ui/questions-panel.js';
+import { createRebuildPanel } from './ui/rebuild-panel.js';
 import { createSettingsDialog } from './ui/settings-dialog.js';
 import { createShortcutsPanel } from './ui/shortcuts-panel.js';
 import { createSidebar } from './ui/sidebar.js';
 import { createSpeakerPanel } from './ui/speaker-panel.js';
 import { createSummaryPanel } from './ui/summary-panel.js';
 import { createTemplateEditor, createTemplateStore } from './ui/template-editor.js';
+import { createToast } from './ui/toast.js';
 import { createTranscriptView } from './ui/transcript-view.js';
 import { createUpdateNotice } from './ui/update-notice.js';
 import { createUsageDialog } from './ui/usage-dialog.js';
 import { createViews } from './ui/views.js';
+import { createWakeLock } from './ui/wake-lock.js';
 import { addTokens, emptyUsage } from './usage/usage.js';
 import { createUsageLog } from './usage/usage-log.js';
 
@@ -138,7 +141,6 @@ function setSessionLangC(sess) {
 let sessions = []; // saved sessions, newest first
 let current = null; // the session on screen
 let run = null; // the live capture/translation in progress, if any
-let toastTimer;
 
 // randomUUID needs a secure context; the fallback takes 128 bits from the same CSPRNG.
 const uid = () =>
@@ -147,16 +149,8 @@ const uid = () =>
 // Errors from audio.js, transcriber.js and translator.js carry a message key.
 const errorText = (err) => (err?.key ? t(err.key, err.params) : (err?.message ?? String(err)));
 
-// Shown as an inline banner above the transcript. variant: 'info', 'warning' or 'critical'.
-function toast(message, ms = 6000, variant = 'info') {
-  els.toast.textContent = message;
-  els.toast.dataset.variant = variant;
-  els.toast.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    els.toast.hidden = true;
-  }, ms);
-}
+// Notices, as an inline banner above the transcript (src/ui/toast.js).
+const toast = createToast({ els });
 
 // A new, empty session in the languages selected (src/session/session-save.js).
 function blankSession() {
@@ -212,11 +206,8 @@ async function showSession(sess) {
   } catch {
     /* private mode */
   }
-  for (const node of els.log.querySelectorAll('.seg')) node.remove();
   flow.forgetLive();
-  els.log.classList.toggle('has-speakers', hasLabels(sess));
-  for (const seg of sess.segments) view.mount(seg);
-  els.empty.hidden = sess.segments.length > 0;
+  view.showAll(sess);
   const [a, b] =
     LANGS.some((l) => l.code === sess.langA) && LANGS.some((l) => l.code === sess.langB) && sess.langA !== sess.langB
       ? [sess.langA, sess.langB]
@@ -298,15 +289,6 @@ const shortcutsPanel = createShortcutsPanel({
 // The notice of a newer version, and when to ask for one (src/ui/update-notice.js).
 const updateNotice = createUpdateNotice({ els, t, settings, storage: browserStorage, bridge: () => window.appUpdates });
 
-// ---------- download ----------
-function download(blob, name) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
-}
-
 // The download dialog (src/ui/export-dialog.js).
 createExportDialog({
   els,
@@ -356,7 +338,10 @@ const summaryPanel = createSummaryPanel({
   // the usage log and the speaker panel are made below
   recordUsage: (sess, usage) => usageLog.recordUsage(sess, usage),
   speakerName: (sess, id) => speakerPanel.speakerName(sess, id),
-  renderSpeakerTools: () => speakerPanel.renderTools(),
+  renderSpeakerTools: () => {
+    speakerPanel.renderTools();
+    rebuildPanel.renderTools();
+  },
   mock: MOCK,
 });
 
@@ -382,6 +367,37 @@ const speakerPanel = createSpeakerPanel({
   recordUsage: (sess, usage) => usageLog.recordUsage(sess, usage), // the usage log is made below
   renderSummary: summaryPanel.render,
   debug: DEBUG,
+  demo: MOCK,
+  isRebuilding: (sess) => rebuildPanel.isRebuilding(sess), // the rebuild panel is made below
+});
+
+// ---------- rebuilding a transcript ----------
+// The transcript made again from the recording, and the one made while listening put back
+// (src/ui/rebuild-panel.js; the rules are in src/session/rebuild.js).
+const rebuildPanel = createRebuildPanel({
+  els,
+  t,
+  store,
+  storage: browserStorage,
+  settings,
+  toast,
+  errorText,
+  uid,
+  getCurrent: () => current,
+  getRun: () => run,
+  getApiKey: settingsDialog.apiKey,
+  openSettings: settingsDialog.open,
+  flushSaves: saver.flushSaves,
+  markDirty: saver.markDirty,
+  isDeleted: (sess) => saver.isForgotten(sess),
+  recordUsage: (sess, usage) => usageLog.recordUsage(sess, usage), // the usage log is made below
+  isLabeling: speakerPanel.isLabeling,
+  showTranscript: view.showAll,
+  showLineError: view.showError,
+  renderSummary: () => {
+    summaryPanel.render();
+    questionsPanel.render(); // made below
+  },
   demo: MOCK,
 });
 
@@ -452,8 +468,6 @@ const usageDialog = createUsageDialog({
 });
 
 // ---------- live run ----------
-let wakeLock = null;
-
 // Active (recording) time of the current session, which is what segment timestamps show.
 function elapsedNow() {
   return run?.startedAt ? run.baseMs + Date.now() - run.startedAt : current.activeMs;
@@ -544,18 +558,8 @@ async function start() {
     r.translator = new MockTranslator({ model: settings.translateModel, onUsage });
     r.transcriber = new MockTranscriber({ ...handlers, languages: [langA, langB, langC].map((l) => l?.name) });
   } else {
-    r.translator = new GeminiTranslator({
-      apiKey,
-      model: settings.translateModel,
-      onUsage,
-      langA: langA.name,
-      langB: langB.name,
-      langC: langC?.name,
-      glossary: settings.glossary,
-      // For the rules of two languages; 'all' gives the first language there, as before. Speech
-      // that its writing system shows to be neither language never reaches those rules with 'all'.
-      otherInto: (r.otherInto === 'B' ? langB : langA).name,
-    });
+    const { translateModel: model, glossary } = settings;
+    r.translator = translatorFor({ apiKey, model, langs: r.langs, otherInto: r.otherInto, glossary, onUsage });
     r.transcriber = new GeminiLiveTranscriber({
       apiKey,
       languageCodes: r.langs.map((l) => l.code),
@@ -606,7 +610,7 @@ async function start() {
       usageLog.accrueListening(r);
       saver.markDirty(sess);
     }, 5000);
-    requestWakeLock();
+    wakeLock.hold();
   } catch (err) {
     if (run !== r) return;
     const denied = err.name === 'NotAllowedError' || err.name === 'SecurityError';
@@ -672,23 +676,14 @@ function stop() {
   const release = () => r.capture?.stop();
   if (r.recorder) r.recorder.stop().then(release, release);
   else release();
-  wakeLock?.release().catch(() => {});
-  wakeLock = null;
+  wakeLock.release();
   setRunning(false);
   els.clock.textContent = formatElapsed(r.session.activeMs);
   saver.markDirty(r.session);
 }
 
-async function requestWakeLock() {
-  try {
-    wakeLock = await navigator.wakeLock?.request('screen');
-  } catch {
-    /* unsupported or denied */
-  }
-}
-document.addEventListener('visibilitychange', () => {
-  if (run && document.visibilityState === 'visible') requestWakeLock();
-});
+// The screen stays on while listening (src/ui/wake-lock.js).
+const wakeLock = createWakeLock({ isRunning: () => !!run });
 
 // ---------- transcript + translation flow ----------
 // From the segmenter's results to translations on the page and read aloud (src/translation/flow.js).
@@ -742,6 +737,8 @@ try {
     els.labelSpeakers,
     els.editSpeakers,
     els.speakerSave,
+    els.rebuild,
+    els.restoreTranscript,
   ])
     el.disabled = false;
 }
