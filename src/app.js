@@ -30,6 +30,7 @@ import { createExportDialog } from './ui/export-dialog.js';
 import { applyTranslations, getLocale, t } from './ui/i18n.js';
 import { octicon } from './ui/icons.js';
 import { LANGS } from './ui/langs.js';
+import { createQuestionsPanel } from './ui/questions-panel.js';
 import { createSettingsDialog } from './ui/settings-dialog.js';
 import { createShortcutsPanel } from './ui/shortcuts-panel.js';
 import { createSidebar } from './ui/sidebar.js';
@@ -105,6 +106,7 @@ const settingsDialog = createSettingsDialog({
     summaryPanel.fillTemplates();
     templateEditor.renderList();
     summaryPanel.render();
+    questionsPanel.render();
     speakerPanel.render();
     shortcutsPanel.render();
     updateNotice.show();
@@ -132,22 +134,7 @@ function setSessionLangC(sess) {
 }
 
 // ---------- sessions (saved conversations) ----------
-// { id, title, customTitle, createdAt, updatedAt, langA, langB, langC?, activeMs, segmentCount?,
-//   usage?, usagePartial?, demo? (see "usage and cost estimates" below),
-//   speakerLabels?: { speakers: [{ id, name }], madeAt, uncertain, model } (see "speaker labels" below),
-//   segments: [{ id, at, elapsed, src, tgt, lang?, tgts?, speaker? }],
-//   recordings: [{ id, startedAt, elapsedStart, durationMs, mime }],
-//   summaries: [{ id, templateId, templateName, length, language, createdAt, markdown, model, truncated,
-//                 segmentCount }] (oldest first),
-//   summary?: { overview, keyPoints, decisions, actionItems: [{ task, owner, due }], truncated,
-//               generatedAt, model, segmentCount } (the one summary an earlier version kept) }
-// With a third language (langC), a segment also has `lang`, the code of the language it was
-// spoken in ('other' for none of the three), and `tgts: [{ lang, text }]`, one translation per
-// target language; `tgt` then holds those translations joined by line breaks, so everything that
-// reads `tgt` works as with two languages.
-// Saved sessions are listed without their segments (`segments` is absent and `segmentCount` says
-// how many there are) and without their summaries; both are loaded the first time the session is
-// shown.
+// What a session holds, in memory and saved: the first comment of src/session/session-save.js.
 let sessions = []; // saved sessions, newest first
 let current = null; // the session on screen
 let run = null; // the live capture/translation in progress, if any
@@ -194,13 +181,14 @@ window.addEventListener('pagehide', saver.flushSaves);
 
 let opening = null; // the session whose segments are being loaded to show it
 async function showSession(sess) {
-  if (!sess.segments || !sess.summaries) {
+  if (!sess.segments || !sess.summaries || !sess.questions) {
     opening = sess;
-    let segments, summaries;
+    let segments, summaries, questions;
     try {
-      [segments, summaries] = await Promise.all([
+      [segments, summaries, questions] = await Promise.all([
         sess.segments ?? store.loadSegments(sess.id),
         sess.summaries ?? store.loadSummaries(sess.id),
+        sess.questions ?? store.loadQuestions(sess.id),
       ]);
     } catch (err) {
       if (opening === sess) opening = null;
@@ -212,6 +200,7 @@ async function showSession(sess) {
     opening = null;
     sess.segments ??= segments;
     sess.summaries ??= summaries;
+    sess.questions ??= questions;
     if (run && current) return; // capture started while loading
   }
   opening = null;
@@ -396,8 +385,34 @@ const speakerPanel = createSpeakerPanel({
   demo: MOCK,
 });
 
+// ---------- questions ----------
+// Questions about a finished session and their answers (src/ui/questions-panel.js).
+const questionsPanel = createQuestionsPanel({
+  els,
+  t,
+  octicon,
+  settings,
+  store,
+  toast,
+  errorText,
+  uid,
+  getCurrent: () => current,
+  getRun: () => run,
+  getApiKey: settingsDialog.apiKey,
+  openSettings: settingsDialog.open,
+  markDirty: saver.markDirty,
+  isDeleted: (sess) => saver.isForgotten(sess),
+  recordUsage: (sess, usage) => usageLog.recordUsage(sess, usage), // the usage log is made below
+  speakerName: (sess, id) => speakerPanel.speakerName(sess, id),
+  summariesOf: summaryPanel.summariesOf,
+  showTab: (name) => views.show(name), // the tabs are made below
+  showLine: view.showLine,
+  mock: MOCK,
+});
+
 // The tabs of the main area (src/ui/views.js), and what each one's panel does when it is shown.
-const views = createViews({ els, onShow: { transcript: () => view.reveal(), summary: () => summaryPanel.render() } });
+const onShow = { transcript: view.reveal, summary: summaryPanel.render, questions: questionsPanel.render };
+const views = createViews({ els, onShow });
 
 // ---------- summary templates (settings dialog) ----------
 const templateEditor = createTemplateEditor({
@@ -463,6 +478,7 @@ function setRunning(running) {
     els.level.style.width = '0';
   }
   summaryPanel.render();
+  questionsPanel.render();
 }
 
 els.toggle.onclick = () => (run ? stop() : start());

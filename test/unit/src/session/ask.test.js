@@ -390,3 +390,18 @@ test('a usage counter that throws does not break the answer', async () => {
   });
   assert.equal((await asker.ask({ segments, question: 'q' })).answer, 'ok');
 });
+
+test("without a fetch of its own, the asker calls the page's fetch as a function, as a browser requires", async () => {
+  const original = globalThis.fetch;
+  // A browser's fetch throws "Illegal invocation" when it is called as a method of another object.
+  globalThis.fetch = function () {
+    if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+    return Promise.resolve(new Response(sse('ok'), { status: 200 }));
+  };
+  try {
+    const asker = new GeminiAsker({ apiKey: 'K', model: 'm' });
+    assert.equal((await asker.ask({ segments, question: 'q' })).answer, 'ok');
+  } finally {
+    globalThis.fetch = original;
+  }
+});

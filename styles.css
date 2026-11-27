@@ -994,6 +994,130 @@ input[type="range"] {
   text-align: right;
 }
 
+/* ---------- Questions about a session: the Questions tab ---------- */
+/* The conversation scrolls; the field to ask stays at the bottom of the tab. */
+.questions {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.questions[hidden] {
+  display: none;
+}
+.questions-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--base-size-8) var(--base-size-16) var(--base-size-16);
+}
+.questions-intro {
+  margin: 0;
+  color: var(--fgColor-muted);
+}
+.questions-intro[hidden] {
+  display: none;
+}
+.questions-list {
+  display: grid;
+  gap: var(--base-size-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.questions-list:empty {
+  display: none;
+}
+/* A turn: the question as the header of a box, the answer as its body (like the summary). */
+.turn {
+  min-width: 0;
+  border: var(--borderWidth-default) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+}
+.turn-question {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--base-size-8);
+  padding: var(--base-size-4) var(--base-size-4) var(--base-size-4) var(--base-size-12);
+  border-bottom: var(--borderWidth-default) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium) var(--borderRadius-medium) 0 0;
+  background: var(--bgColor-muted);
+}
+.turn-question-text {
+  flex: 1;
+  min-width: 0;
+  margin: var(--base-size-6) 0;
+  font-weight: var(--base-text-weight-semibold);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.turn-answer {
+  display: grid;
+  gap: var(--base-size-8);
+  padding: var(--base-size-12) var(--base-size-16);
+}
+.turn-answer .summary-note[hidden] {
+  display: none;
+}
+.turn-error {
+  margin: 0;
+  color: var(--fgColor-danger);
+}
+/* A cited time: a button that reads as a link, in the running text of the answer. Its padding makes
+   the target as tall as a control; the negative margin keeps the height of the line (a button is
+   laid out as an inline block, whose margin box sets the line). */
+.time-link {
+  display: inline-block;
+  padding: calc((var(--control-medium-size) - 1lh) / 2) 0;
+  margin-block: calc((1lh - var(--control-medium-size)) / 2);
+  border: 0;
+  background: none;
+  color: var(--fgColor-link);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+.time-link:hover {
+  text-decoration-thickness: var(--base-size-2);
+}
+.time-link:focus-visible {
+  outline-offset: 0;
+  border-radius: var(--borderRadius-small);
+}
+.ask-form {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--base-size-8);
+  padding: var(--base-size-8) var(--base-size-16) var(--base-size-12);
+  border-top: var(--borderWidth-default) solid var(--borderColor-muted);
+}
+.ask-note {
+  flex-basis: 100%;
+}
+/* The field grows with its text, up to five lines, then scrolls. */
+.ask-input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--control-medium-size);
+  max-height: calc(5lh + 2 * var(--base-size-6) + 2 * var(--borderWidth-default));
+  field-sizing: content;
+}
+textarea.ask-input {
+  resize: none;
+}
+.ask-input:disabled {
+  background: var(--control-bgColor-disabled);
+  color: var(--control-fgColor-disabled);
+  cursor: not-allowed;
+}
+.ask-form .btn[hidden] {
+  display: none;
+}
+
 /* ---------- Transcript ---------- */
 .log-wrap {
   flex: 1;
@@ -1033,6 +1157,10 @@ input[type="range"] {
   margin: 0 auto;
   padding: var(--base-size-12) 0;
   border-bottom: var(--borderWidth-default) solid var(--borderColor-muted);
+  border-radius: var(--borderRadius-small);
+  transition:
+    background-color 1.5s ease-out,
+    box-shadow 1.5s ease-out;
 }
 .seg .src {
   /* A flex row: the code of the language (::before, further down) and the text. */
@@ -1194,6 +1322,18 @@ input[type="range"] {
   .has-speakers .seg .src,
   .has-speakers .seg .tgt {
     grid-column: auto;
+  }
+}
+/* A line shown from a time cited in an answer: marked at once, then the mark fades out (the
+   transition is on .seg). */
+.seg.marked {
+  background: var(--bgColor-attention-muted);
+  box-shadow: 0 0 0 var(--base-size-8) var(--bgColor-attention-muted);
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .seg {
+    transition: none;
   }
 }
 #anchor {
