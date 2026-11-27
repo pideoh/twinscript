@@ -3,7 +3,8 @@
 // The recognizer only finalizes an utterance at a pause, and its interim text is the
 // whole utterance so far. Uninterrupted speech would therefore grow into one huge block,
 // so finished sentences are split off the interim text here. Final results may also be
-// missing or arrive after the next utterance has started; neither may lose text.
+// missing or arrive after the next utterance has started; neither may lose text. Nor may a revision
+// of words that were already split off: the next cut is found in the revised text (committedEnd).
 
 const MIN_SPLIT_CHARS = 10; // shorter sentences are merged with the next one
 const MAX_LIVE_CHARS = 180; // force a split at a clause boundary beyond this
@@ -45,16 +46,57 @@ function continues(text, previous) {
 function stripCommitted(utt, text) {
   if (!utt.committed) return text;
   if (text.startsWith(utt.committed)) return text.slice(utt.committed.length);
-  // The recognizer revised earlier words. Cut at the sentence boundary closest to where we cut before.
-  let cut = Math.min(utt.committed.length, text.length);
-  let best = null;
-  for (const m of text.matchAll(SENTENCE_END)) {
-    const end = m.index + m[0].length;
-    if (Math.abs(end - cut) <= 40 && (best === null || Math.abs(end - cut) < Math.abs(best - cut))) best = end;
-  }
-  if (best !== null) cut = best;
+  // The recognizer revised earlier words, which can change their length: cut where the text that
+  // was split off ends now, not at the same character count.
+  const cut = committedEnd(utt.committed, text);
   utt.committed = text.slice(0, cut);
   return text.slice(cut);
+}
+
+const ANCHOR_CHARS = 16; // the end of what was split off, looked for in the revised text
+const ANCHOR_REACH = 80; // how far from its old place it is looked for
+const ANCHOR_MAX_EDITS = Math.floor(ANCHOR_CHARS * 0.4); // an approximate match keeps 60% of it, as in continues()
+const CLOSING_MARKS = /^(?:[、，。．！？」』）]+|[,.!?;:]+["')\]]*(?=\s|$))/;
+
+// Where the text that was split off (`committed`) ends in `text`, a revision of the same utterance.
+// Its last characters are looked for near the old cut: an exact match closest to it, else the
+// substring with the fewest edits (the earliest of equals). When neither is found, the cut goes
+// back by the anchor's length, so a few words may show twice rather than be lost. Only a stretch
+// around the old cut is searched: `committed` grows for as long as someone talks without a pause.
+function committedEnd(committed, text) {
+  const at = Math.min(committed.length, text.length);
+  const anchor = committed.slice(-ANCHOR_CHARS);
+  const from = Math.max(0, at - ANCHOR_REACH - anchor.length);
+  const to = Math.min(text.length, at + ANCHOR_REACH);
+  let end = -1;
+  for (let i = text.indexOf(anchor, from); i >= 0 && i + anchor.length <= to; i = text.indexOf(anchor, i + 1)) {
+    const e = i + anchor.length;
+    if (end < 0 || Math.abs(e - at) < Math.abs(end - at)) end = e;
+  }
+  if (end < 0) {
+    const near = closestMatchEnd(anchor, text.slice(from, to));
+    end = near < 0 ? Math.max(0, at - ANCHOR_CHARS) : from + near;
+  }
+  // A comma or full stop the revision added right after the cut closes the part already split off.
+  return end + (text.slice(end).match(CLOSING_MARKS)?.[0].length ?? 0);
+}
+
+// End index in `span` of the substring closest to `pattern` (fewest insertions, deletions and
+// substitutions, the earliest of equals), or -1 when even that one differs by too much.
+function closestMatchEnd(pattern, span) {
+  let row = Array.from({ length: pattern.length + 1 }, (_, i) => i);
+  let best = -1;
+  let bestEdits = ANCHOR_MAX_EDITS + 1;
+  if (row[pattern.length] < bestEdits) [best, bestEdits] = [0, row[pattern.length]];
+  for (let j = 1; j <= span.length; j++) {
+    const next = [0];
+    for (let i = 1; i <= pattern.length; i++) {
+      next[i] = Math.min(row[i] + 1, next[i - 1] + 1, row[i - 1] + (pattern[i - 1] === span[j - 1] ? 0 : 1));
+    }
+    row = next;
+    if (row[pattern.length] < bestEdits) [best, bestEdits] = [j, row[pattern.length]];
+  }
+  return best;
 }
 
 // Index at which `rest` can be split into a finished segment + remainder, or 0.
