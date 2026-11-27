@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.17.0](https://github.com/pideoh/twinscript/compare/v0.16.1...v0.17.0) (2026-11-27)
+
+
+### Features
+
+* make a session from an audio file, and decode recordings in pieces ([#176](https://github.com/pideoh/twinscript/issues/176)) ([2630cb7](https://github.com/pideoh/twinscript/commit/2630cb746095f079b8d6e450c5d3717124625a9d))
+* rebuild a session's transcript from its recording ([#173](https://github.com/pideoh/twinscript/issues/173)) ([358825b](https://github.com/pideoh/twinscript/commit/358825b2aa2ebdfb7788177b8c8000008af8814e))
+
 ## [0.16.1](https://github.com/pideoh/twinscript/compare/v0.16.0...v0.16.1) (2026-11-27)
 
 
