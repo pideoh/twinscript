@@ -13,7 +13,7 @@ Choose two languages and press "Start translating": Twinscript detects which one
 - **Captions on top**: a caption window that stays above slides and meeting apps, including full screen.
 - **Reads translations aloud**: finished translations can be spoken with your system's voices.
 - **Keeps a record**: sessions are saved with their audio, and transcripts export with a timeline as text, Markdown, CSV or SRT.
-- **Summaries after the meeting**: summarize a finished session with a template (quick summary, executive summary, meeting minutes, action items, customer meeting, sales call (BANT), 1:1, stand-up, or your own), choosing the length and the language it is written in. Every summary is kept with the session, so you can switch between them, copy one as Markdown or download it as `.md`. Your own templates are written in the settings and can be exported to a JSON file and imported again.
+- **Summaries after the meeting**: in the Summary tab, next to the Transcript tab, summarize a finished session with a template (quick summary, executive summary, meeting minutes, action items, customer meeting, sales call (BANT), 1:1, stand-up, or your own), choosing the length and the language it is written in. Every summary is kept with the session, so you can switch between them, copy one as Markdown or download it as `.md`. Your own templates are written in the settings and can be exported to a JSON file and imported again.
 - **Who said what**: after a meeting, the speakers are told apart from its recording, and each line of the transcript shows who said it. Give the speakers their names, correct a line by hand; summaries and exports use the names.
 - **Better with names**: register company and product names as terms, and correct mishearings with `wrong => right` rules.
 - The interface is available in English, Japanese and Simplified Chinese.
@@ -146,7 +146,7 @@ afterwards. [docs/tuning.md](docs/tuning.md) describes how it is measured.
 
 ## Speaker labels
 
-After a session, "Label speakers" (next to the summary controls) tells the speakers apart from the session's recording
+After a session, "Label speakers" (in the Transcript tab, above the transcript) tells the speakers apart from the session's recording
 and labels each line of the transcript with its speaker: "Speaker 1", "Speaker 2", … in the order they first speak.
 
 - The recording is uploaded to Google's Gemini API for this (`gemini-3.5-transcribe`) and deleted there as soon as it

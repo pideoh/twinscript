@@ -184,8 +184,8 @@ test('the caption zone can be moved into an always-on-top window and comes back 
   await page.evaluate(() => document.getElementById('fakePip').contentWindow.dispatchEvent(new Event('pagehide')));
   assert.deepEqual(await page.locator('#now .seg .src').allTextContents(), ['Shown in the window.', 'Still talking']);
   assert.ok(
-    await page.locator('#now').evaluate((n) => n.previousElementSibling.classList.contains('log-wrap')),
-    'back in its place under the transcript',
+    await page.locator('#now').evaluate((n) => n.previousElementSibling.classList.contains('views')),
+    'back in its place under the tabs',
   );
   assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'false');
   assert.equal(await page.getAttribute('#now', 'style'), '', 'window-only layout is removed');

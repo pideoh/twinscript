@@ -42,6 +42,8 @@ export default {
   'caption.close': '字幕ウィンドウを閉じる',
 
   // セッションの要約
+  'tabs.label': 'セッションの内容',
+  'tabs.transcript': '文字起こし',
   'summary.label': 'セッションの要約',
   'summary.title': '要約',
   'summary.none': 'テンプレートを選んで、このセッションを要約します',

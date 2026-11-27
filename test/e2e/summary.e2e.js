@@ -1,9 +1,19 @@
-// Browser tests: summaries of a finished session, made from templates and kept in a history, and
-// the summary templates in the settings dialog.
+// Browser tests: summaries of a finished session (the Summary tab), made from templates and kept in
+// a history, and the summary templates in the settings dialog.
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mockGemini, mockSummary, reload, saved, setup, storedSessions, translated } from './helpers.js';
+import {
+  mockGemini,
+  mockSummary,
+  reload,
+  saved,
+  setup,
+  shownTab,
+  showTab,
+  storedSessions,
+  translated,
+} from './helpers.js';
 
 const { openApp } = setup();
 
@@ -20,11 +30,13 @@ const summarized = (page, count) =>
       document.querySelectorAll('#summaryHistory option').length === n,
     count,
   );
+// A session with one finished line, stopped, with the Summary tab open.
 async function finishedSession(page, text) {
   const gemini = await mockGemini(page, [[3, 'final', text]]);
   await page.click('#toggle');
   await translated(page, 1);
   await page.click('#toggle');
+  await showTab(page, 'summary');
   return gemini;
 }
 async function readDownload(page, click) {
@@ -43,6 +55,7 @@ function recordClipboard() {
 
 test('a finished session can be summarized; the summary is kept, exported and marked outdated by new speech', async () => {
   const { page, errors, close } = await openApp('', { apiKey: 'test-key', record: false });
+  await showTab(page, 'summary');
   assert.ok(await page.locator('#summary').isHidden(), 'nothing to summarize in an empty session');
   const gemini = await finishedSession(page, 'Budget review starts now.');
   assert.equal(await page.textContent('#summarize'), '要約する');
@@ -83,14 +96,10 @@ test('a finished session can be summarized; the summary is kept, exported and ma
   assert.match(format, /^<format>\nWrite these sections:\n## Overview/);
   assert.equal(requests[0].generationConfig.responseMimeType, undefined);
 
-  // Collapsing is remembered for the user.
-  await page.click('#summaryToggle');
-  assert.ok(await page.locator('#summaryBody').isHidden());
   await saved(page);
   await reload(page);
+  await showTab(page, 'summary');
   await page.waitForSelector('#summary:not([hidden])');
-  assert.ok(await page.locator('#summaryBody').isHidden(), 'still collapsed after a reload');
-  await page.click('#summaryToggle');
   assert.ok((await summaryText(page)).includes('予算の確認を行った。'), 'the summary survives a reload');
   assert.ok(await page.locator('#summaryStale').isHidden());
 
@@ -100,14 +109,15 @@ test('a finished session can be summarized; the summary is kept, exported and ma
   assert.match(exported, /- 報告書を送る \(佐藤, 水曜日\)\n\n文字起こし\n\n\[00:00:0\d\] Budget review starts now\./);
   await page.keyboard.press('Escape');
 
-  // More speech: the panel steps aside while capturing, then the summary is marked outdated.
+  // More speech: listening shows the transcript, then the summary is marked outdated.
   gemini.restart();
   await page.unroute(/streamGenerateContent/);
   await mockGemini(page, [[3, 'final', 'One more thing.']]);
   await page.click('#toggle');
-  await page.waitForFunction(() => document.getElementById('summary').hidden);
+  assert.equal(await shownTab(page), 'transcript');
   await translated(page, 2);
   await page.click('#toggle');
+  await showTab(page, 'summary');
   await page.waitForSelector('#summaryStale:not([hidden])');
   assert.equal(await page.textContent('#summaryStale'), '古い要約');
   assert.deepEqual(errors, []);
@@ -145,6 +155,7 @@ test('summaries made with different templates are all kept: switch between them,
   // The choices are remembered for the next summary.
   await saved(page);
   await reload(page);
+  await showTab(page, 'summary');
   await page.waitForSelector('#summary:not([hidden])');
   assert.equal(await page.inputValue('#summaryTemplate'), 'preset:minutes');
   assert.equal(await page.inputValue('#summaryLength'), 'detailed');
@@ -177,6 +188,7 @@ test('summaries made with different templates are all kept: switch between them,
   assert.ok((await summaryText(page)).includes('予算を承認'));
   await saved(page);
   await reload(page);
+  await showTab(page, 'summary');
   await page.waitForSelector('#summary:not([hidden])');
   assert.equal((await historyTexts(page)).length, 1);
   const [stored] = await storedSessions(page);

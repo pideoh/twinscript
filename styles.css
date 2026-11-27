@@ -25,6 +25,7 @@
   /* Controls, overlays (functional/size) */
   --control-medium-size: 2rem;
   --control-large-size: 2.5rem;
+  --control-xlarge-size: 3rem;
   --control-minTarget-coarse: 2.75rem;
   --control-medium-paddingInline-normal: 0.75rem;
   --control-large-paddingInline-spacious: 1rem;
@@ -97,6 +98,7 @@
   --borderColor-danger-muted: #ff818266;
   --borderColor-success-emphasis: #1a7f37;
   --focus-outlineColor: #0969da;
+  --underlineNav-borderColor-active: #fd8c73;
   --control-bgColor-disabled: #eff2f5;
   --control-borderColor-rest: #d1d9e0;
   --control-borderColor-disabled: #818b981a;
@@ -167,6 +169,7 @@
     --borderColor-danger-muted: #f8514966;
     --borderColor-success-emphasis: #238636;
     --focus-outlineColor: #1f6feb;
+    --underlineNav-borderColor-active: #f78166;
     --control-bgColor-disabled: #212830;
     --control-borderColor-rest: #3d444d;
     --control-borderColor-disabled: #656c761a;
@@ -707,9 +710,76 @@ input[type="range"] {
   display: none;
 }
 
-/* ---------- Session summary: a slim bar above the transcript, expanding into the summary ---------- */
-.summary {
+/* ---------- Tabs of the main area: Primer UnderlineNav ---------- */
+.views {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tabs {
   flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-8);
+  min-height: var(--control-xlarge-size);
+  padding-inline: var(--base-size-16);
+  overflow-x: auto;
+  box-shadow: inset 0 calc(-1 * var(--borderWidth-thin)) 0 var(--borderColor-muted);
+}
+.tab {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: var(--control-medium-size);
+  padding: 0 var(--base-size-8);
+  border: 0;
+  border-radius: var(--borderRadius-medium);
+  background: transparent;
+  color: var(--fgColor-default);
+  font: inherit;
+  font-size: var(--text-body-size-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tab:hover {
+  background: var(--control-transparent-bgColor-hover);
+}
+.tab[aria-selected="true"] {
+  font-weight: var(--base-text-weight-semibold);
+}
+/* The underline of the selected tab sits on the bottom border of the bar. */
+.tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: calc((var(--control-medium-size) - var(--control-xlarge-size)) / 2);
+  left: 0;
+  height: var(--base-size-2);
+  background: var(--underlineNav-borderColor-active);
+}
+.tab-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tab-panel[hidden] {
+  display: none;
+}
+.summary-panel {
+  display: block;
+  overflow-y: auto;
+  padding-bottom: var(--base-size-16);
+}
+.summary-empty {
+  margin: var(--base-size-16);
+  color: var(--fgColor-muted);
+}
+
+/* ---------- Session summary: the Summary tab ---------- */
+.summary {
   margin: var(--base-size-8) var(--base-size-16) 0;
   border: var(--borderWidth-default) solid var(--borderColor-default);
   border-radius: var(--borderRadius-medium);
@@ -724,36 +794,6 @@ input[type="range"] {
   align-items: center;
   gap: var(--base-size-4) var(--base-size-8);
   padding: var(--base-size-4) var(--base-size-4) var(--base-size-4) var(--base-size-12);
-}
-.summary-bar:has(.summary-toggle:not([hidden])) {
-  padding-left: var(--base-size-4);
-}
-.summary-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--base-size-4);
-  height: var(--control-medium-size);
-  padding: 0 var(--base-size-8);
-  border: 0;
-  border-radius: var(--borderRadius-medium);
-  background: transparent;
-  color: var(--fgColor-default);
-  font-weight: var(--base-text-weight-semibold);
-}
-.summary-toggle:hover {
-  background: var(--button-invisible-bgColor-hover);
-}
-.summary-toggle:active {
-  background: var(--button-invisible-bgColor-active);
-}
-.summary-toggle .chevron {
-  color: var(--fgColor-muted);
-}
-.summary-toggle[aria-expanded="false"] .chevron {
-  transform: rotate(-90deg);
-}
-.summary-toggle[hidden] {
-  display: none;
 }
 .summary-meta {
   min-width: 0;
@@ -776,22 +816,20 @@ input[type="range"] {
 .summary-options .select-wrap {
   flex: 0 1 auto;
 }
-/* Speaker labels: their actions and progress, before the summary's. */
+/* Speaker labels: their actions and progress, a toolbar above the transcript. */
 .speaker-tools {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--base-size-8);
   min-width: 0;
-  margin-left: auto;
+  padding: var(--base-size-8) var(--base-size-16) 0;
 }
 .speaker-tools[hidden],
 .speaker-tools .btn[hidden] {
   display: none;
-}
-.speaker-tools:not([hidden]) + .summary-options {
-  margin-left: 0;
 }
 .summarize .spinner,
 .label-speakers .spinner {
@@ -821,8 +859,6 @@ input[type="range"] {
 .summary-body {
   display: grid;
   gap: var(--base-size-12);
-  max-height: 40vh;
-  overflow-y: auto;
   padding: var(--base-size-12) var(--base-size-16) var(--base-size-16);
   border-top: var(--borderWidth-default) solid var(--borderColor-default);
   line-height: var(--text-body-lineHeight-medium);
@@ -1773,13 +1809,8 @@ kbd {
   #toggle {
     height: var(--control-minTarget-coarse);
   }
-  /* Leave most of a phone screen to the transcript; the summary scrolls inside its panel. */
-  .summary-body {
-    max-height: 30vh;
-  }
-  /* The summary's choices take a row of their own and share it; so do the speaker actions. */
-  .summary-options,
-  .speaker-tools {
+  /* The summary's choices take a row of their own and share it. */
+  .summary-options {
     flex: 1 1 100%;
   }
   .summary-options .select-wrap,

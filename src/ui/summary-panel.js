@@ -1,12 +1,12 @@
-// The summary panel under the transcript: the template, length and language selects, making a
-// summary (streamed into the panel as it arrives), the history of a session's summaries, copy,
-// download and delete. The rules about which summaries a session has and which one is shown are in
+// The summary panel, the Summary tab of the main area: the template, length and language selects,
+// making a summary (streamed into the panel as it arrives), the history of a session's summaries,
+// copy, download and delete. The rules about which summaries a session has and which one is shown are in
 // src/session/summaries.js; the request is src/session/summarizer.js.
 //
 // One summary request at a time; it goes on if another session is opened, and its result goes to
-// the session it was made for. The panel is hidden while capturing, so it never moves the caption
-// zone; whether it is expanded is remembered for the user, not per session. The speaker tools sit in
-// the panel's bar: every render of the panel redraws them too (renderSpeakerTools).
+// the session it was made for. A session without finished speech gets a line saying there is no
+// transcript yet in place of the panel; while capturing, no summary is made. Every render of the
+// panel redraws the speaker tools too (renderSpeakerTools).
 
 import { MockSummarizer } from '../debug/mock.js';
 import { formatDateTime, safeFileName } from '../session/exporter.js';
@@ -28,12 +28,9 @@ import { RateLimitError } from '../translation/translator.js';
 import { addTokens, emptyUsage } from '../usage/usage.js';
 import { LANGS, langName } from './langs.js';
 
-const OPEN_KEY = 'rt-summary-open';
-
 // els: the page's elements; t: i18n; getLocale(): the display language; settings: the live
 // settings object (summaryTemplate, summaryLength, summaryLanguage, translateModel);
-// saveSettings(): stores them; storage: a Storage-like object (getItem / setItem) for whether the
-// panel is expanded; store: the session store (putSummary, deleteSummary); toast(message, ms,
+// saveSettings(): stores them; store: the session store (putSummary, deleteSummary); toast(message, ms,
 // variant); errorText(err): an error's message; download(blob, name): saves a file; uid(): a new
 // id; templates: the template store (src/ui/template-editor.js); langLabel(code): a language's
 // name; getCurrent(), getRun(): the session on screen and the run in progress (or null);
@@ -47,7 +44,6 @@ export function createSummaryPanel({
   getLocale,
   settings,
   saveSettings,
-  storage,
   store,
   toast,
   errorText,
@@ -67,12 +63,6 @@ export function createSummaryPanel({
   mock = false,
 }) {
   let summarizing = null; // { session, text } while a request is in flight; text: the answer so far
-  let summaryOpen = true;
-  try {
-    summaryOpen = storage.getItem(OPEN_KEY) !== 'false';
-  } catch {
-    /* private mode */
-  }
   const shownSummaryId = new WeakMap(); // session -> id of the summary on screen (default: the latest)
   const displayLangCode = () => LANGS.find((l) => l.display === getLocale())?.code;
   const offeredLangs = LANGS.map((l) => l.code);
@@ -131,19 +121,18 @@ export function createSummaryPanel({
     const list = summariesOf(sess);
     const busy = summarizing?.session === sess;
     const shown = busy ? null : shownSummary(sess, list);
-    els.summary.hidden = !!getRun() || !hasFinished(sess);
+    els.summary.hidden = !hasFinished(sess);
+    els.summaryEmpty.hidden = !els.summary.hidden;
     fillSummaryLanguages(sess);
     els.summarize.setAttribute('aria-busy', String(busy));
-    els.summarize.setAttribute('aria-disabled', String(!!summarizing));
+    els.summarize.setAttribute('aria-disabled', String(!!summarizing || !!getRun()));
     els.summaryStatus.textContent = busy ? t('summary.working') : '';
     els.summaryMeta.textContent = busy || list.length ? '' : t('summary.none');
-    els.summaryToggle.hidden = !busy && !list.length;
-    els.summaryToggle.setAttribute('aria-expanded', String(summaryOpen));
     // Outdated: speech was added after the summary, or the speakers were labelled after it.
     const { stale, speakersOnly } = staleness(sess, shown);
     els.summaryStale.hidden = !stale;
     els.summaryStale.title = t(speakersOnly ? 'summary.staleSpeakersHelp' : 'summary.staleHelp');
-    els.summaryBody.hidden = (!busy && !shown) || !summaryOpen;
+    els.summaryBody.hidden = !busy && !shown;
     els.summaryHistoryBar.hidden = !shown;
     if (shown) {
       els.summaryHistory.replaceChildren(
@@ -180,15 +169,6 @@ export function createSummaryPanel({
     });
   }
 
-  els.summaryToggle.onclick = () => {
-    summaryOpen = !summaryOpen;
-    try {
-      storage.setItem(OPEN_KEY, String(summaryOpen));
-    } catch {
-      /* private mode */
-    }
-    renderSummary();
-  };
   els.summaryTemplate.onchange = () => {
     settings.summaryTemplate = els.summaryTemplate.value;
     saveSettings();
@@ -222,7 +202,6 @@ export function createSummaryPanel({
       ? new MockSummarizer({ model: settings.translateModel, onUsage })
       : new GeminiSummarizer({ apiKey: getApiKey(), model, onUsage });
     summarizing = { session: sess, text: '' };
-    summaryOpen = true; // the answer is shown as it arrives
     renderSummary();
     try {
       const { markdown, truncated } = await summarizer.summarize(segments, {

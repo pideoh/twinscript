@@ -12,6 +12,7 @@ import {
   seededAnswer,
   seedRecordedSession,
   setup,
+  showTab,
   translated,
   updatesBridge,
 } from './helpers.js';
@@ -52,6 +53,9 @@ for (const colorScheme of ['light', 'dark']) {
       colorScheme,
     });
     await assertAccessible(page, 'main screen, idle');
+    await showTab(page, 'summary');
+    await assertAccessible(page, 'Summary tab, nothing to summarize yet');
+    await showTab(page, 'transcript');
 
     await page.click('#openSettings');
     await assertAccessible(page, 'settings dialog');
@@ -74,7 +78,8 @@ for (const colorScheme of ['light', 'dark']) {
     await assertAccessible(page, 'usage dialog');
     await page.click('#usageDialog .dialog-footer button');
 
-    // The summary panel with a rendered summary (headings, lists, a table, a link) and its history.
+    // The Summary tab with a rendered summary (headings, lists, a table, a link) and its history.
+    await showTab(page, 'summary');
     await mockSummary(page, () => ({
       body: [
         '## Overview',
@@ -99,7 +104,7 @@ for (const colorScheme of ['light', 'dark']) {
     await page.selectOption('#summaryTemplate', 'preset:minutes');
     await page.click('#summarize');
     await page.waitForFunction(() => document.querySelectorAll('#summaryHistory option').length === 2);
-    await assertAccessible(page, 'summary panel');
+    await assertAccessible(page, 'Summary tab with summaries');
 
     // The summary templates in the settings dialog, with the editor open.
     await page.click('#openSettings');

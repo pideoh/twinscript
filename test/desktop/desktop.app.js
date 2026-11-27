@@ -132,8 +132,8 @@ test('runs the demo and moves the captions into an overlay window and back', asy
   await Promise.all([overlay.waitForEvent('close'), overlay.click('.overlay-close')]);
   await page.locator('#now').waitFor({ state: 'attached' });
   assert.ok(
-    await page.locator('#now').evaluate((n) => n.previousElementSibling.classList.contains('log-wrap')),
-    'back under the transcript',
+    await page.locator('#now').evaluate((n) => n.previousElementSibling.classList.contains('views')),
+    'back under the tabs',
   );
   assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'false');
   assert.equal(await page.locator('.overlay-close').count(), 0);

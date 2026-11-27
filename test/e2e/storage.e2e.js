@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mockGemini, reload, rows, saved, sessionNames, setup, tagged, translated } from './helpers.js';
+import { mockGemini, reload, rows, saved, sessionNames, setup, showTab, tagged, translated } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -251,6 +251,7 @@ test('transcripts saved by an earlier version are moved to the new layout withou
     OLD.sessions[2].segments.map(({ src, tgt }) => ({ live: false, src, tgt })),
   );
   assert.equal((await times(page))[319], '00:05:19');
+  await showTab(page, 'summary');
   await page.waitForSelector('#summary:not([hidden])');
   assert.ok((await page.textContent('#summaryContent')).includes('四半期の振り返りを行った。'), 'summary kept');
   assert.ok(await page.locator('#summaryStale').isHidden(), 'and still up to date');
