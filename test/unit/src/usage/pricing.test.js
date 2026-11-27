@@ -113,3 +113,17 @@ test('amounts are shown without a false $0.00 for a cost above zero', () => {
   assert.throws(() => formatUsd(Number.NaN), TypeError);
   assert.throws(() => formatUsd(null), TypeError);
 });
+
+test('questions cost their tokens at the prices of the model that answered them', () => {
+  const usage = addTokens(emptyUsage(), 'question', LITE, {
+    promptTokenCount: 20_000,
+    candidatesTokenCount: 300,
+    thoughtsTokenCount: 100,
+  });
+  const cost = costOf(usage);
+  close(cost.question.usd, (20_000 * 0.3 + 400 * 2.5) / 1e6);
+  close(cost.total.usd, cost.question.usd);
+  assert.deepEqual(costOf(addTokens(emptyUsage(), 'question', 'unknown-model', {})).question.unpriced, [
+    'unknown-model',
+  ]);
+});

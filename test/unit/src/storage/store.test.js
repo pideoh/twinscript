@@ -1,8 +1,11 @@
-// How sessions are laid out in storage: the parts of src/storage/store.js that need no IndexedDB.
+// How sessions are laid out in storage: the parts of src/storage/store.js that need no IndexedDB,
+// and, with the in-memory stand-in of test/support/fake-indexeddb.js, the upgrades and the stores.
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  questionFromRecord,
+  questionRecord,
   segmentChanges,
   segmentFromRecord,
   segmentRange,
@@ -11,6 +14,8 @@ import {
   summaryFromRecord,
   summaryRecord,
 } from '../../../../src/storage/store.js';
+import { createFakeIndexedDB } from '../../../support/fake-indexeddb.js';
+import { withGlobals } from '../../../support/globals.js';
 
 const twoLanguages = {
   id: 's1',
@@ -204,3 +209,148 @@ test('summaries are stored one record each, apart from the session record that t
   assert.deepEqual(record, { ...summary, sessionId: 's1' });
   assert.deepEqual(summaryFromRecord(record), summary);
 });
+
+test('a question is stored with its session id and only the fields of the layout', () => {
+  const entry = {
+    id: 'q-1',
+    question: 'What was decided?',
+    answer: '- Ship on Friday [00:01:05]',
+    model: 'm',
+    createdAt: 7,
+    truncated: false,
+    usage: { version: 1 },
+  };
+  const record = questionRecord('s1', entry);
+  const { usage, ...kept } = entry;
+  assert.deepEqual(record, { ...kept, sessionId: 's1' });
+  assert.deepEqual(questionFromRecord(record), kept);
+  const { meta } = splitSession({ ...twoLanguages, questions: [entry] });
+  assert.equal(meta.questions, undefined, 'not in the session record');
+});
+
+// ---------- with the IndexedDB stand-in ----------
+
+let instance = 0;
+// A store module of its own (the module keeps its open database).
+const freshStore = async () => (await import(`../../../../src/storage/store.js?instance=${++instance}`)).store;
+const opened = (req) =>
+  new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+const readAll = async (indexedDB, name) => {
+  const db = await opened(indexedDB.open('twinscript'));
+  return opened(db.transaction(name).objectStore(name).getAll());
+};
+const STORES_V4 = ['audio', 'questions', 'segments', 'sessions', 'summaries'];
+
+// What version 3 of the app left on disk: a session, its segments, a summary and a recording chunk.
+const V3 = {
+  session: { id: 's1', title: 'Weekly', createdAt: 1, updatedAt: 2, langA: 'ja', langB: 'en', segmentCount: 2 },
+  segments: [
+    { sessionId: 's1', pos: 0, id: 'a', at: 10, elapsed: 0, src: 'Hello.', tgt: 'こんにちは。' },
+    { sessionId: 's1', pos: 1, id: 'b', at: 20, elapsed: 65_000, src: 'Ship it.', tgt: '出荷します。' },
+  ],
+  summary: { sessionId: 's1', id: 'sum-1', markdown: '## Decisions', createdAt: 5, truncated: false },
+  audio: { sessionId: 's1', recId: 'r1', blob: 'chunk' },
+};
+
+function seedVersion3(indexedDB) {
+  const req = indexedDB.open('twinscript', 3);
+  req.onupgradeneeded = () => {
+    const db = req.result;
+    db.createObjectStore('sessions', { keyPath: 'id' }).put(V3.session);
+    const audio = db.createObjectStore('audio', { autoIncrement: true });
+    audio.createIndex('recording', ['sessionId', 'recId']);
+    audio.createIndex('session', 'sessionId');
+    audio.add(V3.audio);
+    const segments = db.createObjectStore('segments', { keyPath: ['sessionId', 'pos'] });
+    for (const s of V3.segments) segments.put(s);
+    db.createObjectStore('summaries', { keyPath: ['sessionId', 'id'] }).put(V3.summary);
+  };
+  return opened(req);
+}
+
+const withFakeDb = (fn) => {
+  const fake = createFakeIndexedDB();
+  return withGlobals({ indexedDB: fake.indexedDB, IDBKeyRange: fake.IDBKeyRange }, () => fn(fake.indexedDB));
+};
+
+test('saved sessions of version 3 open at version 4 with a store for questions and nothing else changed', () =>
+  withFakeDb(async (indexedDB) => {
+    await seedVersion3(indexedDB);
+    const store = await freshStore();
+    assert.deepEqual(await store.listSessions(), [V3.session]);
+
+    const db = await opened(indexedDB.open('twinscript'));
+    assert.equal(db.version, 4);
+    assert.deepEqual([...db.objectStoreNames], STORES_V4);
+    assert.deepEqual(await readAll(indexedDB, 'segments'), V3.segments);
+    assert.deepEqual(await readAll(indexedDB, 'summaries'), [V3.summary]);
+    assert.deepEqual(await readAll(indexedDB, 'audio'), [V3.audio]);
+    assert.deepEqual(await readAll(indexedDB, 'questions'), []);
+    assert.deepEqual(await store.loadSegments('s1'), V3.segments.map(segmentFromRecord));
+    assert.deepEqual(await store.loadSummaries('s1'), [summaryFromRecord(V3.summary)]);
+    assert.deepEqual(await store.getAudioChunks('s1', 'r1'), ['chunk']);
+  }));
+
+test("a session's questions are kept one record each, listed in the order they were asked, and deleted one by one", () =>
+  withFakeDb(async (indexedDB) => {
+    await seedVersion3(indexedDB);
+    const store = await freshStore();
+    const ask = (id, createdAt) => ({
+      id,
+      question: `Q ${id}`,
+      answer: `A ${id}`,
+      model: 'm',
+      createdAt,
+      truncated: false,
+    });
+    await store.putQuestion('s1', ask('zz', 100));
+    await store.putQuestion('s1', ask('aa', 200));
+    await store.putQuestion('s2', ask('other', 150));
+    assert.deepEqual(
+      (await store.loadQuestions('s1')).map((q) => q.id),
+      ['zz', 'aa'],
+      'oldest first, whatever the ids',
+    );
+    assert.deepEqual((await store.loadQuestions('s1'))[0], ask('zz', 100));
+    await store.putQuestion('s1', { ...ask('zz', 100), answer: 'rewritten' });
+    assert.equal((await store.loadQuestions('s1'))[0].answer, 'rewritten', 'the same id is replaced, not added');
+    await store.deleteQuestion('s1', 'zz');
+    assert.deepEqual(
+      (await store.loadQuestions('s1')).map((q) => q.id),
+      ['aa'],
+    );
+    assert.deepEqual(
+      (await store.loadQuestions('s2')).map((q) => q.id),
+      ['other'],
+      'another session keeps its own',
+    );
+    assert.deepEqual(await store.loadQuestions('none'), []);
+  }));
+
+test('deleting a session deletes its questions with its segments, summaries and recording', () =>
+  withFakeDb(async (indexedDB) => {
+    await seedVersion3(indexedDB);
+    const store = await freshStore();
+    const entry = { id: 'q', question: 'Q', answer: 'A', model: 'm', createdAt: 1, truncated: true };
+    await store.putQuestion('s1', entry);
+    await store.putQuestion('s2', entry);
+    await store.deleteSession('s1');
+    assert.deepEqual(await store.listSessions(), []);
+    assert.deepEqual(await store.loadQuestions('s1'), []);
+    assert.deepEqual(await store.loadSegments('s1'), []);
+    assert.deepEqual(await store.loadSummaries('s1'), []);
+    assert.deepEqual(await store.getAudioChunks('s1', 'r1'), []);
+    assert.deepEqual(await store.loadQuestions('s2'), [entry], "another session's questions stay");
+  }));
+
+test('a new install starts at version 4 with every store', () =>
+  withFakeDb(async (indexedDB) => {
+    const store = await freshStore();
+    assert.deepEqual(await store.listSessions(), []);
+    const db = await opened(indexedDB.open('twinscript'));
+    assert.equal(db.version, 4);
+    assert.deepEqual([...db.objectStoreNames], STORES_V4);
+  }));

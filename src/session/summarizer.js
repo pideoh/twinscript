@@ -47,9 +47,21 @@ export function transcriptForSummary(segments, limit = MAX_TRANSCRIPT_CHARS) {
       tgt: plain(oneLine(seg.tgt)),
     }))
     .filter((r) => r.src);
-  const full = rows.map((r) => transcriptLine(r)).join('\n');
-  if (full.length <= limit) return { text: full, truncated: false };
-  const lines = rows.map((r) => transcriptLine(r, { withTranslation: false }));
+  return fitTranscript(
+    rows.map((r) => transcriptLine(r)),
+    rows.map((r) => transcriptLine(r, { withTranslation: false })),
+    limit,
+  );
+}
+
+// The rule for a transcript too long to send, shared by everything that sends one (summaries,
+// questions in src/session/ask.js). `full`: one entry per line with its translations; `lines`: the
+// same lines without them. Returns { text, truncated }: the full lines when they fit within
+// `limit` characters, else the lines without translations, else the start and the end of those,
+// half the budget each, with a marker saying how many lines were left out in between.
+export function fitTranscript(full, lines, limit = MAX_TRANSCRIPT_CHARS) {
+  const whole = full.join('\n');
+  if (whole.length <= limit) return { text: whole, truncated: false };
   const sourceOnly = lines.join('\n');
   if (sourceOnly.length <= limit) return { text: sourceOnly, truncated: false };
 

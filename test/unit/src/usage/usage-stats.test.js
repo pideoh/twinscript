@@ -250,3 +250,16 @@ test('speaker labels are a part of their own in the view, priced as the transcri
   close(view.cost.total.usd, (45_000 * 2 + 5000 * 12) / 1e6 + (1000 * 0.3 + 100 * 2.5) / 1e6);
   assert.deepEqual(view.unpriced, []);
 });
+
+test('questions are a part of their own in the view, in the totals and in the total cost', () => {
+  let usage = addTokens(emptyUsage(), 'summary', LITE, { promptTokenCount: 1000, candidatesTokenCount: 100 });
+  usage = addTokens(usage, 'question', LITE, { promptTokenCount: 20_000, candidatesTokenCount: 200 });
+  const view = usageView(usage, PRICES);
+  assert.deepEqual(view.question, { requests: 1, inputTokens: 20_000, outputTokens: 200 });
+  assert.equal(view.requests, 2);
+  assert.equal(view.inputTokens, 21_000);
+  close(view.cost.question.usd, (20_000 * 0.3 + 200 * 2.5) / 1e6);
+  close(view.cost.total.usd, (21_000 * 0.3 + 300 * 2.5) / 1e6);
+  const old = usageView({ version: USAGE_VERSION, transcription: {}, translation: {}, summary: {} }, PRICES);
+  assert.deepEqual(old.question, { requests: 0, inputTokens: 0, outputTokens: 0 }, 'an older record reads as none');
+});

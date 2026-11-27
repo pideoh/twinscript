@@ -203,11 +203,11 @@ test('transcripts saved by an earlier version are moved to the new layout withou
     newestFirst.map((s) => hhmmss(s.activeMs)),
   );
 
-  // On disk: version 3, session records without segments, one record per segment in order, and
-  // a store for summaries (an old summary stays in its session record as it was).
+  // On disk: version 4, session records without segments, one record per segment in order, and
+  // stores for summaries and questions (an old summary stays in its session record as it was).
   const disk = await dump(page);
-  assert.equal(disk.version, 3);
-  assert.deepEqual(disk.stores.sort(), ['audio', 'segments', 'sessions', 'summaries']);
+  assert.equal(disk.version, 4);
+  assert.deepEqual(disk.stores.sort(), ['audio', 'questions', 'segments', 'sessions', 'summaries']);
   for (const old of OLD.sessions) {
     const { segments, ...meta } = old;
     const record = disk.sessions.find((s) => s.id === old.id);

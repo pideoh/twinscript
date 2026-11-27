@@ -313,6 +313,8 @@ export default {
   'error.summarize': '要約エラー ({status}): {message}',
   'error.summaryRateLimit': 'APIのレート制限に達しました。1分ほど待ってから再度お試しください。',
   'error.summaryInvalid': '応答を要約として読み取れませんでした。再度お試しください。',
+  'error.ask': '質問エラー ({status}): {message}',
+  'error.noAnswer': '回答が返ってきませんでした。再度お試しください。',
   'error.speakersUpload': 'アップロードエラー ({status}): {message}',
   'error.speakersAnalyze': '話者の解析エラー ({status}): {message}',
   'error.speakersRateLimit': 'APIのレート制限に達しました。1分ほど待ってから再度お試しください。',
