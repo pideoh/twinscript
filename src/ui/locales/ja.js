@@ -147,6 +147,10 @@ export default {
   'import.tooLarge':
     'ファイルが {mb} MB を超えています（読み込める上限）。MP3 や M4A などの圧縮された形式にしてください。',
   'import.tooLong': '録音が {minutes} 分を超えています（読み込める上限）。先に短いファイルに分けてください。',
+  'import.tooLongWhole':
+    'この種類のファイルは一度に全体を読むため、{minutes} 分までです。MP3、M4A、WAV に変換するか、分けてください。',
+  'import.tooLargeWhole':
+    'この種類のファイルは一度に全体を読むため、{mb} MB までです。MP3、M4A、WAV に変換するか、分けてください。',
   'import.tooShort': '録音が 1 秒より短く、文字起こしするものがありません。',
   'import.silent': '録音が無音で、文字起こしするものがありません。',
   'import.failed': 'ファイルを読み込めませんでした: {message} 何も追加されていません。',

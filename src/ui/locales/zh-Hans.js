@@ -140,6 +140,8 @@ export default {
   'import.undecodable': '无法将此文件作为音频读取。文件可能已损坏，或格式无法读取。',
   'import.tooLarge': '文件超过 {mb} MB，这是可导入的上限。请使用 MP3 或 M4A 等压缩格式。',
   'import.tooLong': '录音超过 {minutes} 分钟，这是可导入的上限。请先拆分为较短的文件。',
+  'import.tooLongWhole': '此类文件需要整体解码，最长 {minutes} 分钟。请转换为 MP3、M4A 或 WAV，或拆分文件。',
+  'import.tooLargeWhole': '此类文件需要整体解码，最大 {mb} MB。请转换为 MP3、M4A 或 WAV，或拆分文件。',
   'import.tooShort': '录音不足 1 秒，没有可转写的内容。',
   'import.silent': '录音是静音的，没有可转写的内容。',
   'import.failed': '无法导入文件：{message} 没有添加任何内容。',

@@ -152,6 +152,10 @@ export default {
     'The file is larger than {mb} MB, the most the app can import. Use a compressed format such as MP3 or M4A.',
   'import.tooLong':
     'The recording is longer than {minutes} minutes, the most the app can import. Split it into shorter files first.',
+  'import.tooLongWhole':
+    'Files of this kind are decoded whole, so they can be at most {minutes} minutes long. Convert it to MP3, M4A or WAV, or split it.',
+  'import.tooLargeWhole':
+    'Files of this kind are decoded whole, so they can be at most {mb} MB. Convert it to MP3, M4A or WAV, or split it.',
   'import.tooShort': 'The recording is shorter than a second: there is nothing to transcribe.',
   'import.silent': 'The recording is silent: there is nothing to transcribe.',
   'import.failed': 'The file could not be imported: {message} Nothing was added.',

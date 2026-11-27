@@ -226,7 +226,8 @@ A meeting recorded elsewhere (a recorder, a phone, a download of an online meeti
 button beside "New session" opens a file picker. The file is transcribed after the fact, as when a transcript is
 rebuilt (`gemini-3.5-transcribe`, with speakers), and every line is translated.
 
-- Formats: WAV, MP3, M4A and MP4 (AAC), AAC, FLAC, Ogg and WebM, up to 1 hour (60 minutes) and 500 MB. AIFF and CAF cannot be read.
+- Formats: WAV, MP3, M4A and MP4 (AAC), AAC, FLAC, Ogg and WebM, up to 2 hours and 2000 MB. AIFF and CAF cannot be
+  read. Files in Vorbis (some Ogg and WebM files) are decoded whole and can be at most 1 hour and 500 MB.
 - The session is in the languages selected at the top of the window; choose them before importing.
 - Before it starts, the app shows the file's name and length, the languages, and what happens: the file is uploaded to
   the Gemini API in parts and each upload is deleted after the analysis; the transcript is made with speakers and every
@@ -325,9 +326,10 @@ this month, last month and everything recorded, and each saved session.
   that cannot be decoded) is missing from it. Its translations use the setting for other languages as it is when the
   rebuild starts.
 - After a transcript is rebuilt or restored, a time cited in an earlier answer may no longer point at the same line.
-- An imported audio file is transcribed after the fact: there are no live captions for it. Files longer than 1 hour
-  or larger than 500 MB are refused, because the whole file is decoded in memory first (several gigabytes for an hour
-  of stereo audio). The original file is not kept: the recording is the converted 16 kHz mono audio.
+- An imported audio file is transcribed after the fact: there are no live captions for it. Files longer than 2 hours
+  or larger than 2000 MB are refused. A file is read and decoded a piece at a time; a two-hour import needs about
+  1.3 GB of memory. Files in Vorbis are decoded whole, which takes several gigabytes for an hour of stereo audio, so
+  they are limited to 1 hour and 500 MB. The original file is not kept: the recording is the converted 16 kHz mono audio.
 - A transcription session lasts at most 10 minutes, so the app switches to a new connection in the background, at a pause in speech.
 - When the free tier hits its rate limit, translation of sentences in progress pauses for a minute; finished sentences are still translated.
 - With a third language, the language of a sentence is told from its writing system. Languages that share it with

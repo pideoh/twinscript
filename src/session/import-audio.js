@@ -9,27 +9,32 @@
 // ADTS AAC, FLAC, Ogg Vorbis, WebM (Opus, also with a video track). AIFF and CAF are not decoded,
 // so they are not offered.
 //
-// Limits. decodeAudioData decodes a file whole, and its peak memory grows with the length times the
-// file's own sample rate and channels (measured in Chrome 158: about 1.4 GB for 2 hours of 16 kHz mono
-// WAV, 7 GB for 1 hour of 44.1 kHz stereo AAC or 2 hours of 44.1 kHz mono, 10 GB for 2 hours of 48 kHz
-// stereo). Until a file can be decoded in pieces (issue #175), MAX_MS is one hour and MAX_BYTES, which
-// bounds the file read into memory whole, 500 MB. The length is checked from the file's metadata
-// before it is decoded, so a longer file is refused without that cost. A file shorter than MIN_MS or
-// without a sample louder than SILENT_PEAK (-60 dBFS) has nothing to transcribe and is refused before
-// anything is uploaded.
+// Limits, from measurements in Chrome 158 (a fresh browser each time; peak memory above an idle page).
+// A file read a piece at a time (src/session/audio-reader.js) needs memory for its 16 kHz result and the
+// WAV made of it, not for the file: importing two hours of 48 kHz stereo AAC peaked about 1.3 GB above
+// the idle page, one hour about 0.8 GB. So MAX_MS is two hours and MAX_BYTES only refuses what no
+// recording of that length needs. A file decoded whole (what the library cannot read, and Vorbis)
+// costs memory that grows with its length times its own rate and channels (7 GB for an hour of 44.1
+// kHz stereo AAC, 11 GB for two hours of 48 kHz), so it keeps the tighter WHOLE_MAX_MS and
+// WHOLE_MAX_BYTES. The length is checked before decoding (from the library, or the file's metadata),
+// so a longer file is refused without that cost. A file shorter than MIN_MS or without a sample louder
+// than SILENT_PEAK (-60 dBFS) has nothing to transcribe and is refused before anything is uploaded.
 
 import { autoTitle } from './session-save.js';
 import { SAMPLE_RATE, wavBytes } from './speakers.js';
 
-export const MAX_MS = 60 * 60_000;
-export const MAX_BYTES = 500 * 1024 ** 2;
+export const MAX_MS = 2 * 60 * 60_000;
+export const MAX_BYTES = 2000 * 1024 ** 2;
+export const WHOLE_MAX_MS = 60 * 60_000;
+export const WHOLE_MAX_BYTES = 500 * 1024 ** 2;
 export const MIN_MS = 1_000;
 export const SILENT_PEAK = 33; // of 32767
 const TITLE_LENGTH = 100;
 export const CHUNK_MS = 5 * 60_000; // of audio per stored chunk of the recording (9.6 MB)
 
-// The numbers the messages about the limits name.
+// The numbers the messages about the limits name: for a file read in pieces, and one decoded whole.
 export const LIMITS = { minutes: MAX_MS / 60_000, mb: MAX_BYTES / 1024 ** 2 };
+export const WHOLE_LIMITS = { minutes: WHOLE_MAX_MS / 60_000, mb: WHOLE_MAX_BYTES / 1024 ** 2 };
 
 // The type a file of each extension is kept as when the system gives none.
 const BY_EXTENSION = {
@@ -90,16 +95,26 @@ export function checkFile({ name, type, size }) {
   return null;
 }
 
-/** Whether a length in ms is within the limit: null, or { key, params }. NaN or Infinity: not known yet. */
-export function checkLength(durationMs) {
-  if (Number.isFinite(durationMs) && durationMs > MAX_MS)
-    return { key: 'import.tooLong', params: { minutes: LIMITS.minutes } };
+/** Whether a file that is decoded whole is small enough for it: null, or { key, params }. */
+export function checkWhole({ size }) {
+  if (size > WHOLE_MAX_BYTES) return { key: 'import.tooLargeWhole', params: { mb: WHOLE_LIMITS.mb } };
   return null;
 }
 
+/**
+ * Whether a length in ms is within the limit: null, or { key, params }. NaN or Infinity: not known
+ * yet. whole: the file is decoded whole.
+ */
+export function checkLength(durationMs, { whole = false } = {}) {
+  if (!Number.isFinite(durationMs) || durationMs <= (whole ? WHOLE_MAX_MS : MAX_MS)) return null;
+  return whole
+    ? { key: 'import.tooLongWhole', params: { minutes: WHOLE_LIMITS.minutes } }
+    : { key: 'import.tooLong', params: { minutes: LIMITS.minutes } };
+}
+
 /** Whether decoded audio ({ samples: Int16Array, durationMs }) has something to transcribe: null, or { key, params }. */
-export function checkAudio({ samples, durationMs }) {
-  const long = checkLength(durationMs);
+export function checkAudio({ samples, durationMs }, { whole = false } = {}) {
+  const long = checkLength(durationMs, { whole });
   if (long) return long;
   if (durationMs < MIN_MS) return { key: 'import.tooShort' };
   let peak = 0;

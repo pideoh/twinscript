@@ -56,7 +56,7 @@ test('choosing a file says what will happen; the import makes a saved session wi
     said,
     /音声は 16 kHz モノラルに変換して、セッションの録音としてアプリに保存されます。元のファイルは保存されません/,
   );
-  assert.match(said, /読み込めるのは 60 分、500 MB までのファイルです/);
+  assert.match(said, /読み込めるのは 120 分、2000 MB までのファイルです/);
   assert.equal(service.uploads.length, 0, 'nothing is sent before the user agrees');
 
   await page.click('#importConfirm');
@@ -223,8 +223,8 @@ test('a file that cannot be decoded, is too long, is silent or has no speech, an
     'ファイルを音声として読めませんでした。壊れているか、アプリで読めない形式の可能性があります。',
   );
   await refused(
-    wavFile({ name: 'long.wav', seconds: 3600 + 60, rate: 3000, bits: 8 }),
-    '録音が 60 分を超えています（読み込める上限）。先に短いファイルに分けてください。',
+    wavFile({ name: 'long.wav', seconds: 2 * 3600 + 60, rate: 3000, bits: 8 }),
+    '録音が 120 分を超えています（読み込める上限）。先に短いファイルに分けてください。',
   );
   await refused(wavFile({ name: 'quiet.wav', amplitude: 0 }), '録音が無音で、文字起こしするものがありません。');
   await refused(wavFile({ name: 'blip.wav', seconds: 0.5 }), '録音が 1 秒より短く、文字起こしするものがありません。');
@@ -330,7 +330,7 @@ test('the dialog and the control are in English with the English display languag
   await chooseAudioFile(page, wavFile({ name: 'Call.wav' }));
   await fileRead(page);
   assert.equal(await page.textContent('#importTitle'), 'Make a session from an audio file');
-  assert.equal(await page.textContent('#importLimits'), 'Files of up to 60 minutes and 500 MB can be imported.');
+  assert.equal(await page.textContent('#importLimits'), 'Files of up to 120 minutes and 2000 MB can be imported.');
   assert.equal(await page.textContent('#importConfirm'), 'Import');
   assert.deepEqual(errors, []);
   await close();

@@ -9,6 +9,7 @@
 // audio behind; what the requests used is counted in the daily totals all the same. While the dialog
 // is open the main button is held, so that a global shortcut cannot start listening meanwhile.
 
+import { probeAudio } from '../session/audio-reader.js';
 import { GeminiDiarizer } from '../session/diarizer.js';
 import { formatElapsed } from '../session/exporter.js';
 import {
@@ -16,9 +17,11 @@ import {
   checkAudio,
   checkFile,
   checkLength,
+  checkWhole,
   importedSession,
   LIMITS,
   progressKey,
+  WHOLE_LIMITS,
   wavChunks,
 } from '../session/import-audio.js';
 import { transcribeRecording } from '../session/recording-transcript.js';
@@ -145,7 +148,17 @@ export function createImportPanel({
       els.importDuration.textContent = '';
       showError(t(problem.key, problem.params));
     };
-    const problem = checkFile(file) ?? checkLength(await metadataLength(file));
+    const refused = checkFile(file);
+    if (refused) return refuse(refused);
+    // Read a piece at a time where it can be (its length then comes from the library); otherwise
+    // decoded whole, within the tighter limits.
+    const probe = await probeAudio(file);
+    if (job !== mine) return;
+    const whole = !probe;
+    els.importLimits.textContent = t('import.limits', whole ? WHOLE_LIMITS : LIMITS);
+    const problem = whole
+      ? (checkWhole(file) ?? checkLength(await metadataLength(file), { whole }))
+      : checkLength(probe.seconds * 1000);
     if (job !== mine) return;
     if (problem) return refuse(problem);
     let audio;
@@ -155,7 +168,7 @@ export function createImportPanel({
       return refuse({ key: 'import.undecodable' });
     }
     if (job !== mine) return;
-    const bad = checkAudio(audio);
+    const bad = checkAudio(audio, { whole });
     if (bad) return refuse(bad);
     job.audio = audio;
     els.importDuration.textContent = formatElapsed(audio.durationMs);

@@ -5,6 +5,7 @@ import {
   checkAudio,
   checkFile,
   checkLength,
+  checkWhole,
   fileType,
   importedSession,
   MAX_BYTES,
@@ -12,6 +13,8 @@ import {
   MIN_MS,
   progressKey,
   titleFromFileName,
+  WHOLE_MAX_BYTES,
+  WHOLE_MAX_MS,
   wavChunks,
 } from '../../../../src/session/import-audio.js';
 import { emptyUsage } from '../../../../src/usage/usage.js';
@@ -54,8 +57,14 @@ test('an empty file cannot be read and a file over the size limit is refused wit
   assert.equal(checkFile({ name: 'a.wav', type: 'audio/wav', size: MAX_BYTES }), null);
   assert.deepEqual(checkFile({ name: 'a.wav', type: 'audio/wav', size: MAX_BYTES + 1 }), {
     key: 'import.tooLarge',
-    params: { mb: 500 },
+    params: { mb: 2000 },
   });
+});
+
+test('a file decoded whole has a tighter size limit, said with its number', () => {
+  assert.equal(WHOLE_MAX_BYTES, 500 * 1024 ** 2);
+  assert.equal(checkWhole({ size: WHOLE_MAX_BYTES }), null);
+  assert.deepEqual(checkWhole({ size: WHOLE_MAX_BYTES + 1 }), { key: 'import.tooLargeWhole', params: { mb: 500 } });
 });
 
 test('the file input offers the extensions and the types that are taken', () => {
@@ -65,11 +74,17 @@ test('the file input offers the extensions and the types that are taken', () => 
   assert.ok(!offered.some((item) => /aiff|caf/.test(item)));
 });
 
-test('a recording longer than an hour is refused with the limit; an unknown length is decided later', () => {
-  assert.equal(MAX_MS, 3_600_000);
-  assert.equal(MAX_BYTES, 500 * 1024 ** 2);
+test('a recording longer than two hours, or one hour when decoded whole, is refused with the limit; an unknown length is decided later', () => {
+  assert.equal(MAX_MS, 2 * 3_600_000);
+  assert.equal(MAX_BYTES, 2000 * 1024 ** 2);
+  assert.equal(WHOLE_MAX_MS, 3_600_000);
   assert.equal(checkLength(MAX_MS), null);
-  assert.deepEqual(checkLength(MAX_MS + 1), { key: 'import.tooLong', params: { minutes: 60 } });
+  assert.deepEqual(checkLength(MAX_MS + 1), { key: 'import.tooLong', params: { minutes: 120 } });
+  assert.equal(checkLength(WHOLE_MAX_MS, { whole: true }), null);
+  assert.deepEqual(checkLength(WHOLE_MAX_MS + 1, { whole: true }), {
+    key: 'import.tooLongWhole',
+    params: { minutes: 60 },
+  });
   assert.equal(checkLength(Number.NaN), null);
   assert.equal(checkLength(Number.POSITIVE_INFINITY), null, 'a WebM recorded by a browser does not say');
 });
@@ -88,6 +103,10 @@ test('decoded audio needs at least a second of sound, and no more than the limit
   assert.deepEqual(checkAudio(tone(5000, 20)), { key: 'import.silent' }, 'below -60 dBFS');
   assert.deepEqual(checkAudio({ samples: new Int16Array(16), durationMs: MAX_MS + 1000 }), {
     key: 'import.tooLong',
+    params: { minutes: 120 },
+  });
+  assert.deepEqual(checkAudio({ samples: new Int16Array(16), durationMs: WHOLE_MAX_MS + 1000 }, { whole: true }), {
+    key: 'import.tooLongWhole',
     params: { minutes: 60 },
   });
   // One loud moment in a quiet file is enough.
