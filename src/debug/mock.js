@@ -24,17 +24,27 @@ const CHINESE = [
 // [Japanese, English, Simplified Chinese] of each line, whichever was spoken.
 const LINES = SCRIPT.map(([src, tgt], i) => (/[ぁ-んァ-ン]/.test(src) ? [src, tgt] : [tgt, src]).concat(CHINESE[i]));
 const IN = { Japanese: 0, English: 1, 'Simplified Chinese': 2 };
+// With Simplified Chinese among the languages, the question about the results is asked in Chinese.
+const ASKED_IN_CHINESE = 3;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export class MockTranscriber {
-  constructor({ onInterim, onFinal, onState }) {
+  // languages: the English names of the selected languages.
+  constructor({ onInterim, onFinal, onState, languages = [] }) {
     Object.assign(this, { onInterim, onFinal, onState });
+    this.chinese = languages.includes('Simplified Chinese');
+  }
+  // The demo speech: Japanese and English lines, and one Chinese line when Chinese is selected.
+  speech() {
+    return SCRIPT.map(([src], i) =>
+      this.chinese && i === ASKED_IN_CHINESE ? LINES[i][IN['Simplified Chinese']] : src,
+    );
   }
   async start() {
     this.running = true;
     this.onState('listening');
     // One long utterance with no pause: interim text keeps growing, the final only comes at the end.
-    const text = SCRIPT.map(([src]) => src).join(' ');
+    const text = this.speech().join(' ');
     while (this.running) {
       for (let n = 6; n < text.length && this.running; n += 6) {
         this.onInterim(text.slice(0, n));
@@ -66,9 +76,9 @@ export class MockTranslator {
   }
   // into: with a third language, the language asked for (English when the demo has no such lines).
   async translate(text, { onDelta, into } = {}) {
-    const hits = into
-      ? SCRIPT.flatMap(([src], i) => (text.includes(src) ? [LINES[i][IN[into] ?? 1]] : []))
-      : SCRIPT.filter(([src]) => text.includes(src)).map(([, tgt]) => tgt);
+    // The demo lines the text holds, in whichever language each was spoken.
+    const said = LINES.flatMap((line, i) => (line.some((version) => text.includes(version)) ? [i] : []));
+    const hits = said.map((i) => (into ? LINES[i][IN[into] ?? 1] : SCRIPT[i][1]));
     const full = hits.length ? hits.join(' ') : '…';
     for (let n = 6; n < full.length; n += 6) {
       await sleep(40);
@@ -253,11 +263,13 @@ const DEMO_ANSWERS = {
   en: {
     found: (started, report) =>
       `Load testing started on **Friday**${started}, after the API integration was finished. The full report is expected by **Wednesday**${report}.`,
+    report: (report) => `The full report is expected by **Wednesday**${report}.`,
     none: 'The meeting does not say.',
   },
   ja: {
     found: (started, report) =>
       `API連携の完了後、**金曜日**に負荷テストが始まりました${started}。完全なレポートは**水曜日**までに出る見込みです${report}。`,
+    report: (report) => `完全なレポートは**水曜日**までに出る見込みです${report}。`,
     none: '会議の中ではそのことに触れていません。',
   },
 };
@@ -277,7 +289,10 @@ export class MockAsker {
     const started = cite(/load test|負荷テスト/);
     const report = cite(/Wednesday|水曜日/);
     const text = DEMO_ANSWERS[/[ぁ-んァ-ン一-龯]/.test(question) ? 'ja' : 'en'];
-    const full = started || report ? text.found(started, report) : text.none;
+    // A question about the report or its date gets only that line; any other, both.
+    const aboutReport = /report|due|when|deadline|レポート|報告|いつ|期限/i.test(question);
+    const full =
+      report && aboutReport ? text.report(report) : started || report ? text.found(started, report) : text.none;
     for (let n = 12; n < full.length; n += 12) {
       await sleep(40);
       if (signal?.aborted) throw new DOMException('The question was cancelled', 'AbortError');

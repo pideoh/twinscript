@@ -19,6 +19,8 @@ Choose two languages and press "Start translating": Twinscript detects which one
 - **Better with names**: register company and product names as terms, and correct mishearings with `wrong => right` rules.
 - The interface is available in English, Japanese and Simplified Chinese.
 
+![The Summary tab with a quick summary of a meeting: overview, key points, decisions and action items](docs/summary.png)
+
 ## Install
 
 Download the zip for your computer from [Releases](../../releases):
@@ -56,6 +58,8 @@ Each line starts with a short code for its language (JA, EN, ZH), for what was s
 For a meeting in three languages, pick one more in the third language menu ("+ Add a language"). Every sentence is then
 translated into the other two, each translation on its own line with a tag for its language. Choose "+ Add a language"
 again to go back to two languages.
+
+![A meeting in Japanese, English and Chinese: each sentence with its translations into the other two languages, each on a line led by its language code](docs/three-languages.png)
 
 Speech in a language that is none of the selected ones is translated into all of them. To have it translated into one
 of them only, choose that language under "When a language other than the selected ones is spoken, translate into" in
@@ -149,6 +153,8 @@ afterwards. [docs/tuning.md](docs/tuning.md) describes how it is measured.
 
 After a session, the Questions tab (next to Summary) answers questions about it. Type a question and press Enter
 (Shift+Enter for a new line); the answer is written as it arrives and can be stopped.
+
+![The Questions tab with two questions about a meeting, each answer citing the times of the lines it relies on as links](docs/questions.png)
 
 - Answers are written by the translation model from the session's transcript (with speaker names once the speakers are
   labeled) and its summaries. When the meeting does not contain the answer, the answer says so instead of filling the

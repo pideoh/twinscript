@@ -25,7 +25,7 @@ browser, which is used for development and the browser tests. Usage and pricing 
 | `app/` | The desktop app (Electron): main process, preload bridge, and the rules that need no Electron (`policy`, `secrets`, `shortcuts`, `updates`) |
 | `scripts/` | Tools: commit check, price update, metrics, macOS signing, what the browser tests cover (`e2e-coverage.mjs`), `tuning/` (replay and latency) |
 | `test/` | `unit/{src,app,scripts,rules}/`, `e2e/`, `desktop/`; see `test/README.md` |
-| `docs/` | Principles, tuning, API key guide, signing policy |
+| `docs/` | Principles, tuning, API key guide, signing policy, the README's pictures |
 | `.github/workflows/` | Tests, release (release-please), preview build, price check, metrics, signing check |
 
 Every source file starts with a comment that says what it is for and what is not obvious about it. Read that
@@ -58,7 +58,7 @@ Each rule is written once. Open the file for what you are about to touch.
 
 ## Always
 
-- Tests come in the same commit as a behavior change; docs for a change users can see come in the same pull request (README in both languages, `docs/`). Regenerate the README animation (`node scripts/demo.mjs`) only when the main screen looks different.
+- Tests come in the same commit as a behavior change; docs for a change users can see come in the same pull request (README in both languages, `docs/`). Regenerate the README pictures only when what they show looks different: the animation (`node scripts/demo.mjs`, several megabytes per version) for the two-language listening screen, the stills (`node scripts/demo.mjs --stills`) for the three-language transcript and the Summary and Questions tabs.
 - No new dependencies: zero at runtime; dev dependencies are `playwright-core`, `electron`, `electron-builder`, `@biomejs/biome` and `axe-core` only.
 - The interface keeps running in a plain browser. Desktop-only code lives in `app/`; `src/` only detects Electron.
 - User-visible text goes through i18n; code, comments and commit messages are in English.

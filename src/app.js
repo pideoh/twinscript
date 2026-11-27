@@ -542,7 +542,7 @@ async function start() {
     usageLog.recordUsage(sess, addTokens(emptyUsage(), 'translation', model, usageMetadata));
   if (MOCK) {
     r.translator = new MockTranslator({ model: settings.translateModel, onUsage });
-    r.transcriber = new MockTranscriber(handlers);
+    r.transcriber = new MockTranscriber({ ...handlers, languages: [langA, langB, langC].map((l) => l?.name) });
   } else {
     r.translator = new GeminiTranslator({
       apiKey,
