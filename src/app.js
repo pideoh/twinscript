@@ -12,7 +12,7 @@ import { createTrace } from './debug/trace.js';
 import { MODEL as DIARIZE_MODEL } from './session/diarizer.js';
 import { formatElapsed } from './session/exporter.js';
 import { createSessionSaver, isEmpty, blankSession as newSession } from './session/session-save.js';
-import { AudioCapture, appPlatform, inMacDesktopApp } from './speech/audio.js';
+import { AudioCapture, appPlatform, inMacDesktopApp, watchSystemAudio } from './speech/audio.js';
 import { canRecord, Recorder } from './speech/recorder.js';
 import { GeminiLiveTranscriber } from './speech/transcriber.js';
 import { applyReplacements, parseVocabulary } from './speech/vocabulary.js';
@@ -25,10 +25,11 @@ import { ReadAloud } from './translation/read-aloud.js';
 import { translatorFor } from './translation/translator.js';
 import { createCaptionWindow } from './ui/caption-window.js';
 import { download } from './ui/download.js';
-import { readElements } from './ui/elements.js';
+import { readElements, SESSION_CONTROLS } from './ui/elements.js';
 import { createExportDialog } from './ui/export-dialog.js';
 import { applyTranslations, getLocale, t } from './ui/i18n.js';
 import { octicon } from './ui/icons.js';
+import { createImportPanel } from './ui/import-panel.js';
 import { LANGS } from './ui/langs.js';
 import { createQuestionsPanel } from './ui/questions-panel.js';
 import { createRebuildPanel } from './ui/rebuild-panel.js';
@@ -47,7 +48,6 @@ import { createWakeLock } from './ui/wake-lock.js';
 import { addTokens, emptyUsage } from './usage/usage.js';
 import { createUsageLog } from './usage/usage-log.js';
 
-const SILENT_SYSTEM_AUDIO_MS = 8000; // how long PC audio may deliver nothing before the user is told
 const MOCK = new URLSearchParams(location.search).has('mock');
 const DEBUG = new URLSearchParams(location.search).has('debug'); // log raw recognizer output to the console
 // Debug only: the recognizer trace of the last run (src/debug/trace.js), also readable from the console.
@@ -401,6 +401,31 @@ const rebuildPanel = createRebuildPanel({
   demo: MOCK,
 });
 
+// ---------- importing an audio file ----------
+// A new session made from an audio file (src/ui/import-panel.js; the rules are in src/session/import-audio.js).
+const importPanel = createImportPanel({
+  els,
+  t,
+  store,
+  storage: browserStorage,
+  settings,
+  toast,
+  errorText,
+  uid,
+  langLabel,
+  getRun: () => run,
+  getCurrent: () => current,
+  getApiKey: settingsDialog.apiKey,
+  openSettings: settingsDialog.open,
+  recordUsage: (sess, usage) => usageLog.recordUsage(sess, usage), // the usage log is made below
+  onImported: (sess) => {
+    sessions.unshift(sess);
+    return run ? sidebar.render() : showSession(sess);
+  },
+  showLineError: view.showError,
+  demo: MOCK,
+});
+
 // ---------- questions ----------
 // Questions about a finished session and their answers (src/ui/questions-panel.js).
 const questionsPanel = createQuestionsPanel({
@@ -493,6 +518,7 @@ function setRunning(running) {
   }
   summaryPanel.render();
   questionsPanel.render();
+  importPanel.render();
 }
 
 els.toggle.onclick = () => (run ? stop() : start());
@@ -604,7 +630,9 @@ async function start() {
     r.ticker = setInterval(() => {
       els.clock.textContent = formatElapsed(elapsedNow());
     }, 500);
-    if (r.capture && r.capture.systemLevel() !== null) watchSystemAudio(r);
+    const silent = () =>
+      toast(t(inMacDesktopApp() ? 'toast.systemAudioSilentMac' : 'toast.systemAudioSilent'), 20000, 'warning');
+    if (r.capture && r.capture.systemLevel() !== null) r.systemWatch = watchSystemAudio(r.capture, silent);
     // Keeps elapsed time, listening time and recording length current.
     r.autosave = setInterval(() => {
       usageLog.accrueListening(r);
@@ -617,18 +645,6 @@ async function start() {
     toast(denied ? t('toast.permissionNeeded') : errorText(err), 10000, 'critical');
     stop();
   }
-}
-
-// PC audio that never delivers a sample fails silently (on macOS this is what a missing
-// "System Audio Recording" permission looks like), so say so instead of just showing nothing.
-function watchSystemAudio(r) {
-  const since = Date.now();
-  r.systemWatch = setInterval(() => {
-    if (r.capture.systemLevel() > 0) return clearInterval(r.systemWatch);
-    if (Date.now() - since < SILENT_SYSTEM_AUDIO_MS) return;
-    clearInterval(r.systemWatch);
-    toast(t(inMacDesktopApp() ? 'toast.systemAudioSilentMac' : 'toast.systemAudioSilent'), 20000, 'warning');
-  }, 1000);
 }
 
 function startRecording(r) {
@@ -718,29 +734,12 @@ try {
 } catch {
   /* private mode */
 }
-// The main button and the controls that act on the current session (download, summary, speaker
-// labels) are disabled in the HTML until there is a session: a press that came earlier (a click or
-// a global shortcut right after opening) would find none. None of them is disabled for another
-// reason; they are shown or hidden by the panels' own render functions, which have run by now.
+// The controls that act on the current session are disabled in the HTML until there is one (src/ui/elements.js).
 try {
   await showSession(sessions.find((x) => x.id === lastId) ?? blankSession());
 } finally {
   if (!current) await showSession(blankSession());
-  for (const el of [
-    els.toggle,
-    els.export,
-    els.exportTranscript,
-    els.summarize,
-    els.summaryCopy,
-    els.summaryDownload,
-    els.summaryDelete,
-    els.labelSpeakers,
-    els.editSpeakers,
-    els.speakerSave,
-    els.rebuild,
-    els.restoreTranscript,
-  ])
-    el.disabled = false;
+  for (const id of SESSION_CONTROLS) els[id].disabled = false;
 }
 if (MOCK) toast(t('toast.demo'), 4000);
 updateNotice.start(); // not awaited: the app does not wait for GitHub

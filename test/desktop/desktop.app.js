@@ -37,6 +37,60 @@ test('serves only the app files from app://rt/', async () => {
   assert.equal(await status('app/main.js'), 404);
 });
 
+test('an audio file chosen for import can be measured and decoded in the page, and the common formats are played', async () => {
+  const page = await app.firstWindow();
+  await page.waitForLoadState('domcontentloaded');
+  const read = await page.evaluate(async () => {
+    // Two seconds of a 16-bit mono WAV at 8 kHz, as the import reads a file: its length from the
+    // metadata (a blob: URL, which the content security policy allows for media), then its audio.
+    const rate = 8000;
+    const n = rate * 2;
+    const view = new DataView(new ArrayBuffer(44 + n * 2));
+    const text = (at, s) => {
+      for (let i = 0; i < s.length; i++) view.setUint8(at + i, s.charCodeAt(i));
+    };
+    text(0, 'RIFF');
+    view.setUint32(4, 36 + n * 2, true);
+    text(8, 'WAVEfmt ');
+    for (const [at, v, bits] of [
+      [16, 16, 32],
+      [20, 1, 16],
+      [22, 1, 16],
+      [24, rate, 32],
+      [28, rate * 2, 32],
+      [32, 2, 16],
+      [34, 16, 16],
+    ]) {
+      if (bits === 32) view.setUint32(at, v, true);
+      else view.setUint16(at, v, true);
+    }
+    text(36, 'data');
+    view.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) view.setInt16(44 + i * 2, Math.round(3000 * Math.sin(i / 5)), true);
+    const blob = new Blob([view.buffer], { type: 'audio/wav' });
+    const audio = document.createElement('audio');
+    audio.src = URL.createObjectURL(blob);
+    const metadata = await new Promise((resolve) => {
+      audio.onloadedmetadata = () => resolve(audio.duration);
+      audio.onerror = () => resolve(`error ${audio.error?.message}`);
+    });
+    const decoded = (await new OfflineAudioContext(1, 1, 16000).decodeAudioData(await blob.arrayBuffer())).duration;
+    const plays = Object.fromEntries(
+      [
+        'audio/mpeg',
+        'audio/mp4; codecs="mp4a.40.2"',
+        'audio/flac',
+        'audio/ogg; codecs="vorbis"',
+        'audio/webm; codecs="opus"',
+      ].map((type) => [type, audio.canPlayType(type)]),
+    );
+    return { metadata, decoded, plays };
+  });
+  assert.equal(read.metadata, 2);
+  assert.equal(read.decoded, 2);
+  for (const [type, answer] of Object.entries(read.plays)) assert.ok(answer, `${type} is played`);
+});
+
 test('the preload gives the page the secret store, caption overlay click-through, global shortcuts and the update check, nothing else', async () => {
   const page = await app.firstWindow();
   const surface = await page.evaluate(() => {

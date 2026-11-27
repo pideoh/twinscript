@@ -26,6 +26,7 @@ down and shows the translation beside it. The interface is available in English,
 - Answers questions about the meeting, citing the lines of the transcript it relies on.
 - Tells the speakers apart from the recording and labels each line with who said it.
 - Makes the transcript again from the recording, with speakers and translations, keeping the one made while listening.
+- Makes a session from an audio file recorded elsewhere, with speakers and translations.
 
 **How it is built**
 
@@ -219,6 +220,30 @@ lines with their times and their speakers, each translated again into the sessio
   listening and replaces only the rebuilt one.
 - The session's title, recording and earlier usage stay as they are; what the rebuild used is added.
 
+### Making a session from an audio file
+
+A meeting recorded elsewhere (a recorder, a phone, a download of an online meeting) can be brought in as a session. The
+button beside "New session" opens a file picker. The file is transcribed after the fact, as when a transcript is
+rebuilt (`gemini-3.5-transcribe`, with speakers), and every line is translated.
+
+- Formats: WAV, MP3, M4A and MP4 (AAC), AAC, FLAC, Ogg and WebM, up to 1 hour (60 minutes) and 500 MB. AIFF and CAF cannot be read.
+- The session is in the languages selected at the top of the window; choose them before importing.
+- Before it starts, the app shows the file's name and length, the languages, and what happens: the file is uploaded to
+  the Gemini API in parts and each upload is deleted after the analysis; the transcript is made with speakers and every
+  line is translated; it costs one pass over the recording with the transcription model and the translation of every
+  line; the audio is kept in the app as the session's recording, converted to 16 kHz mono (the file itself is not
+  kept). Agreeing here also covers speaker labels and rebuilding.
+- The dialog shows the progress (reading the file, uploading and transcribing part 1 of n, the lines translated so far)
+  and Cancel stops it. Nothing is added until all of it is done: a cancelled or failed import, or closing the app
+  meanwhile, leaves no session and no audio behind. A failure says why (a file that cannot be read, a silent or too
+  short file, no speech found, an API error or the rate limit).
+- The new session is named after the file and dated when it was imported (a file's own date says when it was last
+  copied or converted rather than when the meeting took place); its length is the file's. Its recording is the audio
+  converted to a 16 kHz mono WAV (about 115 MB an hour): it can be downloaded, its speakers labeled again and its
+  transcript rebuilt like any other session's.
+- Lines whose translation failed show their error, as while listening.
+- Not offered while listening, or in the demo.
+
 ## How it translates (modeled on simultaneous interpreting)
 
 A simultaneous interpreter does not translate word by word, does not take back what has been said, and relies on the
@@ -244,7 +269,7 @@ Everything else is stored on your computer, inside the app, and is not synced an
 | --- | --- | --- |
 | The audio you chose to capture, and the recognized text | Gemini API | While listening, for transcription and translation |
 | The session's transcript (for questions, also its summaries and the earlier questions and answers) | Gemini API | When you make a summary or ask a question |
-| The session's recording, deleted after the analysis | Gemini API (Files API) | When you label speakers or rebuild the transcript |
+| The session's recording, or an audio file you import, deleted after the analysis | Gemini API (Files API) | When you label speakers, rebuild the transcript or import an audio file (the audio is kept on your computer as the session's recording, converted to 16 kHz mono) |
 | A request for the number of the latest version; nothing about you or your sessions | GitHub | Desktop app, at most once a day, unless "Check for new versions" is off |
 
 The API key is stored on your computer, encrypted by the operating system (the Keychain on macOS, DPAPI on Windows).
@@ -270,6 +295,7 @@ Google Cloud billing), what you send is not used for training, and the prices ar
 | Translation | a small token fee per request. A sentence translated into several languages takes one request per language: every sentence with a third language, and speech in a language you did not select when it goes into all of them |
 | Speaker labels (`gemini-3.5-transcribe`) | $2.00 per 1M input tokens (about $0.003 per minute of audio) and $12.00 per 1M output tokens for the transcript with word times. The audio sent is somewhat longer than the recording: each part after the first starts with clips of the known speakers, and parts of a long recording overlap by a minute |
 | Rebuilding a transcript | the price of speaker labels for the pass over the recording, plus a translation request for every line (one per target language where a line has several) |
+| Importing an audio file | the same as rebuilding a transcript, for the length of the file |
 | Summaries and questions | the translation model's token fee; one request each, its input mostly the session's transcript, so a long meeting costs more per question than a short one |
 
 These are the prices at the time of writing; Google's [pricing page](https://ai.google.dev/gemini-api/docs/pricing) has the current ones.
@@ -282,7 +308,8 @@ this month, last month and everything recorded, and each saved session.
 
 - Listening time is counted while the transcription is connected; translations, summaries, speaker labels and
   questions by the tokens the API reports for each request. A rebuilt transcript is counted as speaker labels (the pass
-  over the recording) and translation (its lines), also when it is cancelled or fails after requests were made. A session without a usage record shows "Not recorded".
+  over the recording) and translation (its lines), also when it is cancelled or fails after requests were made; so is an
+  imported audio file, on its new session (in the daily totals only, when the import is cancelled or fails). A session without a usage record shows "Not recorded".
 - The totals are kept in the app per day (the last 400 days) and stay when a session is deleted. The demo (`?mock=1`)
   shows made-up usage for its sessions and never adds it to the totals.
 - Amounts are estimates at the paid-tier prices listed in the app, with the date they were taken. With a free key
@@ -298,6 +325,9 @@ this month, last month and everything recorded, and each saved session.
   that cannot be decoded) is missing from it. Its translations use the setting for other languages as it is when the
   rebuild starts.
 - After a transcript is rebuilt or restored, a time cited in an earlier answer may no longer point at the same line.
+- An imported audio file is transcribed after the fact: there are no live captions for it. Files longer than 1 hour
+  or larger than 500 MB are refused, because the whole file is decoded in memory first (several gigabytes for an hour
+  of stereo audio). The original file is not kept: the recording is the converted 16 kHz mono audio.
 - A transcription session lasts at most 10 minutes, so the app switches to a new connection in the background, at a pause in speech.
 - When the free tier hits its rate limit, translation of sentences in progress pauses for a minute; finished sentences are still translated.
 - With a third language, the language of a sentence is told from its writing system. Languages that share it with
@@ -332,7 +362,7 @@ npm run test:app   # desktop app smoke tests; they open real windows
 ```
 
 The Gemini API is mocked in all the tests, so no API key is needed. `http://localhost:5173/?mock=1` is a demo mode
-that needs no API key either; it has no speaker labels and no rebuilding of transcripts (they need the real service). In a browser, PC audio comes from
+that needs no API key either; it has no speaker labels, no rebuilding of transcripts and no importing of audio files (they need the real service). In a browser, PC audio comes from
 sharing a tab or screen with its audio, and an API key entered there is kept in memory only, until the page is closed.
 
 ## Questions, ideas and plans

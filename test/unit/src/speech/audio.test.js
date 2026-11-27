@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { appPlatform, ownAudioRestricted } from '../../../../src/speech/audio.js';
+import { appPlatform, ownAudioRestricted, watchSystemAudio } from '../../../../src/speech/audio.js';
 
 const CHROME = 'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 const MAC_APP = `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ${CHROME.replace('Safari', 'Electron/38.0.0 Safari')}`;
@@ -21,4 +21,34 @@ test('PC audio leaves out the app’s own sound in the macOS desktop app, not on
   assert.equal(ownAudioRestricted(appPlatform(WINDOWS_APP)), false);
   assert.equal(ownAudioRestricted(appPlatform(WINDOWS_BROWSER)), false);
   assert.equal(ownAudioRestricted(appPlatform(MAC_BROWSER)), false);
+});
+
+test('PC audio that delivers nothing is reported once after the wait; any sound ends the watch', (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  let clock = 0;
+  const now = () => clock;
+  const tick = (ms) => {
+    for (let i = 0; i < ms / 1000; i++) {
+      clock += 1000;
+      t.mock.timers.tick(1000);
+    }
+  };
+  let level = 0;
+  let told = 0;
+  watchSystemAudio({ systemLevel: () => level }, () => told++, { ms: 8000, now });
+  tick(7000);
+  assert.equal(told, 0, 'not before the wait');
+  tick(1000);
+  assert.equal(told, 1);
+  tick(5000);
+  assert.equal(told, 1, 'only once');
+
+  clock = 0;
+  watchSystemAudio({ systemLevel: () => level }, () => told++, { ms: 8000, now });
+  tick(2000);
+  level = 0.1;
+  tick(1000);
+  level = 0;
+  tick(10_000);
+  assert.equal(told, 1, 'a sound ends the watch');
 });

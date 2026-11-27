@@ -29,3 +29,7 @@ test('the page may only connect to the Gemini API', () => {
     'wss://generativelanguage.googleapis.com',
   ]);
 });
+
+test("media may be read only from the page's own blobs, never from the network", () => {
+  assert.deepEqual(directives['media-src'], ['blob:']);
+});

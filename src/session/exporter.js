@@ -198,7 +198,20 @@ export const transcriptLabels = (t) => ({
   summaryTruncated: t('summary.truncated'),
 });
 
+// The extension of a recording's type: the app records WebM or MP4 audio (.m4a); a session made from
+// an audio file keeps the file's own type. Anything not known is WebM.
+const EXTENSIONS = [
+  [/webm/, 'webm'],
+  [/^video\/mp4/, 'mp4'],
+  [/mp4|m4a/, 'm4a'],
+  [/aac/, 'aac'],
+  [/mpeg|mp3/, 'mp3'],
+  [/wav/, 'wav'],
+  [/flac/, 'flac'],
+  [/ogg|opus/, 'ogg'],
+];
+
 // The file name of a session's recording: its title and its number (1-based `n`), with the
-// extension of its type (MP4 audio is .m4a; everything else is WebM).
+// extension of its type.
 export const recordingFileName = (title, n, mime) =>
-  `${safeFileName(title)}-${n}.${mime.includes('mp4') ? 'm4a' : 'webm'}`;
+  `${safeFileName(title)}-${n}.${EXTENSIONS.find(([re]) => re.test(mime))?.[1] ?? 'webm'}`;

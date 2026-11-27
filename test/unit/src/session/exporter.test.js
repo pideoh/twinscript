@@ -356,3 +356,14 @@ test('a recording is saved under the session title and its number, as .m4a or .w
   assert.equal(recordingFileName('Weekly', 2, 'audio/webm;codecs=opus'), 'Weekly-2.webm');
   assert.equal(recordingFileName('', 3, ''), 'transcript-3.webm');
 });
+
+test('a recording from an imported file is saved with the extension of its own type', () => {
+  assert.equal(recordingFileName('Call', 1, 'audio/mpeg'), 'Call-1.mp3');
+  assert.equal(recordingFileName('Call', 1, 'audio/x-m4a'), 'Call-1.m4a');
+  assert.equal(recordingFileName('Call', 1, 'video/mp4'), 'Call-1.mp4');
+  assert.equal(recordingFileName('Call', 1, 'audio/aac'), 'Call-1.aac');
+  assert.equal(recordingFileName('Call', 1, 'audio/wav'), 'Call-1.wav');
+  assert.equal(recordingFileName('Call', 1, 'audio/x-flac'), 'Call-1.flac');
+  assert.equal(recordingFileName('Call', 1, 'audio/ogg'), 'Call-1.ogg');
+  assert.equal(recordingFileName('Call', 1, 'video/webm'), 'Call-1.webm');
+});

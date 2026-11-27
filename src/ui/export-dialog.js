@@ -44,7 +44,10 @@ export function createExportDialog({
       row.className = 'rec';
       const info = document.createElement('span');
       const length = getRun()?.recording === rec ? t('export.recordingNow') : formatElapsed(rec.durationMs);
-      info.textContent = t('export.recording', { n: i + 1, date: formatDateTime(rec.startedAt), length });
+      // An imported file's recording has no start: when it was recorded is not known.
+      info.textContent = Number.isFinite(rec.startedAt)
+        ? t('export.recording', { n: i + 1, date: formatDateTime(rec.startedAt), length })
+        : t('export.recordingImported', { n: i + 1, length });
       const save = document.createElement('button');
       save.type = 'button';
       save.className = 'btn';

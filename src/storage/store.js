@@ -258,6 +258,23 @@ export const store = {
     });
   },
 
+  // Writes a new session (its record and all its segments) with the audio of its recordings
+  // (`audio`: [{ recId, blob }], its chunks in order) in one transaction: either all of it is stored or
+  // none of it. A session made from an audio file (src/ui/import-panel.js) is stored this way.
+  addSession(session, audio) {
+    const { meta, segments } = splitSession(session);
+    if (!segments) return Promise.reject(new Error('the segments of the session are not loaded'));
+    return write(['sessions', 'segments', 'audio'], (tx) => {
+      tx.objectStore('sessions').put(meta);
+      const rows = tx.objectStore('segments');
+      for (const record of segments) rows.put(record);
+      const chunks = tx.objectStore('audio');
+      for (const { recId, blob } of audio) chunks.add({ sessionId: session.id, recId, blob });
+    }).then(() => {
+      written.set(session.id, segments);
+    });
+  },
+
   // The transcript kept besides a session's own, or null.
   async loadKeptTranscript(sessionId) {
     const record = await done((await open()).transaction('transcripts').objectStore('transcripts').get(sessionId));

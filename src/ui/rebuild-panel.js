@@ -114,6 +114,14 @@ export function createRebuildPanel({
     // What changes is always said; the agreement to upload the recording is given with it.
     els.rebuildKeep.hidden = !!sess.rebuilt;
     els.rebuildReplace.hidden = !sess.rebuilt;
+    // A session made from an audio file has no transcript made while listening.
+    for (const [el, key] of [
+      [els.rebuildKeep, 'rebuild.keep'],
+      [els.rebuildReplace, 'rebuild.replace'],
+    ]) {
+      el.dataset.i18n = sess.imported ? `${key}Imported` : key;
+      el.textContent = t(el.dataset.i18n);
+    }
     asked = sess;
     els.rebuildDialog.showModal();
   };

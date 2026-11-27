@@ -6,6 +6,8 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { test } from 'node:test';
 import {
+  chooseAudioFile,
+  fileRead,
   mockGemini,
   mockLineTranslation,
   mockQuestions,
@@ -18,6 +20,7 @@ import {
   showTab,
   translated,
   updatesBridge,
+  wavFile,
 } from './helpers.js';
 
 const { openApp } = setup();
@@ -215,6 +218,35 @@ for (const colorScheme of ['light', 'dark']) {
     release();
     await page.waitForSelector('#restoreTranscript:not([hidden])');
     await assertAccessible(page, 'a rebuilt transcript, with the action to restore the one made while listening');
+    assert.deepEqual(errors, []);
+    await close();
+  });
+
+  test(`importing an audio file, its dialog, its progress and its errors pass the accessibility checks in the ${colorScheme} theme`, async () => {
+    const { page, errors, close } = await openApp('', { apiKey: 'test-key' }, undefined, { colorScheme });
+    let release;
+    const held = new Promise((r) => {
+      release = r;
+    });
+    await mockSpeakers(page, {
+      analyze: async () => {
+        await held;
+        return { status: 403, body: { error: { code: 403, message: 'Permission denied' } } };
+      },
+    });
+    await chooseAudioFile(page, wavFile());
+    await fileRead(page);
+    await assertAccessible(page, 'the dialog for an audio file');
+    await page.click('#importConfirm');
+    await page.waitForFunction(() => document.getElementById('importStatus').textContent.includes('1/1'));
+    await assertAccessible(page, 'an import in progress');
+    release();
+    await page.waitForSelector('#importError:not([hidden])');
+    await assertAccessible(page, 'an import that failed');
+    await page.click('#importCancel');
+    await chooseAudioFile(page, { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
+    await page.waitForSelector('#importError:not([hidden])');
+    await assertAccessible(page, 'a file that is not audio');
     assert.deepEqual(errors, []);
     await close();
   });
