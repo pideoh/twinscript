@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.1](https://github.com/pideoh/twinscript/compare/v0.16.0...v0.16.1) (2026-11-27)
+
+
+### Bug Fixes
+
+* keep every character where a long utterance is split into sentences ([#168](https://github.com/pideoh/twinscript/issues/168)) ([b3f8a02](https://github.com/pideoh/twinscript/commit/b3f8a02c12f589ac57352e1e0ee71ef0f49efadc))
+
 ## [0.16.0](https://github.com/pideoh/twinscript/compare/v0.15.0...v0.16.0) (2026-11-27)
 
 
