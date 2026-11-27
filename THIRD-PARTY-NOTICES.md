@@ -62,10 +62,10 @@ SOFTWARE.
 
 ## Mediabunny
 
-[Mediabunny](https://github.com/Vanilagy/mediabunny) 1.66.5, the app's one runtime dependency, installed from npm and
+[Mediabunny](https://github.com/Vanilagy/mediabunny) 1.66.2, the app's one runtime dependency, installed from npm and
 shipped unmodified as `node_modules/mediabunny/dist/bundles/mediabunny.mjs`, which `src/session/audio-reader.js`
-imports to read audio files in pieces. Its source is at https://github.com/Vanilagy/mediabunny/tree/v1.66.5 and in the
-npm package `mediabunny@1.66.5`. Copyright (c) 2026-present, Vanilagy and contributors. Licensed under the Mozilla
+imports to read audio files in pieces. Its source is at https://github.com/Vanilagy/mediabunny/tree/v1.66.2 and in the
+npm package `mediabunny@1.66.2`. Copyright (c) 2026-present, Vanilagy and contributors. Licensed under the Mozilla
 Public License 2.0:
 
 ```text

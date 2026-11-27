@@ -59,7 +59,7 @@ Each rule is written once. Open the file for what you are about to touch.
 ## Always
 
 - Tests come in the same commit as a behavior change; docs for a change users can see come in the same pull request (README in both languages, `docs/`). Regenerate the README pictures only when what they show looks different: the animation (`node scripts/demo.mjs`, several megabytes per version) for the two-language listening screen, the stills (`node scripts/demo.mjs --stills`) for the three-language transcript and the Summary and Questions tabs.
-- No new dependencies: zero at runtime; dev dependencies are `playwright-core`, `electron`, `electron-builder`, `@biomejs/biome` and `axe-core` only.
+- No new dependencies. At runtime there is one, `mediabunny` (reads audio files in pieces): pinned to an exact version, imported only by `src/session/audio-reader.js`, served and packaged as its one bundle file; a second one would be a decision of its own (`test/unit/rules/structure.test.js` checks all of this). Dev dependencies are `playwright-core`, `electron`, `electron-builder`, `@biomejs/biome` and `axe-core` only.
 - The interface keeps running in a plain browser. Desktop-only code lives in `app/`; `src/` only detects Electron.
 - User-visible text goes through i18n; code, comments and commit messages are in English.
 - When a change depends on how the Gemini API behaves, read the official documentation; do not rely on memory. Two assumptions about the Live API are unverified against the service: interim text is the whole utterance so far, and there is one final result per utterance.

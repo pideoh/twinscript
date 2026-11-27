@@ -41,7 +41,7 @@ Sections 1 to 3 apply to everyone, in a clone of the repository or of a fork. Se
 
 The code is someone else's and has not been reviewed: read it before anything runs it.
 
-- Read the whole diff first (`gh pr diff N`). Look hardest at `.github/`, `scripts/`, `package.json` (no new dependencies, no new lifecycle scripts), `app/policy.js`, `app/preload.js` and the content security policy: a change there needs the maintainer's explicit yes.
+- Read the whole diff first (`gh pr diff N`). Look hardest at `.github/`, `scripts/`, `package.json` (no new dependencies, no new lifecycle scripts, no change to the version of the runtime library), `app/policy.js`, `app/preload.js` and the content security policy: a change there needs the maintainer's explicit yes.
 - Do not check it out and run it (`npm ci`, tests, the app) before that read, and never with the API key or any token in the environment.
 - Do not push a fork's code to a branch of this repository before it is reviewed. Workflows there run with the project's secrets, and a preview build of it would be signed with the project's certificate.
 - Approving the first run of a new contributor's checks, and merging, are the maintainer's own decisions; do not do either for them.

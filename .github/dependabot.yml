@@ -31,3 +31,8 @@ updates:
       # gets its own pull request and is merged by a person after trying the app.
       tools:
         patterns: ["@biomejs/biome", "playwright-core", "axe-core"]
+      # The one library that runs in the shipped app. Its own pull request, never merged automatically:
+      # a person reads what changed, checks that the bundle still imports nothing and needs no change to the
+      # content security policy, and updates THIRD-PARTY-NOTICES.md.
+      runtime:
+        patterns: ["mediabunny"]
