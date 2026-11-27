@@ -1,5 +1,6 @@
 // Shared setup for the browser tests, split by topic into test/e2e/helpers/. The test files import
 // everything from here:
+//   audio-reader.js  audio files read in pieces against a whole-file decode: test files, the comparison
 //   app.js      the static server, setup / openApp, ready, reload, rows, saved, listening, ...
 //   gemini.js   the Gemini mocks (WebSocket, token, translation), MOCK_USAGE, translated
 //   targets.js  the translation mock for a third language, tagged, linesDone
@@ -15,6 +16,7 @@
 //   updates.js  the desktop app's update bridge (window.appUpdates)
 
 export * from './helpers/app.js';
+export * from './helpers/audio-reader.js';
 export * from './helpers/gemini.js';
 export * from './helpers/import.js';
 export * from './helpers/pc-audio.js';

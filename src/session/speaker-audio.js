@@ -1,11 +1,15 @@
-// Decodes a session's recordings for speaker labels: each recording (its chunks as one blob) at
-// 16 kHz, mixed to mono, as 16-bit samples. The browser's decoder does the resampling. The thin
-// layer over speakers.js that needs Web Audio; everything else about the audio is there.
+// Decodes a session's recordings (for speaker labels, a rebuilt transcript, an imported file): each
+// recording (its chunks as one blob) at 16 kHz, mixed to mono, as 16-bit samples. A recording is read
+// a piece at a time where the format allows (src/session/audio-reader.js), so the memory it needs does
+// not grow with its length; otherwise it is decoded whole with decodeAudioData, whose decoder does the
+// resampling and holds the whole file at its own rate and channels on the way. The thin layer over
+// speakers.js that needs Web Audio; everything else about the audio is there.
 import { MessageError } from '../ui/message-error.js';
+import { readAudio } from './audio-reader.js';
 import { SAMPLE_RATE } from './speakers.js';
 
-/** Resolves with { samples: Int16Array, durationMs } for one recording. */
-export async function decodeRecording(blob, rate = SAMPLE_RATE) {
+/** Decodes a whole file at once with decodeAudioData: { samples: Int16Array, durationMs }. */
+export async function decodeWhole(blob, rate = SAMPLE_RATE) {
   const data = await blob.arrayBuffer();
   const ctx = new OfflineAudioContext(1, 1, rate);
   const buffer = await ctx.decodeAudioData(data);
@@ -18,6 +22,19 @@ export async function decodeRecording(blob, rate = SAMPLE_RATE) {
     samples[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
   }
   return { samples, durationMs: (samples.length * 1000) / rate };
+}
+
+/**
+ * Resolves with { samples: Int16Array, durationMs } for one recording: read a piece at a time, or
+ * decoded whole when it cannot be (or when reading it in pieces fails). read: readAudio, or a
+ * stand-in.
+ */
+export async function decodeRecording(blob, rate = SAMPLE_RATE, { read = readAudio, signal } = {}) {
+  const pieces = await read(blob, { rate, signal }).catch((err) => {
+    if (err?.name === 'AbortError') throw err;
+    return null;
+  });
+  return pieces ?? decodeWhole(blob, rate);
 }
 
 /**
@@ -34,7 +51,7 @@ export async function decodeRecordings(sess, { getAudioChunks, signal, decode = 
     signal?.throwIfAborted();
     if (!chunks.length) continue;
     try {
-      const audio = await decode(new Blob(chunks, { type: rec.mime }));
+      const audio = await decode(new Blob(chunks, { type: rec.mime }), SAMPLE_RATE, { signal });
       if (audio.samples.length)
         decoded.push({ elapsedStart: rec.elapsedStart ?? 0, startedAt: rec.startedAt, ...audio });
     } catch {

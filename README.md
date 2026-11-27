@@ -346,7 +346,9 @@ this month, last month and everything recorded, and each saved session.
 | Summaries and questions about a meeting | the translation model |
 | Speaker labels and rebuilt transcripts (after a session, from its recording) | `gemini-3.5-transcribe` |
 
-The app is built with web technology and packaged with Electron.
+The app is built with web technology and packaged with Electron. It has one runtime library,
+[Mediabunny](https://github.com/Vanilagy/mediabunny) (MPL-2.0), which reads audio files a piece at a time; the audio
+is decoded by the browser's own decoders.
 
 ## Development
 

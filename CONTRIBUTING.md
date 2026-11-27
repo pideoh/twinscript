@@ -41,7 +41,8 @@ npm run test:app   # desktop smoke tests (opens windows)
 ```
 
 - Tests come with every behavior change, and docs with every change users can see (README in English and Japanese, `docs/`).
-- No new dependencies.
+- No new dependencies. The one runtime dependency, Mediabunny (exact version, imported only by
+  `src/session/audio-reader.js`), and the dev dependencies are listed in `package.json`.
 - The rest is in the conventions listed above: where code and tests go, user-visible text, visual design, the desktop app.
 
 ## Issues, discussions and decisions
