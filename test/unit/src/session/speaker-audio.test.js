@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { decodeRecording, decodeRecordings } from '../../../../src/session/speaker-audio.js';
+import { decodeRecording, decodeRecordings, decodeWhole } from '../../../../src/session/speaker-audio.js';
 import { withGlobals } from '../../../support/globals.js';
 
 // An OfflineAudioContext whose decoder returns the given channels (or fails), and remembers how it
@@ -29,7 +29,7 @@ const blobOf = (...parts) => new Blob(parts.map((p) => Uint8Array.from(p)));
 test('a recording is decoded at 16 kHz into 16-bit samples with its length in milliseconds', async () => {
   const { seen, OfflineAudioContext } = fakeAudioContext({ channels: [new Float32Array(1600).fill(0.5)] });
   await withGlobals({ OfflineAudioContext }, async () => {
-    const { samples, durationMs } = await decodeRecording(blobOf([1, 2, 3]));
+    const { samples, durationMs } = await decodeWhole(blobOf([1, 2, 3]));
     assert.deepEqual(seen.args, [1, 1, 16000], 'the decoder resamples to 16 kHz');
     assert.ok(samples instanceof Int16Array);
     assert.equal(samples.length, 1600);
@@ -41,7 +41,7 @@ test('a recording is decoded at 16 kHz into 16-bit samples with its length in mi
 test('a recording kept in several chunks is decoded as one piece, in order', async () => {
   const { seen, OfflineAudioContext } = fakeAudioContext({ channels: [new Float32Array(4)] });
   await withGlobals({ OfflineAudioContext }, async () => {
-    await decodeRecording(blobOf([1, 2], [3], [4, 5]));
+    await decodeWhole(blobOf([1, 2], [3], [4, 5]));
     assert.deepEqual([...seen.bytes], [1, 2, 3, 4, 5]);
   });
 });
@@ -51,7 +51,7 @@ test('stereo recordings are mixed to mono by averaging the channels', async () =
     channels: [Float32Array.of(0.5, -1, 0), Float32Array.of(0.25, -0.5, 0)],
   });
   await withGlobals({ OfflineAudioContext }, async () => {
-    const { samples } = await decodeRecording(blobOf([0]));
+    const { samples } = await decodeWhole(blobOf([0]));
     assert.deepEqual([...samples], [Math.trunc(0.375 * 0x7fff), Math.trunc(-0.75 * 0x8000), 0]);
   });
 });
@@ -59,7 +59,7 @@ test('stereo recordings are mixed to mono by averaging the channels', async () =
 test('samples past full scale are clipped, and negative full scale reaches the lowest 16-bit value', async () => {
   const { OfflineAudioContext } = fakeAudioContext({ channels: [Float32Array.of(2, -2, 1, -1)] });
   await withGlobals({ OfflineAudioContext }, async () => {
-    const { samples } = await decodeRecording(blobOf([0]));
+    const { samples } = await decodeWhole(blobOf([0]));
     assert.deepEqual([...samples], [0x7fff, -0x8000, 0x7fff, -0x8000]);
   });
 });
@@ -67,7 +67,7 @@ test('samples past full scale are clipped, and negative full scale reaches the l
 test('another sample rate can be asked for, and the duration follows it', async () => {
   const { seen, OfflineAudioContext } = fakeAudioContext({ channels: [new Float32Array(8000)] });
   await withGlobals({ OfflineAudioContext }, async () => {
-    const { durationMs } = await decodeRecording(blobOf([0]), 8000);
+    const { durationMs } = await decodeWhole(blobOf([0]), 8000);
     assert.equal(seen.args[2], 8000);
     assert.equal(durationMs, 1000);
   });
@@ -76,7 +76,7 @@ test('another sample rate can be asked for, and the duration follows it', async 
 test('an empty recording gives no samples and no duration', async () => {
   const { OfflineAudioContext } = fakeAudioContext({ channels: [new Float32Array(0)] });
   await withGlobals({ OfflineAudioContext }, async () => {
-    const { samples, durationMs } = await decodeRecording(blobOf([0]));
+    const { samples, durationMs } = await decodeWhole(blobOf([0]));
     assert.equal(samples.length, 0);
     assert.equal(durationMs, 0);
   });
@@ -86,7 +86,7 @@ test('a recording the browser cannot decode is reported to the caller, not turne
   const failure = new Error('EncodingError');
   const { OfflineAudioContext } = fakeAudioContext({ channels: [new Float32Array(1)], error: failure });
   await withGlobals({ OfflineAudioContext }, async () => {
-    await assert.rejects(decodeRecording(blobOf([9, 9])), failure);
+    await assert.rejects(decodeWhole(blobOf([9, 9])), failure);
   });
 });
 
@@ -125,4 +125,33 @@ test("a session's recordings are decoded in order; one without audio or that can
     decodeRecordings(sess, { getAudioChunks, decode, signal: controller.signal }),
     (err) => err.name === 'AbortError',
   );
+});
+
+test('a recording is read a piece at a time where it can be, and decoded whole otherwise', async () => {
+  const { seen, OfflineAudioContext } = fakeAudioContext({ channels: [new Float32Array(160).fill(0.5)] });
+  await withGlobals({ OfflineAudioContext }, async () => {
+    const pieces = { samples: new Int16Array(320), durationMs: 20 };
+    const asked = [];
+    const read = async (_blob, options) => {
+      asked.push(options.rate);
+      return pieces;
+    };
+    assert.equal(await decodeRecording(blobOf([1]), 16000, { read }), pieces);
+    assert.deepEqual(asked, [16000]);
+    assert.equal(seen.args, null, 'nothing decoded whole');
+
+    const whole = await decodeRecording(blobOf([1]), 16000, { read: async () => null });
+    assert.equal(whole.samples.length, 160, 'a file that cannot be read in pieces');
+    const failed = await decodeRecording(blobOf([1]), 16000, {
+      read: async () => Promise.reject(new Error('damaged halfway')),
+    });
+    assert.equal(failed.samples.length, 160, 'a file whose reading in pieces failed');
+  });
+});
+
+test('cancelling while a recording is read in pieces is not taken for a failure', async () => {
+  const abort = new DOMException('Aborted', 'AbortError');
+  await assert.rejects(decodeRecording(blobOf([1]), 16000, { read: async () => Promise.reject(abort) }), {
+    name: 'AbortError',
+  });
 });

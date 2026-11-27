@@ -29,6 +29,10 @@ test('serves the files the web app is made of, with their content types', () => 
     path: 'src/ui/locales/zh-Hans.js',
     type: 'text/javascript; charset=utf-8',
   });
+  assert.deepEqual(resolveAppFile('app://rt/node_modules/mediabunny/dist/bundles/mediabunny.mjs'), {
+    path: 'node_modules/mediabunny/dist/bundles/mediabunny.mjs',
+    type: 'text/javascript; charset=utf-8',
+  });
   assert.deepEqual(resolveAppFile('app://rt/icons/icon.svg'), { path: 'icons/icon.svg', type: 'image/svg+xml' });
   assert.deepEqual(resolveAppFile('app://rt/icons/icon-512.png#x'), { path: 'icons/icon-512.png', type: 'image/png' });
 });
@@ -36,6 +40,15 @@ test('serves the files the web app is made of, with their content types', () => 
 test('everything else is not served', () => {
   for (const url of [
     'app://rt/package.json',
+    'app://rt/node_modules/mediabunny/package.json',
+    'app://rt/node_modules/mediabunny/dist/bundles/mediabunny.cjs',
+    'app://rt/node_modules/mediabunny/dist/bundles/mediabunny.min.mjs',
+    'app://rt/node_modules/mediabunny/dist/modules/src/index.js',
+    'app://rt/node_modules/other/dist/bundles/mediabunny.mjs',
+    'app://rt/node_modules/mediabunny/dist/bundles/sub/mediabunny.mjs',
+    'app://rt/node_modules/mediabunny/dist/bundles/..%2F..%2F..%2F..%2Fpackage.json',
+    'app://rt/node_modules/mediabunny/dist/bundles/../../../../package.json',
+    'app://rt/node_modules/mediabunny/dist/bundles/%2e%2e/mediabunny.mjs',
     'app://rt/app/main.js',
     'app://rt/test/segmenter.test.js',
     'app://rt/CLAUDE.md',

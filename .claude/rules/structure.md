@@ -21,6 +21,7 @@ The folder says what a file is; the first comment of a file says what it is for 
 
 - Logic is DOM-free, with what it needs passed in (storage, clock, timers, `fetch`, the synthesizer), so it runs under `node:test`. `translation/pacer.js`, `translation/read-aloud.js` and `storage/settings.js` are the models.
 - A part of the screen is a factory in `ui/` that takes one context object and returns a small API: `createX({ els, t, toast, settings, getCurrent, isRunning, markDirty, … })`. The session on screen and the run in progress are passed as getters, never as values. One part tells another something through a callback passed in.
+- The one runtime library is reached only through `src/session/audio-reader.js`; other modules call its functions and never import from `node_modules`.
 - No module imports `app.js`, and a part of the screen does not import another part: `app.js` connects them. This is what keeps imports free of cycles.
 - The logic folders (`speech/`, `translation/`, `session/`, `storage/`, `usage/`) do not touch `document`, `window` or `localStorage`; the few files that must are named, with the reason, in the check.
 - When a part of the screen has rules in it (what is valid, what follows what, what is shown when), the rules go into a pure function or module of their own, with unit tests; the factory only reads the page and calls them.

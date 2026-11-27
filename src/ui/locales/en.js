@@ -126,6 +126,42 @@ export default {
   'speakers.doneUncertain': 'Speakers labeled: {count}. Parts could not be matched with certainty; check the lines.',
   'speakers.cancelled': 'Speaker labeling was cancelled.',
   'speakers.madeAt': 'Labeled from the recording on {date}.',
+  'import.button': 'Import audio file',
+  'import.whileListening': 'Stop listening to import an audio file',
+  'import.title': 'Make a session from an audio file',
+  'import.file': 'File',
+  'import.length': 'Length',
+  'import.languages': 'Languages',
+  'import.languagesHint': 'To use other languages, close this and choose them at the top of the window first.',
+  'import.intro': 'A new session is made from the file:',
+  'import.upload':
+    'The file is uploaded to Google (Gemini API) in parts, and each upload is deleted as soon as it has been analyzed.',
+  'import.transcript':
+    'The transcript is made with speakers, and every line is translated. The session appears when all of it is done; there are no live captions.',
+  'import.cost':
+    'It costs one pass over the recording with the transcription model, and the translation of every line.',
+  'import.keep':
+    "The audio is kept in the app as the session's recording, converted to 16 kHz mono; the file itself is not kept.",
+  'import.limits': 'Files of up to {minutes} minutes and {mb} MB can be imported.',
+  'import.cancel': 'Cancel',
+  'import.confirm': 'Import',
+  'import.reading': 'Reading the file…',
+  'import.notAudio': 'The app cannot read files of this kind. Use WAV, MP3, M4A, AAC, FLAC, Ogg, WebM or MP4.',
+  'import.undecodable': 'The file could not be read as audio. It may be damaged, or in a format the app cannot read.',
+  'import.tooLarge':
+    'The file is larger than {mb} MB, the most the app can import. Use a compressed format such as MP3 or M4A.',
+  'import.tooLong':
+    'The recording is longer than {minutes} minutes, the most the app can import. Split it into shorter files first.',
+  'import.tooLongWhole':
+    'Files of this kind are decoded whole, so they can be at most {minutes} minutes long. Convert it to MP3, M4A or WAV, or split it.',
+  'import.tooLargeWhole':
+    'Files of this kind are decoded whole, so they can be at most {mb} MB. Convert it to MP3, M4A or WAV, or split it.',
+  'import.tooShort': 'The recording is shorter than a second: there is nothing to transcribe.',
+  'import.silent': 'The recording is silent: there is nothing to transcribe.',
+  'import.failed': 'The file could not be imported: {message} Nothing was added.',
+  'import.cancelled': 'Importing the audio file was cancelled. Nothing was added.',
+  'import.done': 'The audio file was imported: {count} lines.',
+  'import.doneFailed': 'The audio file was imported: {count} lines. {failed} of them could not be translated.',
   'rebuild.action': 'Rebuild from recording',
   'rebuild.cancel': 'Cancel',
   'rebuild.restore': 'Restore the transcript made while listening',
@@ -139,8 +175,12 @@ export default {
     'Speakers are labeled again. Names you gave are kept where the speaker can be matched with certainty; otherwise the default name is shown.',
   'rebuild.keep':
     'The transcript made while listening is kept, with its translations and speakers, and can be restored.',
+  'rebuild.keepImported':
+    'The transcript the session has now is kept, with its translations and speakers, and can be restored.',
   'rebuild.replace':
     'The transcript made while listening stays kept and can be restored; the transcript rebuilt earlier is replaced.',
+  'rebuild.replaceImported':
+    'The transcript the session was imported with stays kept and can be restored; the transcript rebuilt earlier is replaced.',
   'rebuild.stale': 'Summaries and answers made earlier are marked as made from an earlier transcript.',
   'rebuild.cost':
     'It costs one more pass over the recording with the transcription model, and the translation of every line.',
@@ -236,6 +276,7 @@ export default {
   'export.close': 'Close',
   'export.recordings': 'Recordings',
   'export.recording': 'Recording {n} ・ {date} ・ {length}',
+  'export.recordingImported': 'Recording {n} ・ imported file ・ {length}',
   'export.recordingNow': 'Recording',
   'export.save': 'Save',
   'export.trace': 'Download recognizer trace (debug)',

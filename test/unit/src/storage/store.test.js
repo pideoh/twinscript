@@ -420,3 +420,35 @@ test('deleting a session deletes its kept transcript', () =>
     assert.equal(await store.loadKeptTranscript('s1'), null);
     assert.ok(await store.loadKeptTranscript('s2'), "another session's stays");
   }));
+
+// ---------- a session made from an audio file ----------
+
+test('a session made from a file is stored with its segments and its audio in one go, and deleted with them', () =>
+  withFakeDb(async (indexedDB) => {
+    const store = await freshStore();
+    const sess = {
+      ...twoLanguages,
+      id: 'imp',
+      segments: [{ id: 'a', elapsed: 0, src: 'Hello.', tgt: 'こんにちは。', speaker: 's1', el: 'node' }],
+      summaries: [],
+      questions: [],
+      recordings: [{ id: 'r1', elapsedStart: 0, durationMs: 4000, mime: 'audio/mpeg' }],
+    };
+    await store.addSession(sess, [{ recId: 'r1', blob: 'the file' }]);
+    const [meta] = await store.listSessions();
+    assert.equal(meta.id, 'imp');
+    assert.equal(meta.segmentCount, 1);
+    assert.equal(meta.segments, undefined);
+    assert.deepEqual(meta.recordings, sess.recordings);
+    assert.deepEqual(await store.loadSegments('imp'), [
+      { id: 'a', at: undefined, elapsed: 0, src: 'Hello.', tgt: 'こんにちは。', speaker: 's1' },
+    ]);
+    assert.deepEqual(await store.getAudioChunks('imp', 'r1'), ['the file']);
+    await assert.rejects(store.addSession({ ...meta, id: 'other' }, []), /not loaded/);
+    assert.equal((await store.listSessions()).length, 1, 'nothing written without its segments');
+
+    await store.deleteSession('imp');
+    assert.deepEqual(await store.listSessions(), []);
+    assert.deepEqual(await readAll(indexedDB, 'segments'), []);
+    assert.deepEqual(await readAll(indexedDB, 'audio'), []);
+  }));

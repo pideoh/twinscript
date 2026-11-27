@@ -329,6 +329,11 @@ input[type="range"]:focus-visible {
   width: 100%;
   justify-content: flex-start;
 }
+/* IconButton, default variant: a square Button around one icon. */
+.btn-icon {
+  width: var(--control-medium-size);
+  padding: 0;
+}
 .btn-large {
   height: var(--control-large-size);
   padding: 0 var(--control-large-paddingInline-spacious);
@@ -550,9 +555,16 @@ input[type="range"] {
   background: var(--bgColor-muted);
   border-right: var(--borderWidth-default) solid var(--borderColor-default);
 }
-.new-session {
-  width: calc(100% - var(--base-size-16));
+/* New session, and beside it the IconButton that makes one from an audio file. */
+.sidebar-actions {
+  display: flex;
+  gap: var(--base-size-8);
   margin: 0 var(--base-size-8) var(--base-size-8);
+}
+.new-session {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
 }
 #sessionList {
   flex: 1;
@@ -1614,6 +1626,34 @@ body.running #log .seg .tgt {
   padding-left: var(--base-size-20);
 }
 .rebuild-changes li[hidden] {
+  display: none;
+}
+/* The file to import, its length and the languages of the session made from it. */
+.import-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--base-size-4) var(--base-size-16);
+  margin: 0;
+}
+.import-facts dt {
+  color: var(--fgColor-muted);
+}
+.import-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.import-hint {
+  display: block;
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+}
+.import-status {
+  margin: 0;
+  color: var(--fgColor-muted);
+}
+#importAudio[hidden],
+#importConfirm[hidden],
+.import-status[hidden] {
   display: none;
 }
 .dialog-footer {

@@ -126,6 +126,17 @@ const IDS = [
   'rebuildKeep',
   'rebuildReplace',
   'rebuildConfirm',
+  'importAudio',
+  'importFile',
+  'importDialog',
+  'importName',
+  'importDuration',
+  'importLangs',
+  'importLimits',
+  'importError',
+  'importStatus',
+  'importCancel',
+  'importConfirm',
   'templateList',
   'templateNew',
   'templateImport',
@@ -153,6 +164,25 @@ const IDS = [
   'priceFields',
   'pricesError',
   'pricesReset',
+];
+
+// The main button and the controls that act on the current session (download, summary, speaker
+// labels, rebuilding), by id. They are disabled in the HTML until there is a session: a press that
+// came earlier (a click or a global shortcut right after opening) would find none. None of them is
+// disabled for another reason; they are shown or hidden by the panels' own render functions.
+export const SESSION_CONTROLS = [
+  'toggle',
+  'export',
+  'exportTranscript',
+  'summarize',
+  'summaryCopy',
+  'summaryDownload',
+  'summaryDelete',
+  'labelSpeakers',
+  'editSpeakers',
+  'speakerSave',
+  'rebuild',
+  'restoreTranscript',
 ];
 
 // The elements of `doc` (the page's document) by id; an id that is not on the page gives null.

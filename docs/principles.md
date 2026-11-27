@@ -33,8 +33,11 @@ in the repository so the measurement can be repeated. A claim that was not measu
 fact.
 
 **6. What is in the repository is what runs.**
-No build step, no runtime dependencies, nothing downloaded by name at run time. Code is small enough to read,
-and what a library would have provided is written here and tested.
+No build step, and nothing downloaded by name at run time. The code that runs is the project's own, plus only
+what the repository names exactly: a runtime dependency is an exception, decided and recorded on its own, pinned
+to one version, shipped as its author published it, reached through a single module, and limited to what the
+platform cannot do. None is added for convenience. What a library would otherwise have provided is written here
+and tested, small enough to read.
 
 **7. A rule that matters is a check.**
 If breaking a rule can be detected, a test or a CI job detects it. Prose is for what cannot be checked: intent,

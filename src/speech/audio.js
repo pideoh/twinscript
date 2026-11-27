@@ -22,6 +22,23 @@ export const appPlatform = (ua = navigator.userAgent) => ({
 // some apps (the Teams desktop app), so Windows takes the plain loopback, the app's own sound included.
 export const ownAudioRestricted = ({ desktop, platform }) => desktop && platform !== 'windows';
 
+export const SILENT_SYSTEM_AUDIO_MS = 8000; // how long PC audio may deliver nothing before the user is told
+
+// PC audio that never delivers a sample fails silently (on macOS this is what a missing "System Audio
+// Recording" permission looks like), so the user is told instead of just being shown nothing:
+// onSilent() is called once when `capture` (systemLevel(): the level of its PC audio) has delivered
+// nothing for `ms`; watching stops at the first sound. Returns the interval, cleared when the run stops.
+export function watchSystemAudio(capture, onSilent, { ms = SILENT_SYSTEM_AUDIO_MS, now = Date.now } = {}) {
+  const since = now();
+  const watch = setInterval(() => {
+    if (capture.systemLevel() > 0) return clearInterval(watch);
+    if (now() - since < ms) return;
+    clearInterval(watch);
+    onSilent();
+  }, 1000);
+  return watch;
+}
+
 function toBase64(buffer) {
   const bytes = new Uint8Array(buffer);
   let bin = '';

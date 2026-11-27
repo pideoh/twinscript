@@ -45,7 +45,11 @@
       "src/**/*",
       "package.json",
       "LICENSE",
-      "THIRD-PARTY-NOTICES.md"
+      "THIRD-PARTY-NOTICES.md",
+      "!node_modules/**/*",
+      "node_modules/mediabunny/package.json",
+      "node_modules/mediabunny/LICENSE",
+      "node_modules/mediabunny/dist/bundles/mediabunny.mjs"
     ],
     "artifactName": "twinscript-${version}-${os}-${arch}.${ext}",
     "mac": {
@@ -64,5 +68,8 @@
       "target": "zip",
       "icon": "icons/icon-512.png"
     }
+  },
+  "dependencies": {
+    "mediabunny": "1.66.2"
   }
 }

@@ -290,7 +290,7 @@ test('the folders under src/ are exactly the ones the desktop app serves', async
 
 // 7
 // Lower this when app.js shrinks; never raise it.
-const APP_MAX_LINES = 746;
+const APP_MAX_LINES = 745;
 
 test('src/app.js does not grow', async () => {
   const text = await read(join(ROOT, 'src/app.js'));
@@ -298,5 +298,32 @@ test('src/app.js does not grow', async () => {
   assert.ok(
     lines <= APP_MAX_LINES,
     `src/app.js has ${lines} lines (limit ${APP_MAX_LINES}). New logic goes into a module (see .claude/rules/structure.md), not into app.js. The limit is lowered when the file shrinks, never raised.`,
+  );
+});
+
+// 8
+// The app's one runtime dependency, imported from one module only, behind the functions it exports.
+const RUNTIME_DEPENDENCIES = ['mediabunny'];
+const DEPENDENCY_IMPORTER = 'src/session/audio-reader.js';
+
+test('mediabunny is the only runtime dependency, and only its one module reaches node_modules', async () => {
+  const pkg = JSON.parse(await read(join(ROOT, 'package.json')));
+  assert.deepEqual(
+    Object.keys(pkg.dependencies ?? {}),
+    RUNTIME_DEPENDENCIES,
+    'package.json has another runtime dependency. The app runs on what is in the repository (principle 6): a new one is a decision of its own, not a side effect of a change.',
+  );
+  for (const [name, version] of Object.entries(pkg.dependencies))
+    assert.match(version, /^\d+\.\d+\.\d+$/, `${name} must be pinned to an exact version in package.json.`);
+  const reaching = [];
+  for (const f of [...(await listing('src', SCRIPT_FILES)), join(ROOT, 'index.html')]) {
+    const code = stripComments(await read(f));
+    if (/node_modules|from\s+['"](?![./])|import\(\s*['"](?![./])/.test(code) && rel(f) !== DEPENDENCY_IMPORTER)
+      reaching.push(rel(f));
+  }
+  assert.deepEqual(
+    reaching,
+    [],
+    `${reaching.join(', ')} imports from node_modules or by a bare name. Only ${DEPENDENCY_IMPORTER} loads the library; call the functions it exports.`,
   );
 });

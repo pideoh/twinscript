@@ -12,11 +12,14 @@ const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
 };
 
-// The same files the web app is made of; everything else (app/, test/, package.json, ...) is 404.
+// The same files the web app is made of; everything else (app/, test/, package.json, ...) is 404. Of
+// node_modules, only the one file of the runtime dependency that the page imports
+// (src/session/audio-reader.js).
 const ALLOWED = [
   /^index\.html$/,
   /^styles\.css$/,
@@ -24,6 +27,7 @@ const ALLOWED = [
   /^src\/[\w-][\w.-]*\.js$/,
   /^src\/(speech|translation|session|storage|usage|ui|debug)\/[\w-][\w.-]*\.js$/,
   /^src\/ui\/locales\/[\w-][\w.-]*\.js$/,
+  /^node_modules\/mediabunny\/dist\/bundles\/mediabunny\.mjs$/,
 ];
 
 // Maps a request URL on the app's own origin to a file relative to the app root.

@@ -10,6 +10,7 @@
 // A session:
 // { id, title, customTitle, createdAt, updatedAt, langA, langB, langC?, activeMs, segmentCount?,
 //   usage?, usagePartial?, demo? (src/usage/usage.js, src/usage/usage-log.js),
+//   imported? (made from an audio file, src/session/import-audio.js),
 //   speakerLabels?: { speakers: [{ id, name }], madeAt, uncertain, model } (src/session/speaker-labels.js),
 //   segments: [{ id, at, elapsed, src, tgt, lang?, tgts?, speaker? }],
 //   recordings: [{ id, startedAt, elapsedStart, durationMs, mime }],
