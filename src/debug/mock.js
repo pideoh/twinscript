@@ -1,5 +1,8 @@
 // Demo engines used with ?mock=1 — lets the UI run without an API key or microphone.
 
+import { cleanQuestion } from '../session/ask.js';
+import { formatElapsed } from '../session/exporter.js';
+
 const SCRIPT = [
   ['それでは本日の定例会議を始めます。', "Let's begin today's regular meeting."],
   ['まず先週の進捗について共有をお願いします。', "First, please share last week's progress."],
@@ -241,6 +244,59 @@ None.
 
 None`,
 };
+
+// Answers to questions about the demo meeting, whatever the question: where load testing stands,
+// citing the lines of the transcript that say so (found by their words, at the times the transcript
+// shows), in Japanese for a question written in Japanese, else in English. A transcript without
+// those lines gets the answer the real model gives when the meeting does not say.
+const DEMO_ANSWERS = {
+  en: {
+    found: (started, report) =>
+      `Load testing started on **Friday**${started}, after the API integration was finished. The full report is expected by **Wednesday**${report}.`,
+    none: 'The meeting does not say.',
+  },
+  ja: {
+    found: (started, report) =>
+      `API連携の完了後、**金曜日**に負荷テストが始まりました${started}。完全なレポートは**水曜日**までに出る見込みです${report}。`,
+    none: '会議の中ではそのことに触れていません。',
+  },
+};
+
+export class MockAsker {
+  constructor({ model = 'demo', onUsage } = {}) {
+    this.model = model;
+    this.onUsage = onUsage;
+  }
+  // input: as GeminiAsker.ask (segments, question, onDelta, signal).
+  async ask({ segments = [], question, onDelta, signal }) {
+    const words = (seg) => `${seg.src ?? ''} ${seg.tgt ?? ''}`;
+    const cite = (pattern) => {
+      const seg = segments.find((s) => s.src && pattern.test(words(s)));
+      return seg ? ` [${formatElapsed(seg.elapsed || 0)}]` : '';
+    };
+    const started = cite(/load test|負荷テスト/);
+    const report = cite(/Wednesday|水曜日/);
+    const text = DEMO_ANSWERS[/[ぁ-んァ-ン一-龯]/.test(question) ? 'ja' : 'en'];
+    const full = started || report ? text.found(started, report) : text.none;
+    for (let n = 12; n < full.length; n += 12) {
+      await sleep(40);
+      if (signal?.aborted) throw new DOMException('The question was cancelled', 'AbortError');
+      onDelta?.(full.slice(0, n));
+    }
+    onDelta?.(full);
+    const transcript = segments.map(words).join('');
+    const usage = demoUsage(transcript + question, full, 400);
+    this.onUsage?.(usage, this.model);
+    return {
+      question: cleanQuestion(question),
+      answer: full,
+      model: this.model,
+      createdAt: Date.now(),
+      truncated: false,
+      usage: null,
+    };
+  }
+}
 
 export class MockSummarizer {
   constructor({ model = 'demo', onUsage } = {}) {

@@ -52,6 +52,7 @@
       <div id="tabs" class="tabs" role="tablist" aria-label="Session content" data-i18n-aria-label="tabs.label">
         <button id="tabTranscript" type="button" class="tab" role="tab" aria-selected="true" aria-controls="transcriptPanel" data-view="transcript"><span data-i18n="tabs.transcript">Transcript</span></button>
         <button id="tabSummary" type="button" class="tab" role="tab" aria-selected="false" aria-controls="summaryPanel" tabindex="-1" data-view="summary"><span data-i18n="summary.title">Summary</span></button>
+        <button id="tabQuestions" type="button" class="tab" role="tab" aria-selected="false" aria-controls="questionsPanel" tabindex="-1" data-view="questions"><span data-i18n="questions.title">Questions</span></button>
       </div>
 
       <div id="transcriptPanel" class="tab-panel" role="tabpanel" aria-labelledby="tabTranscript" tabindex="0" data-view="transcript">
@@ -103,6 +104,25 @@
             <p id="summaryTruncated" class="summary-note" data-i18n="summary.truncated" hidden>This summary covers only part of a long transcript.</p>
             <div id="summaryContent" class="markdown"></div>
           </div>
+        </section>
+      </div>
+
+      <div id="questionsPanel" class="tab-panel" role="tabpanel" aria-labelledby="tabQuestions" tabindex="0" data-view="questions" hidden>
+        <p id="questionsEmpty" class="summary-empty" data-i18n="toast.noTranscript">There is no transcript yet</p>
+        <section id="questions" class="questions" aria-labelledby="questionsHeading">
+          <h2 id="questionsHeading" class="visually-hidden" data-i18n="questions.label">Questions about this session</h2>
+          <div id="questionsLog" class="questions-log">
+            <p id="questionsIntro" class="questions-intro" data-i18n="questions.intro">Ask about what was said in this meeting. Answers come from its transcript and give the time of each line they rely on.</p>
+            <ol id="questionsList" class="questions-list"></ol>
+          </div>
+          <form id="askForm" class="ask-form">
+            <p id="questionsNote" class="summary-note ask-note" hidden></p>
+            <label for="question" class="visually-hidden" data-i18n="questions.field">Question</label>
+            <textarea id="question" class="text-input ask-input" rows="1" disabled placeholder="Ask about this meeting" data-i18n-placeholder="questions.placeholder"></textarea>
+            <button id="ask" type="submit" class="btn btn-primary" disabled data-i18n="questions.ask">Ask</button>
+            <button id="askStop" type="button" class="btn" hidden><svg class="octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg><span data-i18n="questions.stop">Stop</span></button>
+            <span id="questionsStatus" class="visually-hidden" role="status"></span>
+          </form>
         </section>
       </div>
     </main>

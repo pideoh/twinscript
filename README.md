@@ -14,6 +14,7 @@ Choose two languages and press "Start translating": Twinscript detects which one
 - **Reads translations aloud**: finished translations can be spoken with your system's voices.
 - **Keeps a record**: sessions are saved with their audio, and transcripts export with a timeline as text, Markdown, CSV or SRT.
 - **Summaries after the meeting**: in the Summary tab, next to the Transcript tab, summarize a finished session with a template (quick summary, executive summary, meeting minutes, action items, customer meeting, sales call (BANT), 1:1, stand-up, or your own), choosing the length and the language it is written in. Every summary is kept with the session, so you can switch between them, copy one as Markdown or download it as `.md`. Your own templates are written in the settings and can be exported to a JSON file and imported again.
+- **Questions about the meeting**: in the Questions tab, ask what was decided, who will do what or what a number was, and follow up. Answers come from the transcript, say so when the meeting does not contain the answer, and link each time they cite to that line of the transcript.
 - **Who said what**: after a meeting, the speakers are told apart from its recording, and each line of the transcript shows who said it. Give the speakers their names, correct a line by hand; summaries and exports use the names.
 - **Better with names**: register company and product names as terms, and correct mishearings with `wrong => right` rules.
 - The interface is available in English, Japanese and Simplified Chinese.
@@ -144,6 +145,23 @@ afterwards. [docs/tuning.md](docs/tuning.md) describes how it is measured.
   source and translation, source only, or translation only) and the recordings.
 - Everything is stored on your computer, inside the app. Nothing is synced anywhere.
 
+## Questions about a meeting
+
+After a session, the Questions tab (next to Summary) answers questions about it. Type a question and press Enter
+(Shift+Enter for a new line); the answer is written as it arrives and can be stopped.
+
+- Answers are written by the translation model from the session's transcript (with speaker names once the speakers are
+  labeled) and its summaries. When the meeting does not contain the answer, the answer says so instead of filling the
+  gap. It is written in the language of the question.
+- An answer gives the time of each line it relies on, such as [00:12:34]. Each time that is in the transcript is a link:
+  it opens the Transcript tab at that line and marks it for a moment.
+- Follow-up questions see the earlier questions and answers of the session.
+- Questions and answers are saved with the session and deleted with it; each one can be deleted on its own. A question
+  that was stopped or failed is not saved and stays in the field to ask again.
+- A transcript too long to send whole is shortened in the middle, and the answer carries a note that it is based on
+  only part of the meeting.
+- Questions can be asked once a session has ended, not while listening.
+
 ## Speaker labels
 
 After a session, "Label speakers" (in the Transcript tab, above the transcript) tells the speakers apart from the session's recording
@@ -180,6 +198,8 @@ connects with the key in the address instead for the rest of the session and log
 On macOS the encryption key lives in the Keychain, in an item named "Twinscript Safe Storage". If macOS asks whether
 Twinscript may use it, choose "Always Allow"; the app uses it only to read and save your API key.
 
+- Summaries and questions about a meeting send the session's transcript (and, for questions, its summaries and the
+  earlier questions and answers) to the Gemini API.
 - Speaker labels upload the session's recording to the Gemini API (Files API) and delete it after the analysis.
 - The desktop app asks GitHub for the number of the latest version, at most once a day. Nothing about
   you or your sessions is sent. Turn off "Check for new versions" in the settings and no request is made.
@@ -194,6 +214,8 @@ Twinscript may use it, choose "Always Allow"; the app uses it only to read and s
 - **Speaker labels** (`gemini-3.5-transcribe`): $2.00 per 1M input tokens, about $0.003 per minute of audio, and
   $12.00 per 1M output tokens for the transcript with word times. The audio sent is somewhat longer than the recording:
   each part after the first starts with clips of the known speakers, and parts of a long recording overlap by a minute.
+- **Summaries and questions** are made with the translation model: each one is a single request whose input is
+  mostly the session's transcript, so a long meeting costs more per question than a short one.
 - A sentence that is translated into several languages takes one translation request (and its token fee) per language:
   every sentence with a third language, and speech in a language you did not select when it goes into all of them.
 
@@ -202,10 +224,10 @@ These are the prices at the time of writing; Google's [pricing page](https://ai.
 ### Usage and cost
 
 The graph button in the header opens what was used and an estimate of its cost in US dollars: for the session on
-screen (listening time, translation, summary and speaker-label requests and their tokens), totals for today, this month, last month
+screen (listening time, translation, summary, speaker-label and question requests and their tokens), totals for today, this month, last month
 and everything recorded, and each saved session.
 
-- Listening time is counted while the transcription is connected; translations, summaries and speaker labels by the
+- Listening time is counted while the transcription is connected; translations, summaries, speaker labels and questions by the
   tokens the API reports for each request. Sessions saved before this screen existed show "not recorded".
 - The totals are kept in the app per day (the last 400 days) and stay when a session is deleted. The demo
   (`?mock=1`) shows made-up usage for its sessions and never adds it to the totals.
@@ -217,6 +239,8 @@ and everything recorded, and each saved session.
 ## Limitations
 
 - Speakers are told apart only after a session, from its recording, not while listening.
+- Questions are answered only after a session, not while listening. Answers come from the transcript, so what was
+  misheard is answered as heard; check a cited line when it matters.
 - A transcription session lasts at most 10 minutes, so the app switches to a new connection in the background, at a pause in speech.
 - When the free tier hits its rate limit, translation of sentences in progress pauses for a minute; finished sentences are still translated.
 - With a third language, the language of a sentence is told from its writing system. Languages that share it with
@@ -232,6 +256,7 @@ and everything recorded, and each saved session.
 | --- | --- |
 | Transcription (streaming, with interim results) | Gemini Live API `gemini-3.5-transcribe-live` |
 | Translation (streaming) | `gemini-3.5-flash-lite` (can be changed in settings) |
+| Summaries and questions about a meeting | the translation model |
 | Speaker labels (after a session, from its recording) | `gemini-3.5-transcribe` |
 
 How it translates is described under [How it translates](#how-it-translates-modeled-on-simultaneous-interpreting).

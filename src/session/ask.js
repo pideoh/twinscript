@@ -268,8 +268,10 @@ export function segmentAt(segments, seconds, endMs) {
 export class GeminiAsker {
   // onUsage(usageMetadata, model): told what the request used, as the API reported it, as in the
   // summarizer: the last `usageMetadata` of the stream is the request's total; a request that failed
-  // before any arrived reports nothing. fetch: the fetch function; now(): the clock, for createdAt.
-  constructor({ apiKey, model, onUsage, fetch = globalThis.fetch, now = Date.now }) {
+  // before any arrived reports nothing. fetch: the fetch function (by default the page's own, called
+  // as a function: a browser's fetch throws "Illegal invocation" when called as a method of another
+  // object); now(): the clock, for createdAt.
+  constructor({ apiKey, model, onUsage, fetch = (...args) => globalThis.fetch(...args), now = Date.now }) {
     this.apiKey = apiKey;
     this.model = model;
     this.onUsage = onUsage;

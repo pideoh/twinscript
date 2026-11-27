@@ -1,4 +1,4 @@
-// Browser tests: the tabs of the main area (Transcript, Summary), by mouse and by keyboard, which
+// Browser tests: the tabs of the main area (Transcript, Summary, Questions), by mouse and by keyboard, which
 // one is shown after opening a session and after starting, and what each tab holds.
 
 import assert from 'node:assert/strict';
@@ -28,11 +28,12 @@ async function finishedSession(page, text) {
 
 test('the tabs switch the panel by mouse; the caption zone and the main button stay outside them', async () => {
   const { page, errors, close } = await openApp('', { apiKey: 'test-key' });
-  assert.deepEqual(await page.locator('[role="tab"]').allTextContents(), ['文字起こし', '要約']);
+  assert.deepEqual(await page.locator('[role="tab"]').allTextContents(), ['文字起こし', '要約', '質問']);
   assert.equal(await page.getAttribute('[role="tablist"]', 'aria-label'), 'セッションの内容');
   assert.deepEqual(await tabState(page), [
     { name: 'transcript', selected: 'true', tabindex: '0', panel: true },
     { name: 'summary', selected: 'false', tabindex: '-1', panel: false },
+    { name: 'questions', selected: 'false', tabindex: '-1', panel: false },
   ]);
   for (const tab of await page.locator('[role="tab"]').all()) {
     assert.ok((await tab.boundingBox()).height >= 32, 'a tab is at least 32px tall');
@@ -46,6 +47,7 @@ test('the tabs switch the panel by mouse; the caption zone and the main button s
   assert.deepEqual(await tabState(page), [
     { name: 'transcript', selected: 'false', tabindex: '-1', panel: false },
     { name: 'summary', selected: 'true', tabindex: '0', panel: true },
+    { name: 'questions', selected: 'false', tabindex: '-1', panel: false },
   ]);
   assert.ok(await page.isVisible('.dock #toggle'), 'the main button is outside the tabs');
   assert.ok(await page.isVisible('header.bar'));
@@ -64,17 +66,23 @@ test('the arrow keys, Home and End move between the tabs and select; Tab goes on
   assert.equal(await shownTab(page), 'summary');
   assert.equal(await focused(page), 'tabSummary');
   await page.keyboard.press('ArrowRight');
+  assert.equal(await shownTab(page), 'questions');
+  assert.equal(await focused(page), 'tabQuestions');
+  await page.keyboard.press('ArrowRight');
   assert.equal(await shownTab(page), 'transcript', 'wraps around after the last tab');
   assert.equal(await focused(page), 'tabTranscript');
   await page.keyboard.press('ArrowLeft');
-  assert.equal(await shownTab(page), 'summary', 'and before the first');
+  assert.equal(await shownTab(page), 'questions', 'and before the first');
   await page.keyboard.press('Home');
   assert.equal(await shownTab(page), 'transcript');
   await page.keyboard.press('End');
+  assert.equal(await shownTab(page), 'questions');
+  assert.equal(await focused(page), 'tabQuestions');
+  await page.keyboard.press('ArrowLeft');
   assert.equal(await shownTab(page), 'summary');
   assert.equal(await focused(page), 'tabSummary');
 
-  // The next stop after the selected tab is its panel, not the other tab.
+  // The next stop after the selected tab is its panel, not another tab.
   await page.keyboard.press('Tab');
   assert.equal(await focused(page), 'summaryPanel');
   await page.keyboard.press('Shift+Tab');
@@ -137,7 +145,7 @@ test('the speaker tools sit above the transcript, in the Transcript tab', async 
 
 test('with nothing to summarize, the Summary tab says so in place of the summary', async () => {
   const { page, errors, close } = await openApp('', { apiKey: 'test-key' });
-  assert.equal(await page.locator('[role="tab"]').count(), 2, 'the tabs are there before anything is said');
+  assert.equal(await page.locator('[role="tab"]').count(), 3, 'the tabs are there before anything is said');
   await showTab(page, 'summary');
   assert.ok(await page.isVisible('#summaryEmpty'));
   assert.equal(await page.textContent('#summaryEmpty'), '文字起こしがまだありません');

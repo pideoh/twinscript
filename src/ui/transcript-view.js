@@ -1,7 +1,8 @@
 // The transcript in the page: one block per segment (time, speaker, source text, translation),
 // in the transcript or, while listening, in the caption zone under it, and the code that leads
 // each line. The translation flow (src/translation/flow.js) talks to the page only through the
-// API returned here, so it never reads the page as state.
+// API returned here, so it never reads the page as state. A line can also be brought into view and
+// marked by its index in the session (showLine), for a time cited in an answer to a question.
 //
 // The DOM of a segment is attached to the segment object itself (`el`, `speakerEl`, `srcEl`,
 // `tgtEl`, and `lines`, a Map of target code to line while it has one line per target language):
@@ -14,6 +15,8 @@ import { languageByScript, sourceByScript } from '../translation/script-hint.js'
 import { LANGS, langTag as tagAmong } from './langs.js';
 
 const byCode = (code) => LANGS.find((l) => l.code === code);
+// How long a line shown from elsewhere (a time cited in an answer) stays marked.
+const MARK_MS = 2000;
 
 // The code of the language a segment's single translation is in, told from the writing system of
 // the translation or, failing that, of the source (the translation is then in the other language).
@@ -230,6 +233,24 @@ export function createTranscriptView({
     els.log.scrollTop = els.log.scrollHeight;
   };
 
+  // Brings the line of the session's segment `index` into view and marks it for a moment (`.marked`,
+  // faded out by the stylesheet unless the reader prefers reduced motion); it takes the focus, so a
+  // screen reader reads it. False when there is no such line on the page.
+  let marked = null;
+  function showLine(index) {
+    const seg = getCurrent()?.segments[index];
+    if (!seg?.el?.isConnected) return false;
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (marked) clearTimeout(marked.timer);
+    marked?.el.classList.remove('marked');
+    seg.el.classList.add('marked');
+    seg.el.tabIndex = -1;
+    seg.el.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+    seg.el.focus({ preventScroll: true });
+    marked = { el: seg.el, timer: setTimeout(() => seg.el.classList.remove('marked'), MARK_MS) };
+    return true;
+  }
+
   return {
     mount,
     // The transcript is on screen again: at the newest line if the reader was there, else where it was.
@@ -248,6 +269,7 @@ export function createTranscriptView({
     // The translation shown for a segment: its single translation, or the line for `code`.
     shownTranslation: (seg, code) =>
       code === undefined ? seg.tgtEl.textContent : seg.lines.get(code)?.lastChild.textContent,
+    showLine,
     setText,
     setTargets,
     clearTargets,

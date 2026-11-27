@@ -203,6 +203,69 @@ for (const scheme of ['light', 'dark']) {
   await close();
 }
 
+// Questions (English and Japanese UI, desktop and phone): the empty tab, an answer streaming in, a
+// conversation, and a failed question. The failure needs a real request, so the demo session is
+// opened again without the demo, with a made-up key, and the request is answered with a rate limit.
+async function askDemo(page, question) {
+  await page.fill('#question', question);
+  await page.click('#ask');
+}
+const answerDone = (page, count) =>
+  page.waitForFunction(
+    (n) => document.querySelectorAll('#questionsList .turn').length === n && document.getElementById('askStop').hidden,
+    count,
+    { timeout: 10_000 },
+  );
+for (const scheme of ['light', 'dark']) {
+  for (const uiLang of ['en', 'ja']) {
+    for (const [name, size] of [
+      ['', {}],
+      ['-phone', { width: 390, height: 844, phone: true }],
+    ]) {
+      const prefix = `questions-${scheme}-${uiLang}${name}`;
+      if (!wanted(prefix)) continue;
+      const { page, close } = await open({ scheme, uiLang, ...size });
+      await page.click('#tabQuestions');
+      await shot(page, `${prefix}-empty`);
+      await page.click('#tabTranscript');
+      await listen(page);
+      await page.click('#toggle');
+      await page.waitForTimeout(400);
+      await page.click('#tabQuestions');
+      await shot(page, `${prefix}-ready`);
+      const [first, second] =
+        uiLang === 'ja'
+          ? ['負荷テストはどうなっていますか？', 'レポートはいつ出ますか？']
+          : ['How is load testing going?', 'When is the report due?'];
+      await askDemo(page, first);
+      await page.waitForFunction(
+        () => document.querySelector('#questionsList .turn .markdown')?.textContent.length > 30,
+      );
+      await shot(page, `${prefix}-streaming`);
+      await answerDone(page, 1);
+      await askDemo(page, second);
+      await answerDone(page, 2);
+      await page.waitForTimeout(200);
+      await shot(page, `${prefix}-conversation`);
+      await page.evaluate(() => {
+        const settings = JSON.parse(localStorage.getItem('rt-settings') || '{}');
+        localStorage.setItem('rt-settings', JSON.stringify({ ...settings, apiKey: 'screenshot' }));
+      });
+      await page.route(/streamGenerateContent/, (route) =>
+        route.fulfill({ status: 429, contentType: 'application/json', body: '{}' }),
+      );
+      await page.goto(`${origin}/`);
+      await page.waitForFunction(() => typeof document.getElementById('toggle')?.onclick === 'function');
+      await page.click('#tabQuestions');
+      await askDemo(page, uiLang === 'ja' ? '誰がレポートを書きますか？' : 'Who writes the report?');
+      await page.waitForSelector('#questionsList .turn-error');
+      await page.waitForTimeout(200);
+      await shot(page, `${prefix}-error`);
+      await close();
+    }
+  }
+}
+
 // Usage and cost (Japanese UI): the dialog after a demo session, with made-up totals of earlier days,
 // and the prices in the settings.
 function sampleTotals() {

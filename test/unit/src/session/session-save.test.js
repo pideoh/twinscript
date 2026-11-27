@@ -74,7 +74,7 @@ test('a new session has the selected languages, no third one when there is none,
   assert.equal(sess.langA, 'ja-JP');
   assert.equal(sess.langB, 'en-US');
   assert.equal('langC' in sess, false);
-  assert.deepEqual([sess.segments, sess.summaries, sess.recordings], [[], [], []]);
+  assert.deepEqual([sess.segments, sess.summaries, sess.questions, sess.recordings], [[], [], [], []]);
   assert.equal(sess.title, '');
   assert.equal(sess.customTitle, false);
   assert.equal(blankSession({ ...settings, langC: 'ko-KR' }, { id: 'b', now: 42 }).langC, 'ko-KR');

@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { test } from 'node:test';
 import {
   mockGemini,
+  mockQuestions,
   mockSpeakers,
   mockSummary,
   seededAnswer,
@@ -55,6 +56,8 @@ for (const colorScheme of ['light', 'dark']) {
     await assertAccessible(page, 'main screen, idle');
     await showTab(page, 'summary');
     await assertAccessible(page, 'Summary tab, nothing to summarize yet');
+    await showTab(page, 'questions');
+    await assertAccessible(page, 'Questions tab, nothing to ask about yet');
     await showTab(page, 'transcript');
 
     await page.click('#openSettings');
@@ -105,6 +108,21 @@ for (const colorScheme of ['light', 'dark']) {
     await page.click('#summarize');
     await page.waitForFunction(() => document.querySelectorAll('#summaryHistory option').length === 2);
     await assertAccessible(page, 'Summary tab with summaries');
+
+    // The Questions tab with an answer (Markdown, a cited time as a link) and a failed question.
+    await showTab(page, 'questions');
+    const answers = [
+      { body: 'All **three** are done [00:00:00].\n\n- See `v2` and [the notes](https://example.com/notes).' },
+      { status: 500, body: { error: { message: 'Internal error' } } },
+    ];
+    await mockQuestions(page, () => answers.shift());
+    await page.fill('#question', 'What is done?');
+    await page.click('#ask');
+    await page.waitForSelector('#questionsList .time-link');
+    await page.fill('#question', 'Who did it?');
+    await page.click('#ask');
+    await page.waitForSelector('#questionsList .turn-error');
+    await assertAccessible(page, 'Questions tab with turns');
 
     // The summary templates in the settings dialog, with the editor open.
     await page.click('#openSettings');

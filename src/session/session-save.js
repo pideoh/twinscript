@@ -6,6 +6,25 @@
 // writes only the segments that changed since its last save. Empty sessions are never written, so
 // opening the app or a new session does not litter the list. A session written for the first time
 // is added at the top of the list of saved sessions (getSessions(), the same array the app lists).
+//
+// A session:
+// { id, title, customTitle, createdAt, updatedAt, langA, langB, langC?, activeMs, segmentCount?,
+//   usage?, usagePartial?, demo? (src/usage/usage.js, src/usage/usage-log.js),
+//   speakerLabels?: { speakers: [{ id, name }], madeAt, uncertain, model } (src/session/speaker-labels.js),
+//   segments: [{ id, at, elapsed, src, tgt, lang?, tgts?, speaker? }],
+//   recordings: [{ id, startedAt, elapsedStart, durationMs, mime }],
+//   summaries: [{ id, templateId, templateName, length, language, createdAt, markdown, model, truncated,
+//                 segmentCount }] (oldest first),
+//   summary?: { overview, keyPoints, decisions, actionItems: [{ task, owner, due }], truncated,
+//               generatedAt, model, segmentCount } (the one summary an earlier version kept),
+//   questions: [{ id, question, answer, model, createdAt, truncated }] (oldest first) }
+// With a third language (langC), a segment also has `lang`, the code of the language it was
+// spoken in ('other' for none of the three), and `tgts: [{ lang, text }]`, one translation per
+// target language; `tgt` then holds those translations joined by line breaks, so everything that
+// reads `tgt` works as with two languages.
+// Saved sessions are listed without their segments (`segments` is absent and `segmentCount` says
+// how many there are) and without their summaries and questions; all are loaded the first time the
+// session is shown (src/storage/store.js has how each is stored).
 
 import { emptyUsage } from '../usage/usage.js';
 import { formatDateTime } from './exporter.js';
@@ -28,6 +47,7 @@ export function blankSession(settings, { id, now }) {
     usage: emptyUsage(), // what it used of the API (src/usage/usage.js); absent in sessions made before it was counted
     segments: [],
     summaries: [],
+    questions: [],
     recordings: [],
   };
 }

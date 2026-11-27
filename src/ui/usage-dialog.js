@@ -101,6 +101,7 @@ export function createUsageDialog({
         usageRow(t('usage.translation'), tokens('translation')),
         usageRow(t('usage.summary'), tokens('summary')),
         usageRow(t('usage.speakers'), tokens('diarization')),
+        usageRow(t('usage.questions'), tokens('question')),
         viewRow(t('usage.total'), view, true),
       );
     }
