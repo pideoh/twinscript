@@ -294,6 +294,7 @@ export async function labelSpeakers({
           ok,
           reason,
         })),
+        labels: result.labels, // what decided each label: overlap, clip, unknown or new
         overlap: result.overlap,
         uncertain: result.uncertain,
       });
