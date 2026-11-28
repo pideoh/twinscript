@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.1](https://github.com/pideoh/twinscript/compare/v0.18.0...v0.18.1) (2026-11-28)
+
+
+### Bug Fixes
+
+* keep keyboard focus on a session's button when the list is redrawn ([#196](https://github.com/pideoh/twinscript/issues/196)) ([5276b94](https://github.com/pideoh/twinscript/commit/5276b94417c97c5aafd04976875a242a674708f1))
+* keep words in place and speakers consistent where parts of a recording join ([#199](https://github.com/pideoh/twinscript/issues/199)) ([962e1a4](https://github.com/pideoh/twinscript/commit/962e1a4a2e23a5470839ef1c6e6e428ab740896a))
+
 ## [0.18.0](https://github.com/pideoh/twinscript/compare/v0.17.0...v0.18.0) (2026-11-28)
 
 
