@@ -31,6 +31,7 @@ import { applyTranslations, getLocale, t } from './ui/i18n.js';
 import { octicon } from './ui/icons.js';
 import { createImportPanel } from './ui/import-panel.js';
 import { LANGS } from './ui/langs.js';
+import { createListenChoices } from './ui/listen-choices.js';
 import { createQuestionsPanel } from './ui/questions-panel.js';
 import { createRebuildPanel } from './ui/rebuild-panel.js';
 import { createSettingsDialog } from './ui/settings-dialog.js';
@@ -66,9 +67,7 @@ const browserStorage = {
   setItem: (name, value) => localStorage.setItem(name, value),
 };
 // The API key is not part of the settings: it is never written to localStorage (see secrets.js).
-function saveSettings() {
-  writeSettings(browserStorage, settings);
-}
+const saveSettings = () => writeSettings(browserStorage, settings);
 // Earlier versions kept the key in the settings JSON: move it out and rewrite the JSON without it.
 const { settings, legacyKey } = loadSettings(browserStorage);
 const loadedKey = await loadApiKey(window.secretStore, legacyKey);
@@ -103,6 +102,7 @@ const settingsDialog = createSettingsDialog({
     }
   },
   onRelocalize: () => {
+    listenChoices.render();
     setStatus(statusState);
     els.toggle.textContent = t(run ? 'toggle.stop' : 'toggle.start');
     sidebar.render();
@@ -131,6 +131,7 @@ const settingsDialog = createSettingsDialog({
   checkUpdatesNow: () => updateNotice.checkNow(),
 });
 const langLabel = settingsDialog.langLabel;
+const listenChoices = createListenChoices({ els, t, settings, langLabel }); // the bottom bar's button and popover
 // A session with two languages keeps the shape it always had: no langC at all.
 function setSessionLangC(sess) {
   if (settings.langC) sess.langC = settings.langC;
@@ -211,6 +212,7 @@ async function showSession(sess) {
       : [settings.langA, settings.langB];
   const langC = sess.langC;
   settingsDialog.selectLangs(a, b, LANGS.some((l) => l.code === langC) && langC !== a && langC !== b ? langC : '');
+  listenChoices.render();
   saveSettings();
   captionWindow.applyOptions();
   els.clock.textContent = formatElapsed(sess.activeMs);
@@ -491,9 +493,7 @@ const usageDialog = createUsageDialog({
 
 // ---------- live run ----------
 // Active (recording) time of the current session, which is what segment timestamps show.
-function elapsedNow() {
-  return run?.startedAt ? run.baseMs + Date.now() - run.startedAt : current.activeMs;
-}
+const elapsedNow = () => (run?.startedAt ? run.baseMs + Date.now() - run.startedAt : current.activeMs);
 
 let statusState = 'idle';
 function setStatus(state) {

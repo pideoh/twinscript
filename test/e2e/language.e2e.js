@@ -3,7 +3,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { reload, saved, setup } from './helpers.js';
+import { chooseListening, reload, saved, setup, swapLanguages } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -87,7 +87,7 @@ test('changing the display language in settings updates the screen at once and i
 
 test('a third language keeps going to the same language after the two are swapped', async () => {
   const { page, errors, close } = await openApp('', { otherInto: 'A' });
-  await page.click('#swap');
+  await swapLanguages(page);
   assert.equal(await page.inputValue('#langA'), 'en-US');
   await page.click('#openSettings');
   assert.equal(await page.inputValue('#otherInto'), 'B');
@@ -106,12 +106,12 @@ const storedLangs = (page) =>
 
 test("choosing the other side's language swaps the two and is kept", async () => {
   const { page, errors, close } = await openApp('', { langA: 'ko-KR', langB: 'en-US' });
-  await page.selectOption('#langA', 'en-US');
+  await chooseListening(page, '#langA', 'en-US');
   assert.deepEqual(await langs(page), ['en-US', 'ko-KR', '']);
   assert.deepEqual(await shown(page), ['英語', '韓国語'], 'the header shows the swapped languages');
   assert.deepEqual(await storedLangs(page), ['en-US', 'ko-KR', '']);
 
-  await page.selectOption('#langB', 'en-US');
+  await chooseListening(page, '#langB', 'en-US');
   assert.deepEqual(await langs(page), ['ko-KR', 'en-US', ''], 'the mirror case');
   assert.deepEqual(await shown(page), ['韓国語', '英語']);
   assert.deepEqual(await storedLangs(page), ['ko-KR', 'en-US', '']);
@@ -121,7 +121,7 @@ test("choosing the other side's language swaps the two and is kept", async () =>
 
 test("choosing the other side's language with a third language selected swaps the two and keeps the third", async () => {
   const { page, errors, close } = await openApp('', { langA: 'fr-FR', langB: 'en-US', langC: 'ko-KR' });
-  await page.selectOption('#langA', 'en-US');
+  await chooseListening(page, '#langA', 'en-US');
   assert.deepEqual(await langs(page), ['en-US', 'fr-FR', 'ko-KR']);
   assert.deepEqual(await storedLangs(page), ['en-US', 'fr-FR', 'ko-KR']);
   assert.deepEqual(errors, []);

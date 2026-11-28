@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  chooseListening,
   linesDone,
   mockGemini,
   mockTargets,
@@ -12,6 +13,7 @@ import {
   saved,
   setup,
   storedSessions,
+  swapLanguages,
   tagged,
   translated,
 } from './helpers.js';
@@ -22,7 +24,7 @@ test('with a third language every sentence is translated into the other two, a f
   const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
   assert.equal(await page.locator('#langC option[value=""]').textContent(), '+ 言語を追加');
   assert.equal(await page.inputValue('#langC'), '', 'two languages unless one is added');
-  await page.selectOption('#langC', 'cmn-Hans-CN');
+  await chooseListening(page, '#langC', 'cmn-Hans-CN');
 
   await mockGemini(page, [
     [3, 'final', 'それでは会議を始めます。'],
@@ -106,7 +108,7 @@ test('with a third language every sentence is translated into the other two, a f
 
   // The session reopens with its third language.
   await page.click('#newSession');
-  await page.selectOption('#langC', '');
+  await chooseListening(page, '#langC', '');
   await reload(page);
   await page.waitForSelector('#sessionList .session');
   assert.equal(await page.inputValue('#langC'), '', 'an untouched new session is not saved');
@@ -121,7 +123,7 @@ test('with a third language every sentence is translated into the other two, a f
 test('turning the third language off returns to two languages as before', async () => {
   const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false, langC: 'ko-KR' });
   assert.equal(await page.inputValue('#langC'), 'ko-KR');
-  await page.selectOption('#langC', '');
+  await chooseListening(page, '#langC', '');
   const gemini = await mockGemini(page, [[3, 'final', 'それでは会議を始めます。']]);
   await page.click('#toggle');
   await translated(page, 1);
@@ -138,7 +140,7 @@ test('turning the third language off returns to two languages as before', async 
 
   // A new session with a third language; going back to the old one turns it off again.
   await page.click('#newSession');
-  await page.selectOption('#langC', 'ko-KR');
+  await chooseListening(page, '#langC', 'ko-KR');
   gemini.restart();
   await page.click('#toggle');
   await page.waitForFunction(() => document.querySelectorAll('.seg:not(.live) .tgt-line').length === 2);
@@ -154,25 +156,25 @@ test('turning the third language off returns to two languages as before', async 
 
 test('the third language never equals the other two', async () => {
   const { page, close } = await openApp('', {});
-  await page.selectOption('#langC', 'en-US');
+  await chooseListening(page, '#langC', 'en-US');
   assert.deepEqual(
     [await page.inputValue('#langA'), await page.inputValue('#langB'), await page.inputValue('#langC')],
     ['ja-JP', 'cmn-Hans-CN', 'en-US'],
     'the language it was taken from gets the first one not in use',
   );
-  await page.selectOption('#langA', 'en-US');
+  await chooseListening(page, '#langA', 'en-US');
   assert.deepEqual(
     [await page.inputValue('#langA'), await page.inputValue('#langB'), await page.inputValue('#langC')],
     ['en-US', 'cmn-Hans-CN', 'ja-JP'],
     'the third takes the language the first one had',
   );
-  await page.selectOption('#langC', 'cmn-Hans-CN');
+  await chooseListening(page, '#langC', 'cmn-Hans-CN');
   assert.deepEqual(
     [await page.inputValue('#langA'), await page.inputValue('#langB'), await page.inputValue('#langC')],
     ['en-US', 'ja-JP', 'cmn-Hans-CN'],
     'the second takes the language the third one had',
   );
-  await page.click('#swap');
+  await swapLanguages(page);
   assert.deepEqual(
     [await page.inputValue('#langA'), await page.inputValue('#langB'), await page.inputValue('#langC')],
     ['ja-JP', 'en-US', 'cmn-Hans-CN'],
@@ -189,7 +191,7 @@ test('with a third language the settings keep the choice for other languages and
   assert.deepEqual(twoLanguages, ['both', '3']);
   await page.click('#settings button[value=ok]');
 
-  await page.selectOption('#langC', 'cmn-Hans-CN');
+  await chooseListening(page, '#langC', 'cmn-Hans-CN');
   await page.click('#openSettings');
   assert.ok(await page.locator('#otherInto').isVisible());
   assert.ok(await page.locator('#readAloudField').isVisible(), 'Chrome can speak');
@@ -204,7 +206,7 @@ test('with a third language the settings keep the choice for other languages and
   await page.click('#settings button[value=ok]');
   assert.ok(!(await page.locator('#now').evaluate((n) => n.classList.contains('tgt-only'))));
 
-  await page.selectOption('#langC', '');
+  await chooseListening(page, '#langC', '');
   await page.click('#openSettings');
   assert.ok(await page.locator('#otherInto').isVisible());
   assert.deepEqual(
@@ -213,7 +215,7 @@ test('with a third language the settings keep the choice for other languages and
     'two languages keep their own caption settings',
   );
   await page.click('#settings button[value=ok]');
-  await page.selectOption('#langC', 'cmn-Hans-CN');
+  await chooseListening(page, '#langC', 'cmn-Hans-CN');
   await page.click('#openSettings');
   assert.equal(await page.inputValue('#captionContent'), 'both', 'the choice made with three languages is kept');
   await close();

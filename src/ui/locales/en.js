@@ -37,6 +37,12 @@ export default {
   'empty.sub': 'Speak in either language. It is detected automatically and translated into the other one.',
   'log.jump': 'Latest',
   'now.label': 'Sentence being spoken',
+  'dock.label': 'Listening',
+  'listen.choices': 'Languages and audio input',
+  'listen.languages': 'Languages',
+  'listen.summary.one': '{a} · {input}',
+  'listen.summary.two': '{a} ⇄ {b} · {input}',
+  'listen.summary.three': '{a}, {b}, {c} · {input}',
   'now.head': 'Now',
   'now.empty': 'Captions appear here once translation starts',
   'caption.title': 'Captions',
@@ -132,7 +138,8 @@ export default {
   'import.file': 'File',
   'import.length': 'Length',
   'import.languages': 'Languages',
-  'import.languagesHint': 'To use other languages, close this and choose them at the top of the window first.',
+  'import.languagesHint':
+    'To use other languages, close this and choose them in the bar at the bottom of the window first.',
   'import.intro': 'A new session is made from the file:',
   'import.upload':
     'The file is uploaded to Google (Gemini API) in parts, and each upload is deleted as soon as it has been analyzed.',

@@ -1,5 +1,5 @@
 // Rebuilding a session's transcript from its recording, in the page: the action and its
-// confirmation, its progress and Cancel (in the toolbar above the transcript, beside the speaker
+// confirmation, its progress and Cancel (in the header, beside the speaker
 // tools), and putting back the original transcript (made while listening, or with the import). The
 // transcript is made by
 // src/session/recording-transcript.js; the rules about what is kept and offered are in
@@ -46,7 +46,7 @@ export function progressKey({ step }) {
 // user deleted it; recordUsage(sess, usage): counts what a request used; isLabeling(): speakers are
 // being labelled; showTranscript(sess): puts the session's lines on the page again;
 // showLineError(seg, code, text): shows a line's translation error (code: its target, or null for its
-// single translation); renderSummary(): redraws the summary panel and the toolbars (renderTools);
+// single translation); renderSummary(): redraws the summary panel and the header's actions (renderTools);
 // demo: the demo (?mock=1), which has no engine for it.
 export function createRebuildPanel({
   els,

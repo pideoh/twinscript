@@ -1,12 +1,13 @@
 // The sidebar: the list of saved sessions (open, rename, delete), the "new session" button and the
-// drawer that holds the list on narrow screens. No session can be switched to, and the one being
+// drawer that holds the list on narrow screens; with the list, the name of the session on screen in
+// the header (`els.sessionName`, the same title, or the one it will get while it has none yet). No session can be switched to, and the one being
 // recorded cannot be deleted, while a run is in progress.
 //
 // The list itself is the app's (getSessions()); a deleted session is taken out of it through
 // removeSession, since the app replaces the array rather than changing it.
 
 import { formatDateTime, formatElapsed } from '../session/exporter.js';
-import { isEmpty } from '../session/session-save.js';
+import { autoTitle, isEmpty } from '../session/session-save.js';
 
 // els: the page's elements; t: i18n; octicon(name): an icon; store: the session store
 // (deleteSession); toast(message, ms, variant); getSessions(): the saved sessions, newest first;
@@ -31,6 +32,9 @@ export function createSidebar({
 }) {
   function renderSidebar() {
     const current = getCurrent();
+    const title = current ? current.title || autoTitle(current) : '';
+    els.sessionName.textContent = title;
+    els.sessionName.title = title;
     els.sessionList.replaceChildren(
       ...getSessions().map((sess) => {
         const row = document.createElement('div');

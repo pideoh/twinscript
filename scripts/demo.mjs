@@ -96,7 +96,9 @@ async function takeStills() {
   };
 
   // Three languages: each sentence of the demo meeting, translated into the other two.
+  await page.click('#listenChoices'); // the languages are chosen in the bottom bar's popover
   await page.selectOption('#langC', 'cmn-Hans-CN');
+  await page.click('#listenChoices');
   await page.click('#toggle');
   await until(() => {
     const done = [...document.querySelectorAll('.seg:not(.live)')];

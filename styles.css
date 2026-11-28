@@ -21,6 +21,7 @@
   --base-size-40: 2.5rem;
   --base-size-48: 3rem;
   --base-size-64: 4rem;
+  --base-size-128: 8rem;
 
   /* Controls, overlays (functional/size) */
   --control-medium-size: 2rem;
@@ -517,30 +518,141 @@ input[type="range"] {
   height: 100%;
 }
 
+/* The header: this session and what is done with it. Its name (one line, cut with an ellipsis),
+   then its actions, then, set apart, what belongs to the app. The name gives way first, down to a
+   short width; then the actions wrap below it. */
 .bar {
   display: flex;
   flex-wrap: wrap;
   gap: var(--base-size-8);
   align-items: center;
-  justify-content: space-between;
   padding: calc(var(--base-size-8) + env(safe-area-inset-top)) var(--base-size-16) var(--base-size-8);
   background: var(--bgColor-default);
   border-bottom: var(--borderWidth-default) solid var(--borderColor-default);
 }
-.langs,
-.tools {
+.session-name {
+  flex: 1 1 var(--base-size-128);
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-title-size-small);
+  font-weight: var(--base-text-weight-semibold);
+  line-height: var(--control-medium-size);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* The session's actions and the app's flow as one group: beside the name while they fit, else on
+   the lines below it, right-aligned, with the app's at the end of the last line. */
+.header-actions,
+.app-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--base-size-8);
+  min-width: 0;
+}
+.header-actions {
+  flex: 0 1 auto;
+  margin-left: auto;
+}
+.session-actions {
+  display: contents;
+}
+/* Usage and settings are the app's, not the session's: a divider sets them apart. */
+.app-actions {
+  flex: none;
+  padding-left: var(--base-size-8);
+  border-left: var(--borderWidth-default) solid var(--borderColor-default);
+}
+
+/* The bottom bar: listening, the same on every tab, on one line at every width. What is listened to
+   (one button that says it and opens the choices), the caption window, then the status, time and
+   level, then Start / Stop at the far end. A surface of its own, so that what is above it (the
+   question field) reads as part of the panel. When the bar is narrow, the level and then the time
+   and the status's words give way (the status keeps its dot, its words stay for screen readers). */
+.dock {
+  container: dock / inline-size;
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-8);
+  padding: var(--base-size-8) var(--base-size-16) calc(var(--base-size-8) + env(safe-area-inset-bottom));
+  background: var(--bgColor-muted);
+  border-top: var(--borderWidth-default) solid var(--borderColor-default);
+}
+.listen-choices {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.listen-summary {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.listen-summary-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.listen-summary:disabled {
+  cursor: default;
+}
+/* Primer Overlay, anchored above the button. */
+.popover {
+  position: absolute;
+  bottom: calc(100% + var(--base-size-8));
+  left: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-8);
+  width: max-content;
+  max-width: calc(100vw - 2 * var(--base-size-16));
+  padding: var(--base-size-12);
+  border-radius: var(--borderRadius-large);
+  background: var(--overlay-bgColor);
+  box-shadow: var(--shadow-floating-small);
+}
+.popover[hidden] {
+  display: none;
+}
+.popover-label {
+  margin: 0;
+  color: var(--fgColor-muted);
+  font-size: var(--text-caption-size);
+  font-weight: var(--base-text-weight-semibold);
+}
+.langs {
   display: flex;
   gap: var(--base-size-8);
   align-items: center;
   min-width: 0;
 }
-.bar .select-wrap {
-  flex: 0 1 auto;
+.langs .select-wrap {
+  flex: 1 1 0;
 }
-/* Beside the sidebar the header stays on one row: the selects shorten before anything wraps. */
-@media (min-width: 820px) {
-  .bar {
-    flex-wrap: nowrap;
+@container dock (max-width: 40rem) {
+  .dock .meter {
+    display: none;
+  }
+}
+@container dock (max-width: 30rem) {
+  .dock .clock {
+    display: none;
+  }
+  .dock .state-label {
+    padding: 0 var(--base-size-6);
+  }
+  .dock #statusText {
+    position: absolute;
+    width: var(--borderWidth-thin);
+    height: var(--borderWidth-thin);
+    margin: calc(-1 * var(--borderWidth-thin));
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 
@@ -828,9 +940,8 @@ input[type="range"] {
 .summary-options .select-wrap {
   flex: 0 1 auto;
 }
-/* A toolbar above the transcript: the actions on it (speaker labels, rebuilding it from the
-   recording) and their progress, one group each. It is not shown while no group is. */
-.transcript-tools,
+/* The session's actions in the header (speaker labels, rebuilding the transcript, export), each
+   group with its progress. A long status wraps inside its group. */
 .tool-group {
   display: flex;
   flex-wrap: wrap;
@@ -839,11 +950,9 @@ input[type="range"] {
   gap: var(--base-size-8);
   min-width: 0;
 }
-.transcript-tools {
-  flex: none;
-  padding: var(--base-size-8) var(--base-size-16) 0;
+.tool-group .summary-meta {
+  flex: 0 1 auto;
 }
-.transcript-tools:not(:has(> .tool-group:not([hidden]))),
 .tool-group[hidden],
 .tool-group .btn[hidden] {
   display: none;
@@ -1473,18 +1582,10 @@ body.running #log .seg .tgt {
   font-size: 0.92em;
 }
 
-/* ---------- Status row and main action ---------- */
-.dock {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--base-size-12);
-  padding: var(--base-size-8) var(--base-size-16) calc(var(--base-size-8) + env(safe-area-inset-bottom));
-  background: var(--bgColor-default);
-  border-top: var(--borderWidth-default) solid var(--borderColor-default);
-}
+/* ---------- Status and main action, in the bottom bar ---------- */
 .status {
   display: flex;
+  flex: none;
   align-items: center;
   gap: var(--base-size-12);
   color: var(--fgColor-muted);
@@ -2019,14 +2120,20 @@ kbd {
   .session .act {
     opacity: 1;
   }
-  .langs {
-    flex: 1 1 100%;
+  /* The session's actions show their icons only; each keeps its name for assistive technology and
+     as its tooltip. */
+  .session-actions .btn:has(.octicon) {
+    width: var(--control-medium-size);
+    padding: 0;
   }
-  .tools {
-    flex: 1 1 100%;
-  }
-  .bar .select-wrap {
-    flex: 1 1 0;
+  .session-actions .btn .btn-label {
+    position: absolute;
+    width: var(--borderWidth-thin);
+    height: var(--borderWidth-thin);
+    margin: calc(-1 * var(--borderWidth-thin));
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   #toggle {
     height: var(--control-minTarget-coarse);

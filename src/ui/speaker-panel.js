@@ -1,5 +1,5 @@
-// Speaker labels in the page: the "identify speakers" action and its progress (a toolbar above the
-// transcript, in the Transcript tab), the editor of the
+// Speaker labels in the page: the "identify speakers" action and its progress (in the header, with
+// the session's other actions, on every tab), the editor of the
 // speakers' names, and the speaker control on each transcript line. Who spoke when is told from the
 // session's recording by the transcription model (src/session/diarizer.js, src/session/speakers.js);
 // the rules about a session's labels are in src/session/speaker-labels.js.
@@ -93,7 +93,7 @@ export function createSpeakerPanel({
     const busy = labeling?.session === sess;
     const ready = canLabel(sess, !!getRun(), demo);
     const rebuilding = isRebuilding(null);
-    // The toolbar above the transcript; it steps aside while listening.
+    // In the header; it steps aside while listening.
     els.speakerTools.hidden = !!getRun() || (!busy && !ready && !hasLabels(sess));
     els.labelSpeakers.hidden = !busy && !ready;
     els.labelSpeakers.setAttribute('aria-busy', String(busy));
