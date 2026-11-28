@@ -11,7 +11,7 @@ import { MockTranscriber, MockTranslator } from './debug/mock.js';
 import { createTrace } from './debug/trace.js';
 import { MODEL as DIARIZE_MODEL } from './session/diarizer.js';
 import { formatElapsed } from './session/exporter.js';
-import { createSessionSaver, isEmpty, blankSession as newSession } from './session/session-save.js';
+import { createSessionSaver, isEmpty, blankSession as newSession, uid } from './session/session-save.js';
 import { AudioCapture, appPlatform, inMacDesktopApp, watchSystemAudio } from './speech/audio.js';
 import { canRecord, Recorder } from './speech/recorder.js';
 import { GeminiLiveTranscriber } from './speech/transcriber.js';
@@ -128,6 +128,7 @@ const settingsDialog = createSettingsDialog({
   openPriceFields: () => usageDialog.openPriceFields(),
   pendingOverrides: () => usageDialog.pendingOverrides(),
   checkForUpdates: () => updateNotice.check(),
+  checkUpdatesNow: () => updateNotice.checkNow(),
 });
 const langLabel = settingsDialog.langLabel;
 // A session with two languages keeps the shape it always had: no langC at all.
@@ -142,10 +143,6 @@ let sessions = []; // saved sessions, newest first
 let current = null; // the session on screen
 let run = null; // the live capture/translation in progress, if any
 
-// randomUUID needs a secure context; the fallback takes 128 bits from the same CSPRNG.
-const uid = () =>
-  crypto.randomUUID?.() ??
-  [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
 // Errors from audio.js, transcriber.js and translator.js carry a message key.
 const errorText = (err) => (err?.key ? t(err.key, err.params) : (err?.message ?? String(err)));
 

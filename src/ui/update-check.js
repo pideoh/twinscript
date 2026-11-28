@@ -6,6 +6,8 @@
 //   checkedAt  time of the last check that got an answer (ms), 0 for none
 //   current    the version that was running then; latest, newer: what GitHub said
 //   dismissed  the version whose notice the user closed
+// A check is made at start and once a day while the setting is on (checkDue, afterCheck), or when
+// the user asks for one in the settings (afterManualCheck).
 
 export const UPDATE_KEY = 'rt-update';
 export const CHECK_EVERY_MS = 24 * 60 * 60 * 1000;
@@ -45,6 +47,19 @@ export function afterCheck(state, result, now) {
   const latest = version(result?.latest);
   if (!current || !latest) return state;
   return { ...state, checkedAt: now, current, latest, newer: result.newer === true };
+}
+
+// What a check the user asked for ("Check now") found, and the state after it: { state, outcome,
+// version }. outcome is 'newer' (version: the latest), 'current' (version: the running one) or
+// 'failed' (version: null). An answer is kept as afterCheck keeps it, so it counts as the day's
+// check; a newer version found this way is no longer dismissed (the user asked now). A failure
+// changes nothing.
+export function afterManualCheck(state, result, now) {
+  const next = afterCheck(state, result, now);
+  if (next === state) return { state, outcome: 'failed', version: null };
+  if (!next.newer) return { state: next, outcome: 'current', version: next.current };
+  const dismissed = next.dismissed === next.latest ? null : next.dismissed;
+  return { state: { ...next, dismissed }, outcome: 'newer', version: next.latest };
 }
 
 // The version to announce while `running` is the running version, or null: the last answer said

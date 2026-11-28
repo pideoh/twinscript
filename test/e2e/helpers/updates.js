@@ -3,7 +3,9 @@
 
 // The init script for openApp. The running version is `current`; check() answers `latest` (or
 // the version in sessionStorage 'e2e-latest', so a test can release a later one), or fails when
-// `fail` is 'null' (an answer of null) or 'throw'. window.__updates counts the calls.
+// `fail` is 'null' (an answer of null) or 'throw' (or as sessionStorage 'e2e-fail' says, '' for
+// none). While sessionStorage 'e2e-hold' is set, check() waits until window.__releaseUpdateCheck()
+// is called. window.__updates counts the calls.
 export function updatesBridge({ current = '0.13.0', latest = '0.14.0', fail = '' } = {}) {
   return {
     script: ({ current, latest, fail }) => {
@@ -23,8 +25,14 @@ export function updatesBridge({ current = '0.13.0', latest = '0.14.0', fail = ''
         },
         check: async () => {
           calls.check++;
-          if (fail === 'throw') throw new Error('net::ERR_INTERNET_DISCONNECTED');
-          if (fail === 'null') return null;
+          if (sessionStorage.getItem('e2e-hold')) {
+            await new Promise((resolve) => {
+              window.__releaseUpdateCheck = resolve;
+            });
+          }
+          const failing = sessionStorage.getItem('e2e-fail') ?? fail;
+          if (failing === 'throw') throw new Error('net::ERR_INTERNET_DISCONNECTED');
+          if (failing === 'null') return null;
           const l = sessionStorage.getItem('e2e-latest') ?? latest;
           return { current, latest: l, newer: newer(l, current) };
         },

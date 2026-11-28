@@ -1748,6 +1748,26 @@ body.running #log .seg .tgt {
 .caption[hidden] {
   display: none;
 }
+/* The running version, and "Check now" with what it found (desktop app). */
+.app-version {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+}
+.app-version[hidden],
+.update-check-row .btn[hidden] {
+  display: none;
+}
+.update-check-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--base-size-8);
+}
+.update-check-status {
+  min-width: 0;
+  color: var(--fgColor-muted);
+}
 .shortcut-list {
   display: grid;
   grid-template-columns: 1fr auto;

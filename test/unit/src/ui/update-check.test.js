@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   afterCheck,
+  afterManualCheck,
   CHECK_EVERY_MS,
   checkDue,
   dismissVersion,
@@ -61,4 +62,43 @@ test('nothing is announced when not newer, or after the app was updated', () => 
   const older = afterCheck(emptyUpdateState(), { current: '0.13.0', latest: '0.14.0', newer: true }, NOW);
   assert.equal(versionToAnnounce(older, '0.14.0'), null, 'the answer was for the version before the update');
   assert.equal(versionToAnnounce(older, null), null);
+});
+
+test("a check by hand that finds a newer version counts as the day's check and announces it, even if dismissed", () => {
+  const dismissed = dismissVersion(
+    afterCheck(emptyUpdateState(), { current: '0.13.0', latest: '0.14.0', newer: true }, NOW),
+    '0.14.0',
+  );
+  const later = NOW + 60_000;
+  const done = afterManualCheck(dismissed, { current: '0.13.0', latest: '0.14.0', newer: true }, later);
+  assert.equal(done.outcome, 'newer');
+  assert.equal(done.version, '0.14.0');
+  assert.deepEqual(done.state, { checkedAt: later, current: '0.13.0', latest: '0.14.0', newer: true, dismissed: null });
+  assert.equal(versionToAnnounce(done.state, '0.13.0'), '0.14.0');
+  assert.ok(!checkDue(done.state, later + 60_000), 'the daily check does not ask again a minute later');
+});
+
+test('a check by hand keeps an earlier dismissed version dismissed when it finds another', () => {
+  const state = { ...emptyUpdateState(), dismissed: '0.14.0' };
+  const done = afterManualCheck(state, { current: '0.13.0', latest: '0.15.0', newer: true }, NOW);
+  assert.equal(done.state.dismissed, '0.14.0');
+  assert.equal(versionToAnnounce(done.state, '0.13.0'), '0.15.0');
+});
+
+test("a check by hand on the latest version says so and counts as the day's check", () => {
+  const done = afterManualCheck(emptyUpdateState(), { current: '0.14.0', latest: '0.14.0', newer: false }, NOW);
+  assert.deepEqual({ outcome: done.outcome, version: done.version }, { outcome: 'current', version: '0.14.0' });
+  assert.equal(done.state.checkedAt, NOW);
+  assert.equal(versionToAnnounce(done.state, '0.14.0'), null);
+});
+
+test('a check by hand that fails changes nothing, so the daily check still comes when due', () => {
+  const state = afterCheck(emptyUpdateState(), { current: '0.13.0', latest: '0.13.0', newer: false }, NOW);
+  for (const answer of [null, { current: '0.13.0', latest: 'https://evil' }, { latest: '0.14.0', newer: true }]) {
+    const done = afterManualCheck(state, answer, NOW + CHECK_EVERY_MS);
+    assert.equal(done.outcome, 'failed');
+    assert.equal(done.version, null);
+    assert.equal(done.state, state);
+    assert.ok(checkDue(done.state, NOW + CHECK_EVERY_MS));
+  }
 });

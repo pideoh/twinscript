@@ -257,6 +257,17 @@ for (const colorScheme of ['light', 'dark']) {
     await assertAccessible(page, 'main screen with the notice of a newer version');
     await page.click('#openSettings');
     await assertAccessible(page, 'settings dialog in the desktop app');
+    // "Check now" with each thing it can find: a newer version, the latest, a failure.
+    for (const [result, prepare] of [
+      ['newer', () => {}],
+      ['current', () => sessionStorage.setItem('e2e-latest', '0.13.0')],
+      ['failed', () => sessionStorage.setItem('e2e-fail', 'null')],
+    ]) {
+      await page.evaluate(prepare);
+      await page.click('#checkNow');
+      await page.waitForFunction((r) => document.getElementById('checkNowStatus').dataset.result === r, result);
+      await assertAccessible(page, `settings dialog after Check now (${result})`);
+    }
     await page.click('#settings button[value=ok]');
     assert.deepEqual(errors, []);
     await close();

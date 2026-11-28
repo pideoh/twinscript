@@ -458,6 +458,12 @@
         </fieldset>
         <fieldset id="updatesGroup" class="settings-group" hidden>
           <legend class="settings-group-title" data-i18n="settings.updates">Updates</legend>
+          <p id="appVersion" class="app-version" hidden></p>
+          <div class="update-check-row">
+            <button type="button" id="checkNow" class="btn" data-i18n="settings.checkNow">Check now</button>
+            <span id="checkNowStatus" class="update-check-status" role="status"></span>
+            <button type="button" id="checkNowOpen" class="btn" data-i18n="update.open" hidden>View release</button>
+          </div>
           <div class="form-control">
             <label class="check"><input id="checkUpdates" type="checkbox"> <span data-i18n="settings.checkUpdates">Check for new versions</span></label>
             <small class="caption" data-i18n="settings.checkUpdates.help">Once a day, Twinscript asks GitHub for the number of the latest version. Nothing about you or your sessions is sent.</small>

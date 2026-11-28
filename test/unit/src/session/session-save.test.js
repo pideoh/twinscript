@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { formatDateTime } from '../../../../src/session/exporter.js';
-import { autoTitle, blankSession, createSessionSaver, isEmpty } from '../../../../src/session/session-save.js';
+import { autoTitle, blankSession, createSessionSaver, isEmpty, uid } from '../../../../src/session/session-save.js';
+
+test('each new session or recording gets an id of its own', () => {
+  const ids = new Set(Array.from({ length: 100 }, uid));
+  assert.equal(ids.size, 100);
+  for (const id of ids) assert.match(id, /^[0-9a-f-]{32,36}$/);
+});
 
 // A clock and timers the test moves by hand.
 function fakeClock(start = 1_000_000) {

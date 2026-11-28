@@ -126,6 +126,127 @@ test('the notice stays out of the way while listening', async () => {
   await close();
 });
 
+// ---------- the version in the settings, and "Check now" ----------
+const status = (page) => page.locator('#checkNowStatus');
+const checkNow = async (page, result) => {
+  await page.click('#checkNow');
+  await page.waitForFunction((r) => document.getElementById('checkNowStatus').dataset.result === r, result);
+};
+const storedUpdate = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('rt-update')));
+
+test('the settings show the running version; Check now says when it is the latest', async () => {
+  const { page, errors, close } = await openApp('', {}, updatesBridge({ current: '0.14.0', latest: '0.14.0' }));
+  assert.equal((await updateCalls(page)).check, 1);
+  await page.click('#openSettings');
+  assert.equal(await page.textContent('#appVersion'), 'バージョン 0.14.0');
+  assert.notEqual(await page.$eval('#appVersion', (el) => getComputedStyle(el).userSelect), 'none', 'can be copied');
+  assert.equal(await page.textContent('#checkNow'), '今すぐ確認');
+  assert.equal(await status(page).getAttribute('role'), 'status');
+  assert.equal(await status(page).textContent(), '');
+
+  await checkNow(page, 'current');
+  assert.equal(await status(page).textContent(), '最新のバージョンです。');
+  assert.ok(await page.locator('#checkNowOpen').isHidden());
+  assert.equal(await page.getAttribute('#checkNow', 'aria-disabled'), 'false');
+  assert.equal((await updateCalls(page)).check, 2);
+  assert.ok(await notice(page).isHidden());
+
+  // Opened again: what it found belonged to that moment; the version stays.
+  await page.click('#settings button[value=ok]');
+  await page.click('#openSettings');
+  assert.equal(await status(page).textContent(), '');
+  assert.equal(await page.textContent('#appVersion'), 'バージョン 0.14.0');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('Check now with checking off finds a newer version, shows the notice even if it was dismissed, and opens its release', async () => {
+  const { page, errors, close } = await openApp('', {}, updatesBridge({ current: '0.13.0', latest: '0.14.0' }));
+  await notice(page).waitFor();
+  await page.click('#updateDismiss');
+  await page.click('#openSettings');
+  await page.uncheck('#checkUpdates');
+  await page.click('#settings button[value=ok]');
+  await reload(page);
+  assert.equal((await updateCalls(page)).check, 0);
+  assert.ok(await notice(page).isHidden());
+
+  await page.click('#openSettings');
+  await checkNow(page, 'newer');
+  assert.equal(await status(page).textContent(), 'バージョン 0.14.0 が利用できます。');
+  assert.equal((await updateCalls(page)).check, 1, 'exactly one request');
+  assert.ok(await notice(page).isVisible(), 'the notice appears as well');
+  assert.equal(await page.textContent('#updateText'), 'バージョン 0.14.0 が利用できます');
+  assert.equal((await storedUpdate(page)).dismissed, null);
+
+  await page.click('#checkNowOpen');
+  await page.waitForFunction(() => window.__updates.opened.length === 1);
+  assert.deepEqual((await updateCalls(page)).opened, ['0.14.0']);
+
+  // Saving the settings (still off) keeps the notice the user asked for.
+  await page.click('#settings button[value=ok]');
+  assert.ok(await notice(page).isVisible());
+  assert.equal((await updateCalls(page)).check, 1);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('after Check now the daily check does not ask again', async () => {
+  const { page, errors, close } = await openApp(
+    '',
+    {},
+    updatesBridge({ current: '0.14.0', latest: '0.14.0', fail: 'null' }),
+  );
+  assert.equal((await updateCalls(page)).check, 1);
+  assert.equal((await storedUpdate(page)).checkedAt, 0, 'the check at start failed');
+  await page.evaluate(() => sessionStorage.setItem('e2e-fail', ''));
+
+  await page.click('#openSettings');
+  await checkNow(page, 'current');
+  assert.ok((await storedUpdate(page)).checkedAt > 0, "counts as the day's check");
+  await page.click('#settings button[value=ok]'); // closing looks whether a check is due
+  assert.equal((await updateCalls(page)).check, 2);
+  await reload(page);
+  assert.equal((await updateCalls(page)).check, 0, 'nor at the next start');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('Check now that fails says so beside the button, with no error shown elsewhere', async () => {
+  const { page, errors, close } = await openApp('', {}, updatesBridge({ fail: 'null' }));
+  assert.equal((await updateCalls(page)).check, 1);
+  await page.click('#openSettings');
+  await checkNow(page, 'failed');
+  assert.equal(await status(page).textContent(), '確認できませんでした。しばらくしてからもう一度お試しください。');
+  assert.ok(await page.locator('#checkNowOpen').isHidden());
+  assert.ok(await page.locator('#toast').isHidden());
+  assert.ok(await notice(page).isHidden());
+  assert.equal((await updateCalls(page)).check, 2);
+  assert.equal((await storedUpdate(page)).checkedAt, 0, "a failure is not counted as the day's check");
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('while Check now is asking the button waits, keeps the focus, and a second press asks nothing', async () => {
+  const { page, errors, close } = await openApp('', { checkUpdates: false }, updatesBridge());
+  assert.equal((await updateCalls(page)).check, 0);
+  await page.evaluate(() => sessionStorage.setItem('e2e-hold', '1'));
+  await page.click('#openSettings');
+  await page.click('#checkNow');
+  await page.waitForFunction(() => document.getElementById('checkNowStatus').dataset.result === 'checking');
+  assert.equal(await status(page).textContent(), '確認しています…');
+  assert.equal(await page.getAttribute('#checkNow', 'aria-disabled'), 'true');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'checkNow');
+  await page.click('#checkNow', { force: true }); // aria-disabled: Playwright would wait for it otherwise
+  await page.keyboard.press('Enter');
+  await page.evaluate(() => window.__releaseUpdateCheck());
+  await page.waitForFunction(() => document.getElementById('checkNowStatus').dataset.result === 'newer');
+  assert.equal((await updateCalls(page)).check, 1);
+  assert.equal(await page.getAttribute('#checkNow', 'aria-disabled'), 'false');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
 test('in a browser there is no update setting and no notice', async () => {
   const { page, errors, close } = await openApp('');
   await page.click('#openSettings');
