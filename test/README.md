@@ -20,7 +20,8 @@ Run one file with `node --test test/unit/src/speech/segmenter.test.js`.
 prints a table per file; `scripts/e2e-coverage.mjs` says how a line is counted.
 
 `npm run test:e2e:desktop` runs the same browser tests against the desktop app instead of Chrome: it
-sets `E2E_TARGET=desktop` (from `e2e/desktop.env`), and `e2e/helpers/desktop.js` then launches the app
+first has the `electron` package fetch its binary if it is missing (`install-electron`; otherwise the
+first test files to start would all fetch it at once), sets `E2E_TARGET=desktop` (from `e2e/desktop.env`), and `e2e/helpers/desktop.js` then launches the app
 for each page, with its own temporary profile, the fake microphone and the same mocks. It opens real
 windows, so it needs a display; CI runs it on macOS and Windows (`e2e-desktop`). The differences are
 kept in the helpers, so a test reads the same for both:
