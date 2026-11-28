@@ -46,6 +46,24 @@
           },
           {
             "context": "CodeQL"
+          },
+          {
+            "context": "e2e-desktop (macos-latest, 1)"
+          },
+          {
+            "context": "e2e-desktop (macos-latest, 2)"
+          },
+          {
+            "context": "e2e-desktop (macos-latest, 3)"
+          },
+          {
+            "context": "e2e-desktop (windows-latest, 1)"
+          },
+          {
+            "context": "e2e-desktop (windows-latest, 2)"
+          },
+          {
+            "context": "e2e-desktop (windows-latest, 3)"
           }
         ]
       }
