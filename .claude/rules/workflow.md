@@ -25,7 +25,7 @@ Sections 1 to 3 apply to everyone, in a clone of the repository or of a fork. Se
 
 - Open it against `main` of `pideoh/twinscript` (from a fork: from the fork's branch), as a draft, with the headings of `.github/PULL_REQUEST_TEMPLATE.md`. The title follows Conventional Commits and becomes the changelog line, so it says what users get. End the summary with `Closes #N` when there is an issue.
 - Describe only what the merged product will contain.
-- It is ready for review when five checks are green: `test`, `unit-other-os` on macOS and on Windows, and `e2e-desktop` (the browser tests against the desktop app) on macOS and on Windows. A change is verified when it has passed on every system it ships for, not on the one it was written on. On a first contribution from a fork the checks start only after the maintainer approves the run.
+- It is ready for review when these checks are green: `test`, `unit-other-os` on macOS and on Windows, and every `e2e-desktop` job (the browser tests against the desktop app, split into three jobs on macOS and three on Windows). A change is verified when it has passed on every system it ships for, not on the one it was written on. On a first contribution from a fork the checks start only after the maintainer approves the run.
 - The maintainer merges. Do not push to a branch after its pull request is merged; a follow-up is a new branch from `main`.
 - Never edit `version` in `package.json` or `CHANGELOG.md`: releases are made from a release pull request (see `CLAUDE.md`).
 
