@@ -16,6 +16,7 @@ import { extname, join, normalize, resolve } from 'node:path';
 import { after, afterEach, before } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { standInInstaller } from './bridge.js';
 import { DESKTOP, DESKTOP_ORIGIN, launchDesktop } from './desktop.js';
 import { grantToken, TOKEN_ENDPOINT } from './gemini.js';
 
@@ -144,6 +145,7 @@ export function setup() {
         /* a frame without storage */
       }
     }, stored);
+    await context.addInitScript(standInInstaller.script, standInInstaller.arg);
     if (init) await context.addInitScript(init.script, init.arg);
     // Every live connection first asks for a single-use token; tests that mock the WebSocket
     // themselves get one here (mockGemini's own answer takes precedence).
@@ -156,10 +158,14 @@ export function setup() {
   return { openApp };
 }
 
-// The page starts asynchronously (stored key and sessions are loaded first); its buttons work
-// once the handlers are attached.
+// The page starts asynchronously (stored key and sessions are loaded first); it is ready once its
+// handlers are attached and the saved sessions are shown, which enables the controls that act on the
+// current session (#export is one; src/ui/elements.js lists them).
 export const ready = (page) =>
-  page.waitForFunction(() => typeof document.getElementById('toggle')?.onclick === 'function');
+  page.waitForFunction(
+    () =>
+      typeof document.getElementById('toggle')?.onclick === 'function' && !document.getElementById('export').disabled,
+  );
 export async function reload(page) {
   await page.reload();
   await ready(page);

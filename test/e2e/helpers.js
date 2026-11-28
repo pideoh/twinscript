@@ -17,9 +17,14 @@
 //   rebuild.js  a transcript rebuilt from the recording: its answer, the named session, translation, the kept transcript
 //   translation-errors.js  the translation mock a test answers itself, speech said on demand, a movable clock
 //   updates.js  the desktop app's update bridge (window.appUpdates)
+//   bridge.js   stand-ins for the desktop app's preload bridge, the same in both targets
+//   download.js a file the page downloads, the same in both targets
 
 export * from './helpers/app.js';
 export * from './helpers/audio-reader.js';
+export * from './helpers/bridge.js';
+export { browserOnly, DESKTOP, desktopOnly } from './helpers/desktop.js';
+export * from './helpers/download.js';
 export * from './helpers/gemini.js';
 export * from './helpers/import.js';
 export * from './helpers/import-languages.js';

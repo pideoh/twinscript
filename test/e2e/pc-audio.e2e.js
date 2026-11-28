@@ -3,7 +3,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { fakeDisplayMedia, listening, mockGemini, setup } from './helpers.js';
+import { browserOnly, fakeDisplayMedia, listening, mockGemini, setup } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -83,27 +83,31 @@ test('the desktop app on Windows asks for the whole system sound, from every app
   await close();
 });
 
-test('in a browser, sharing PC audio keeps the shared tab or screen sound as it is', async () => {
-  const { page, errors, close } = await openApp(
-    '',
-    { apiKey: 'test-key', source: 'system', record: false },
-    { script: fakeDisplayMedia, arg: {} },
-  );
-  await mockGemini(page, []);
-  await page.click('#toggle');
-  await listening(page);
-  await page.click('#toggle');
-  const calls = await page.evaluate(() => window.displayMediaCalls);
-  assert.deepEqual(calls, [
-    {
-      video: true,
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-      systemAudio: 'include',
-    },
-  ]);
-  assert.deepEqual(errors, []);
-  await close();
-});
+test(
+  'in a browser, sharing PC audio keeps the shared tab or screen sound as it is',
+  browserOnly('the desktop app answers getDisplayMedia with its own system audio'),
+  async () => {
+    const { page, errors, close } = await openApp(
+      '',
+      { apiKey: 'test-key', source: 'system', record: false },
+      { script: fakeDisplayMedia, arg: {} },
+    );
+    await mockGemini(page, []);
+    await page.click('#toggle');
+    await listening(page);
+    await page.click('#toggle');
+    const calls = await page.evaluate(() => window.displayMediaCalls);
+    assert.deepEqual(calls, [
+      {
+        video: true,
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        systemAudio: 'include',
+      },
+    ]);
+    assert.deepEqual(errors, []);
+    await close();
+  },
+);
 
 const PERMISSION_PATH = '画面収録とシステムオーディオ録音 →「システムオーディオ録音のみ」で Twinscript を許可';
 
@@ -124,21 +128,25 @@ test('the desktop app on macOS explains the System Audio Recording permission wh
   await close();
 });
 
-test('PC audio that ends in a browser or the Windows app just says the audio input ended', async () => {
-  for (const desktopApp of [undefined, 'win']) {
-    const { page, errors, close } = await openApp(
-      '',
-      { apiKey: 'test-key', source: 'system', record: false },
-      { script: fakeDisplayMedia, arg: { desktopApp, endAfterMs: 500 } },
-    );
-    await mockGemini(page, []);
-    await page.click('#toggle');
-    await page.waitForFunction(() => document.getElementById('toast').textContent === '音声入力が終了しました');
-    assert.equal(await page.textContent('#statusText'), '停止中');
-    assert.deepEqual(errors, []);
-    await close();
-  }
-});
+test(
+  'PC audio that ends in a browser or the Windows app just says the audio input ended',
+  browserOnly('it stands in for a browser, which the desktop app on macOS is not'),
+  async () => {
+    for (const desktopApp of [undefined, 'win']) {
+      const { page, errors, close } = await openApp(
+        '',
+        { apiKey: 'test-key', source: 'system', record: false },
+        { script: fakeDisplayMedia, arg: { desktopApp, endAfterMs: 500 } },
+      );
+      await mockGemini(page, []);
+      await page.click('#toggle');
+      await page.waitForFunction(() => document.getElementById('toast').textContent === '音声入力が終了しました');
+      assert.equal(await page.textContent('#statusText'), '停止中');
+      assert.deepEqual(errors, []);
+      await close();
+    }
+  },
+);
 
 test('the desktop app on macOS points to the System Audio Recording permission when no PC audio arrives', async () => {
   const { page, close } = await openApp(

@@ -3,7 +3,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { listening, mockGemini, reload, setup, updateCalls, updatesBridge } from './helpers.js';
+import { browserOnly, listening, mockGemini, reload, setup, updateCalls, updatesBridge } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -247,13 +247,17 @@ test('while Check now is asking the button waits, keeps the focus, and a second 
   await close();
 });
 
-test('in a browser there is no update setting and no notice', async () => {
-  const { page, errors, close } = await openApp('');
-  await page.click('#openSettings');
-  assert.ok(await page.locator('#updatesGroup').isHidden());
-  await page.click('#settings button[value=ok]');
-  assert.ok(await notice(page).isHidden());
-  assert.equal(await page.evaluate(() => localStorage.getItem('rt-update')), null);
-  assert.deepEqual(errors, []);
-  await close();
-});
+test(
+  'in a browser there is no update setting and no notice',
+  browserOnly('the desktop app always has the update bridge'),
+  async () => {
+    const { page, errors, close } = await openApp('');
+    await page.click('#openSettings');
+    assert.ok(await page.locator('#updatesGroup').isHidden());
+    await page.click('#settings button[value=ok]');
+    assert.ok(await notice(page).isHidden());
+    assert.equal(await page.evaluate(() => localStorage.getItem('rt-update')), null);
+    assert.deepEqual(errors, []);
+    await close();
+  },
+);

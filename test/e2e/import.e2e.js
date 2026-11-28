@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   chooseAudioFile,
+  download,
   fileRead,
   importChoice,
   lineSpeakers,
@@ -106,10 +107,10 @@ test('choosing a file says what will happen; the import makes a saved session wi
   // The recording can be downloaded as the file it was.
   await page.click('#export');
   assert.equal(await page.textContent('#recordings .rec span'), '録音 1 ・ 読み込んだファイル ・ 00:00:20');
-  const [download] = await Promise.all([page.waitForEvent('download'), page.click('#recordings .rec button')]);
-  assert.equal(download.suggestedFilename(), 'Weekly sync-1.wav');
+  const recordingFile = await download(page, () => page.click('#recordings .rec button'));
+  assert.equal(recordingFile.suggestedFilename(), 'Weekly sync-1.wav');
   let size = 0;
-  for await (const chunk of await download.createReadStream()) size += chunk.length;
+  for await (const chunk of await recordingFile.createReadStream()) size += chunk.length;
   assert.equal(size, kept);
   await page.keyboard.press('Escape');
 

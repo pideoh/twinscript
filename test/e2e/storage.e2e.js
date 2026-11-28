@@ -4,7 +4,18 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mockGemini, reload, rows, saved, sessionNames, setup, showTab, tagged, translated } from './helpers.js';
+import {
+  download,
+  mockGemini,
+  reload,
+  rows,
+  saved,
+  sessionNames,
+  setup,
+  showTab,
+  tagged,
+  translated,
+} from './helpers.js';
 
 const { openApp } = setup();
 
@@ -274,7 +285,7 @@ test('transcripts saved by an earlier version are moved to the new layout withou
   await openSession(page, 'Recorded call.', 2);
   await page.click('#export');
   assert.match(await page.textContent('#recordings .rec span'), /^録音 1 ・ .* ・ 00:00:09$/);
-  const [file] = await Promise.all([page.waitForEvent('download'), page.click('#recordings .rec button')]);
+  const file = await download(page, () => page.click('#recordings .rec button'));
   const bytes = [];
   for await (const chunk of await file.createReadStream()) bytes.push(...chunk);
   assert.deepEqual(bytes, [1, 2, 3, 4, 5, 6, 7, 8], 'the recording downloads as it was saved');
