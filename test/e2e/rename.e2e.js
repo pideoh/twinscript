@@ -1,5 +1,6 @@
 // Browser tests: renaming a saved session in its row of the sidebar, with the mouse and with the
-// keyboard, and what the header and the saved session show afterwards.
+// keyboard, what the header and the saved session show afterwards, and where the keyboard focus is
+// when the list is made anew.
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -54,6 +55,7 @@ test('a session is renamed in its row with Enter, and the header and the saved s
   assert.equal(await header(page), 'Budget review');
   assert.deepEqual(await focused(page), { tag: 'BUTTON', label: '名前を変更', value: null });
   await saved(page);
+  assert.deepEqual(await focused(page), { tag: 'BUTTON', label: '名前を変更', value: null }, 'after the save too');
   assert.deepEqual(
     (await storedSessions(page)).map((s) => [s.title, s.customTitle]),
     [['Budget review', true]],
@@ -85,6 +87,8 @@ test('Escape leaves the name as it was, and an empty or unchanged name keeps it'
   assert.deepEqual(await sessionNames(page), ['Weekly sync']);
   assert.equal(await header(page), 'Weekly sync');
   assert.deepEqual(await focused(page), { tag: 'BUTTON', label: '名前を変更', value: null });
+  await saved(page);
+  assert.deepEqual(await focused(page), { tag: 'BUTTON', label: '名前を変更', value: null }, 'after the save too');
 
   await pencil(page).click();
   await page.fill(FIELD, '   ');
@@ -109,6 +113,8 @@ test('a session is renamed with the keyboard alone', async () => {
   assert.deepEqual(await sessionNames(page), ['Retro']);
   assert.equal(await header(page), 'Retro');
   assert.deepEqual(await focused(page), { tag: 'BUTTON', label: '名前を変更', value: null });
+  await saved(page);
+  assert.deepEqual(await focused(page), { tag: 'BUTTON', label: '名前を変更', value: null }, 'after the save too');
   assert.deepEqual(errors, []);
   await close();
 });
@@ -156,6 +162,44 @@ test('a session saved while a name is typed does not take away what is typed', a
   await reload(page);
   await page.waitForSelector('#sessionList .session');
   assert.deepEqual(await sessionNames(page), ['Hello there.', 'Budget review']);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test("a row's button keeps the focus when another session is saved and the list is made anew", async () => {
+  const { page, errors, close } = await withSession();
+  await page.click('#newSession');
+  const { say } = await mockSpeech(page);
+  await mockTranslation(page, ({ text }) => `訳:${text}`);
+  await page.click('#toggle');
+  await listening(page);
+  // Which button has the focus, and the name of the session whose row holds it.
+  const focusedIn = () =>
+    page.evaluate(() => {
+      const el = document.activeElement;
+      return {
+        label: el.getAttribute('aria-label'),
+        session: el.closest('.session')?.querySelector('.name').textContent,
+      };
+    });
+  // Waits until the row the focus is in has been taken out of the page by a redraw.
+  const redrawn = async (speak) => {
+    await page.evaluate(() => {
+      window.focusedRow = document.activeElement.closest('.session');
+    });
+    await speak();
+    await page.waitForFunction(() => !window.focusedRow.isConnected);
+  };
+
+  await row(page).locator('.act').nth(1).focus();
+  await redrawn(() => say('final', 'Hello there.'));
+  assert.deepEqual(await focusedIn(), { label: '削除', session: 'Weekly sync' });
+
+  await pencil(page, 1).focus();
+  await redrawn(() => say('final', 'And more.'));
+  assert.deepEqual(await focusedIn(), { label: '名前を変更', session: 'Weekly sync' });
+
+  await page.click('#toggle');
   assert.deepEqual(errors, []);
   await close();
 });
