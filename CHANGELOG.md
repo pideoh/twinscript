@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/pideoh/twinscript/compare/v0.18.1...v0.19.0) (2026-11-28)
+
+
+### Features
+
+* show importing, speaker labels and rebuilding in the demo as in the app ([#202](https://github.com/pideoh/twinscript/issues/202)) ([446a775](https://github.com/pideoh/twinscript/commit/446a7754895e7bdf4cbdeb876432c769c4ec00b9))
+
 ## [0.18.1](https://github.com/pideoh/twinscript/compare/v0.18.0...v0.18.1) (2026-11-28)
 
 
