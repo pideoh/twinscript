@@ -181,7 +181,37 @@ export const rows = (page) =>
   );
 export const sessionNames = (page) => page.locator('#sessionList .name').allTextContents();
 
-export const saved = (page) => page.waitForTimeout(500); // saves are debounced by 250 ms
+// Waits until what was changed before the call is written to IndexedDB, however slow the machine.
+// The app writes 250 ms after the last change (src/session/session-save.js): a timer of the page set
+// for longer, now, fires after the app's own timer has, since a page's timers fire in order of their
+// time. The writes then queued (saves, a deleted session, recorded audio) finish before a read-write
+// transaction over the same stores that is begun after them can start, so once that one completes,
+// they are on disk.
+export async function saved(page) {
+  const done = page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        setTimeout(() => {
+          const open = indexedDB.open('twinscript');
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const db = open.result;
+            // The app has opened its database by the time it is ready (`ready`), so the stores exist.
+            const tx = db.transaction([...db.objectStoreNames], 'readwrite');
+            tx.oncomplete = () => {
+              db.close();
+              resolve();
+            };
+            tx.onerror = tx.onabort = () => reject(tx.error);
+          };
+        }, 300);
+      }),
+  );
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('the pending saves were not written within 10 s')), 10_000).unref(),
+  );
+  await Promise.race([done, timeout]);
+}
 
 // What each page has logged (console messages and page errors), kept for the error of `listening`.
 const diagnostics = new WeakMap();

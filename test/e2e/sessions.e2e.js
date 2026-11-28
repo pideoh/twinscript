@@ -49,6 +49,7 @@ test('sessions survive a reload, can be switched, renamed and deleted', async ()
   page.once('dialog', (d) => d.accept());
   await page.locator('#sessionList .session').first().locator('.act').last().click();
   await page.waitForFunction(() => document.querySelectorAll('#sessionList .session').length === 1);
+  await saved(page);
   await reload(page);
   await page.waitForSelector('#sessionList .session');
   assert.deepEqual(await sessionNames(page), ['週次定例']);
