@@ -2,15 +2,15 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { listening, mockGemini, reload, setup } from './helpers.js';
+import { chooseListening, listening, mockGemini, reload, setup, swapLanguages } from './helpers.js';
 
 const { openApp } = setup();
 
 test('the two languages can never be the same', async () => {
   const { page, close } = await openApp();
-  await page.selectOption('#langA', 'en-US');
+  await chooseListening(page, '#langA', 'en-US');
   assert.equal(await page.inputValue('#langB'), 'ja-JP');
-  await page.click('#swap');
+  await swapLanguages(page);
   assert.equal(await page.inputValue('#langA'), 'ja-JP');
   assert.equal(await page.inputValue('#langB'), 'en-US');
   await close();

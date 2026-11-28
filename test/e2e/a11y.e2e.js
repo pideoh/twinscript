@@ -217,7 +217,30 @@ for (const colorScheme of ['light', 'dark']) {
     await assertAccessible(page, 'a rebuild in progress');
     release();
     await page.waitForSelector('#restoreTranscript:not([hidden])');
-    await assertAccessible(page, 'a rebuilt transcript, with the action to restore the one made while listening');
+    await assertAccessible(page, 'a rebuilt transcript, with the action to restore the original one');
+    assert.deepEqual(errors, []);
+    await close();
+  });
+
+  test(`the three bands pass the accessibility checks on every tab, with the choices open, while listening and at 390 px in the ${colorScheme} theme`, async () => {
+    const { page, errors, close } = await openApp('', { apiKey: 'test-key' }, undefined, { colorScheme });
+    await seedRecordedSession(page);
+    for (const tab of ['summary', 'questions', 'transcript']) {
+      await showTab(page, tab);
+      await assertAccessible(page, `the ${tab} tab, with the session's actions in the header`);
+    }
+    await page.click('#listenChoices');
+    await assertAccessible(page, 'the choices of what is listened to, open');
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await assertAccessible(page, 'at 390 px, the session actions as icons');
+    await mockGemini(page, [[3, 'interim', 'Still speaking']]);
+    await page.click('#toggle');
+    await page.waitForSelector('#dot.on');
+    await assertAccessible(page, 'at 390 px, while listening');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await assertAccessible(page, 'while listening');
+    await page.click('#toggle');
     assert.deepEqual(errors, []);
     await close();
   });

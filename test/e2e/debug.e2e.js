@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mockGemini, reload, rows, saved, setup, translated } from './helpers.js';
+import { chooseListening, mockGemini, reload, rows, saved, setup, translated } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -89,7 +89,7 @@ test('without debug mode there is no file input, no trace and no trace download'
 test('in debug mode an audio file plays into the recognizer and the run stops when it ends', async () => {
   const { page, errors, close } = await openApp('?debug=1', { apiKey: 'test-key' });
   assert.equal(await page.textContent('#source option[value=file]'), '音声ファイル（デバッグ）');
-  await page.selectOption('#source', 'file');
+  await chooseListening(page, '#source', 'file');
   let chunks = 0;
   let loud = 0;
   await page.routeWebSocket(/generativelanguage/, (ws) => {

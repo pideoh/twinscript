@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { fakeDisplayMedia, listening, mockTargets, setup } from './helpers.js';
+import { chooseListening, fakeDisplayMedia, listening, mockTargets, setup, swapLanguages } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -156,7 +156,7 @@ test('reading aloud keeps to the same language after the two are swapped', async
   await page.click('#openSettings');
   assert.equal(await page.locator('#readAloud option[value=A]').textContent(), '日本語への訳文');
   await page.click('#settings button[value=ok]');
-  await page.click('#swap');
+  await swapLanguages(page);
   await page.click('#openSettings');
   assert.equal(await page.inputValue('#readAloud'), 'B');
   assert.equal(await page.locator('#readAloud option[value=B]').textContent(), '日本語への訳文');
@@ -170,7 +170,7 @@ test('reading aloud is unavailable for two languages written in the same alphabe
   assert.ok(await page.locator('#readAloud').isDisabled());
   assert.ok(await page.locator('#readAloudUnavailable').isVisible());
   await page.click('#settings button[value=ok]');
-  await page.selectOption('#langB', 'ja-JP');
+  await chooseListening(page, '#langB', 'ja-JP');
   await page.click('#openSettings');
   assert.ok(await page.locator('#readAloud').isEnabled());
   assert.ok(await page.locator('#readAloudUnavailable').isHidden());
@@ -191,14 +191,14 @@ test('in the Windows desktop app reading aloud is not offered while PC audio is 
   assert.ok(await page.locator('#readAloudUnavailable').isHidden());
   await page.click('#settings button[value=ok]');
 
-  await page.selectOption('#source', 'mic');
+  await chooseListening(page, '#source', 'mic');
   await page.click('#openSettings');
   assert.ok(await page.locator('#readAloud').isEnabled());
   assert.equal(await page.inputValue('#readAloud'), 'A', 'the stored choice applies again');
   assert.ok(await page.locator('#readAloudHeard').isHidden());
   await page.click('#settings button[value=ok]');
 
-  await page.selectOption('#source', 'both');
+  await chooseListening(page, '#source', 'both');
   await page.click('#openSettings');
   assert.ok(await page.locator('#readAloud').isDisabled());
   assert.ok(await page.locator('#readAloudHeard').isVisible());
@@ -307,13 +307,13 @@ test('with three languages only the translation into the chosen language is read
 test('a choice of reading aloud that does not fit the number of languages shows and acts as off', async () => {
   const { page, errors, close } = await openApp('', { readAloud: 'both' }, { script: fakeSpeech });
   const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('rt-settings')).readAloud);
-  await page.selectOption('#langC', 'ko-KR');
+  await chooseListening(page, '#langC', 'ko-KR');
   await page.click('#openSettings');
   assert.equal(await page.inputValue('#readAloud'), 'off', 'both directions, with three languages');
   await page.selectOption('#readAloud', 'C');
   await page.click('#settings button[value=ok]');
 
-  await page.selectOption('#langC', '');
+  await chooseListening(page, '#langC', '');
   await page.click('#openSettings');
   assert.equal(await page.inputValue('#readAloud'), 'off', 'the third language, once it is turned off');
   assert.deepEqual(
@@ -323,12 +323,12 @@ test('a choice of reading aloud that does not fit the number of languages shows 
   assert.equal(await stored(), 'off');
   await page.click('#settings button[value=ok]');
 
-  await page.selectOption('#langC', 'ko-KR');
+  await chooseListening(page, '#langC', 'ko-KR');
   await page.click('#openSettings');
   assert.equal(await page.inputValue('#readAloud'), 'off', 'turning a third language on again does not bring it back');
   await page.selectOption('#readAloud', 'C');
   await page.click('#settings button[value=ok]');
-  await page.selectOption('#langA', 'ko-KR');
+  await chooseListening(page, '#langA', 'ko-KR');
   await page.click('#openSettings');
   assert.equal(await page.inputValue('#readAloud'), 'A', 'the choice follows Korean to another place');
   assert.deepEqual(errors, []);

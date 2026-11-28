@@ -130,19 +130,6 @@ test('opening a session or a new one shows its transcript', async () => {
   await close();
 });
 
-test('the speaker tools sit above the transcript, in the Transcript tab', async () => {
-  const { page, errors, close } = await openApp('', { apiKey: 'test-key' });
-  await seedRecordedSession(page);
-  assert.ok(await page.isVisible('#transcriptPanel #speakerTools #labelSpeakers'));
-  const tools = await page.locator('#speakerTools').boundingBox();
-  const log = await page.locator('#log').boundingBox();
-  assert.ok(tools.y + tools.height <= log.y, 'above the transcript');
-  await showTab(page, 'summary');
-  assert.ok(await page.isHidden('#labelSpeakers'), 'not in the Summary tab');
-  assert.deepEqual(errors, []);
-  await close();
-});
-
 test('with nothing to summarize, the Summary tab says so in place of the summary', async () => {
   const { page, errors, close } = await openApp('', { apiKey: 'test-key' });
   assert.equal(await page.locator('[role="tab"]').count(), 3, 'the tabs are there before anything is said');

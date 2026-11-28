@@ -65,12 +65,19 @@ show the version you are running, and "Check now" there asks at once, whether or
 
 ## During a meeting
 
-Choose the languages and the audio input, then press "Start translating". Each line starts with a short code for its
-language (JA, EN, ZH), for what was said and for its translations.
+Everything about listening is in the bar at the bottom of the window, the same on every tab. Its first button says
+what is listened to (for example "Japanese ⇄ English · Microphone") and opens the choices: the languages, their swap
+and the audio input. Choose them, then press "Start translating" at the right end of the bar; the choices cannot be
+changed while listening. Each line starts with a short code for its language (JA, EN, ZH), for what was said and for
+its translations.
+
+The header at the top is the session on screen: its name, what can be done with it (speaker labels, rebuilding the
+transcript, download), and at the far end the usage and the settings. In a narrow window the session's buttons show
+only their icons.
 
 ### Languages
 
-For a meeting in three languages, pick one more in the third language menu ("+ Add a language"; choosing it again goes
+For a meeting in three languages, pick one more in the third language menu of those choices ("+ Add a language"; choosing it again goes
 back to two). Every sentence is then translated into the other two, each translation on its own line with a tag for
 its language, as in this meeting in Japanese, English and Chinese:
 
@@ -96,7 +103,7 @@ Twinscript from "System Audio Recording Only" (and "Microphone") with the − bu
 
 ### Captions on top of other apps
 
-The caption window button (top right) moves the caption area into a frameless, translucent window that stays on top of
+The caption window button (in the bottom bar) moves the caption area into a frameless, translucent window that stays on top of
 everything else, including full-screen slides and meeting apps. Drag it to move it; close it with ×. The "Captions"
 group in settings changes it while you listen:
 
@@ -178,7 +185,7 @@ and can be stopped. Here it has answered two questions:
 
 ### Speaker labels
 
-After a session, "Label speakers" (in the Transcript tab, above the transcript) tells the speakers apart from the
+After a session, "Label speakers" (in the header, next to the session's name) tells the speakers apart from the
 session's recording and labels each line of the transcript with its speaker: "Speaker 1", "Speaker 2", … in the order
 they first speak. Only sessions with a recording can be labeled.
 
@@ -200,7 +207,7 @@ they first speak. Only sessions with a recording can be labeled.
 ### Rebuilding the transcript from the recording
 
 The transcript made while listening is made fast, and keeps what the live model misheard or missed. After a session
-with a recording, "Rebuild from recording" (next to the speaker tools) transcribes the recording again with the model
+with a recording, "Rebuild transcript" (next to "Label speakers") transcribes the recording again with the model
 that transcribes after the fact (`gemini-3.5-transcribe`) and makes the session's lines anew from it: sentence-sized
 lines with their times and their speakers, each translated again into the session's languages.
 
@@ -216,9 +223,9 @@ lines with their times and their speakers, each translated again into the sessio
   failed shows its error, as while listening.
 - Speaker names you gave are kept for a speaker who can be matched with certainty to one of the earlier lines'
   speakers; otherwise the default name is shown.
-- The transcript made while listening is kept, with its translations and speakers. "Restore the transcript made while
-  listening" puts it back and drops the rebuilt one. Rebuilding a rebuilt transcript keeps the one made while
-  listening and replaces only the rebuilt one.
+- The transcript made while listening (or, for an imported audio file, the one made on import) is kept, with its
+  translations and speakers. "Restore the original transcript" puts it back and drops the rebuilt one. Rebuilding a
+  rebuilt transcript keeps the original one and replaces only the rebuilt one.
 - The session's title, recording and earlier usage stay as they are; what the rebuild used is added.
 
 ### Making a session from an audio file
@@ -229,7 +236,7 @@ rebuilt (`gemini-3.5-transcribe`, with speakers), and every line is translated.
 
 - Formats: WAV, MP3, M4A and MP4 (AAC), AAC, FLAC, Ogg and WebM, up to 2 hours and 2000 MB. AIFF and CAF cannot be
   read. Files in Vorbis (some Ogg and WebM files) are decoded whole and can be at most 1 hour and 500 MB.
-- The session is in the languages selected at the top of the window; choose them before importing.
+- The session is in the languages selected in the bottom bar; choose them before importing.
 - Before it starts, the app shows the file's name and length, the languages, and what happens: the file is uploaded to
   the Gemini API in parts and each upload is deleted after the analysis; the transcript is made with speakers and every
   line is translated; it costs one pass over the recording with the transcription model and the translation of every

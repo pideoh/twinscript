@@ -157,7 +157,7 @@ for (const scheme of ['light', 'dark']) {
   }
 }
 
-// A third language (Japanese UI): the header with its third select, tagged translations.
+// A third language (Japanese UI): the bottom bar with its choices open, tagged translations.
 for (const scheme of ['light', 'dark']) {
   for (const [name, size] of [
     ['', {}],
@@ -166,8 +166,9 @@ for (const scheme of ['light', 'dark']) {
     if (!wanted(`three-${scheme}${name}`)) continue;
     const { page, close } = await open({ scheme, uiLang: 'ja', langC: 'cmn-Hans-CN', ...size });
     await shot(page, `three-${scheme}${name}-idle`);
-    await page.locator('header.bar').screenshot({ path: join(out, `three-${scheme}${name}-header.png`) });
-    console.log(`three-${scheme}${name}-header`);
+    await page.click('#listenChoices');
+    await shot(page, `three-${scheme}${name}-choices`);
+    await page.click('#listenChoices');
     await listen(page);
     await shot(page, `three-${scheme}${name}-listening`);
     await page.click('#toggle');

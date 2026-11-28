@@ -3,7 +3,17 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { linesDone, mockGemini, mockTargets, saved, setup, storedSessions, tagged } from './helpers.js';
+import {
+  chooseListening,
+  linesDone,
+  mockGemini,
+  mockTargets,
+  saved,
+  setup,
+  storedSessions,
+  swapLanguages,
+  tagged,
+} from './helpers.js';
 
 const { openApp } = setup();
 
@@ -172,16 +182,16 @@ test('the choice follows its language when languages change places, and is all o
   await saveSettings(page);
   assert.deepEqual(await choice(), ['C', '韓国語のみ']);
 
-  await page.selectOption('#langA', 'ko-KR'); // the third takes Japanese
+  await chooseListening(page, '#langA', 'ko-KR'); // the third takes Japanese
   assert.deepEqual([await page.inputValue('#langA'), await page.inputValue('#langC')], ['ko-KR', 'ja-JP']);
   assert.deepEqual(await choice(), ['A', '韓国語のみ']);
-  await page.click('#swap');
+  await swapLanguages(page);
   assert.deepEqual(await choice(), ['B', '韓国語のみ']);
 
   await page.click('#openSettings');
   await page.selectOption('#otherInto', 'C');
   await saveSettings(page);
-  await page.selectOption('#langC', '');
+  await chooseListening(page, '#langC', '');
   assert.deepEqual(await choice(), ['all', '選んだすべての言語']);
   assert.equal(await page.locator('#otherInto option').count(), 3, 'no third language to choose');
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('rt-settings')));

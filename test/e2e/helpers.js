@@ -7,6 +7,7 @@
 //   summary.js  the summary mock
 //   questions.js  the question mock, the conversation on screen, saved questions
 //   tabs.js     the tabs of the main area: the one shown, showing one
+//   listening.js  choosing the languages and the audio input in the bottom bar's popover
 //   storage.js  saved sessions read from IndexedDB
 //   pc-audio.js the getDisplayMedia stand-in
 //   speakers.js the recorded session and the speaker-label mocks
@@ -19,6 +20,7 @@ export * from './helpers/app.js';
 export * from './helpers/audio-reader.js';
 export * from './helpers/gemini.js';
 export * from './helpers/import.js';
+export * from './helpers/listening.js';
 export * from './helpers/pc-audio.js';
 export * from './helpers/questions.js';
 export * from './helpers/rebuild.js';
