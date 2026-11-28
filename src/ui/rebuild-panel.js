@@ -13,6 +13,7 @@
 // the same. While it runs, the session's transcript cannot be edited and it cannot be listened to.
 
 import { GeminiDiarizer } from '../session/diarizer.js';
+import { GeminiPunctuator } from '../session/punctuate.js';
 import {
   applyRebuilt,
   applyRestored,
@@ -34,6 +35,7 @@ import { LANGS } from './langs.js';
 export function progressKey({ step }) {
   if (step === 'upload') return 'speakers.uploading';
   if (step === 'analyze') return 'rebuild.transcribing';
+  if (step === 'punctuate') return 'rebuild.punctuating';
   return 'rebuild.translating';
 }
 
@@ -162,6 +164,7 @@ export function createRebuildPanel({
         langs,
         otherInto: settings.otherInto,
         diarizer: new GeminiDiarizer({ apiKey }),
+        punctuator: new GeminiPunctuator({ apiKey, model: settings.translateModel, onUsage: count('translation') }),
         translator: translatorFor({
           apiKey,
           model: settings.translateModel,

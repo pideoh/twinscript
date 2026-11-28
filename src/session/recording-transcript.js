@@ -1,8 +1,9 @@
 // A transcript made from a recording after the fact, rather than while listening: the recording is
 // transcribed in parts by the transcription model with speakers and word times (the same pass as
-// speaker labels, src/session/diarizer.js), the words are made into sentence-sized lines, and the
-// lines are translated (src/translation/batch.js). DOM-free: the recording's samples, the
-// diarizer, the translator and the ids are passed in. It neither reads nor writes a session: the
+// speaker labels, src/session/diarizer.js), where a stretch of words came back with too little
+// punctuation the text model puts it in (src/session/punctuate.js), the words are made into
+// sentence-sized lines, and the lines are translated (src/translation/batch.js). DOM-free: the
+// recording's samples, the diarizer, the punctuator, the translator and the ids are passed in. It neither reads nor writes a session: the
 // caller decides what to do with the result (src/ui/rebuild-panel.js puts it in place of a session's
 // transcript).
 //
@@ -16,15 +17,20 @@
 //
 // Lines: a change of speaker or a pause of PAUSE_MS or more ends a line; within that, a line ends where
 // the live segmenter would split it (src/speech/segmenter.js: a sentence end that leaves at least a
-// few characters, or a clause boundary past the longest line), always between two words. Words are
+// few characters, or a clause boundary past the longest line), always between two words. Unlike the
+// live transcript, a line never waits for a sentence end more than MAX_LIVE_CHARS characters away:
+// it is cut where the segmenter cuts a line without one (forcedSplit). Long sentences joined by
+// commas are common in speech (a measured bare passage, once punctuated, had 83 commas and 17 full
+// stops), and this holds for every transcript made from a recording, whoever punctuated it. Words are
 // joined with a space, except between two characters of a script written without spaces (Japanese,
 // Chinese) and before closing punctuation; where the model's text tells whether a space follows a
 // word (`space`), that is used instead.
 
-import { CJK, findSplit } from '../speech/segmenter.js';
+import { CJK, findSplit, forcedSplit, MAX_LIVE_CHARS } from '../speech/segmenter.js';
 import { translateLines } from '../translation/batch.js';
 import { MessageError } from '../ui/message-error.js';
 import { labelSpeakers, MODEL } from './diarizer.js';
+import { punctuateStretches } from './punctuate.js';
 import { piecesMs, recordingTimeline, SAMPLE_RATE } from './speakers.js';
 
 export const PAUSE_MS = 1_500;
@@ -34,7 +40,7 @@ const STARTS_CJK = new RegExp(`^[${CJK}]`);
 const CLOSING = /^[,.!?;:%)\]}、。，．！？；：」』）]/;
 
 // What goes between two words of a line: '' or ' '.
-function separator(prev, next) {
+export function separator(prev, next) {
   if (ENDS_CJK.test(prev.text) && STARTS_CJK.test(next.text)) return '';
   if (CLOSING.test(next.text)) return '';
   if (prev.space !== undefined) return prev.space ? ' ' : '';
@@ -55,7 +61,11 @@ function splitStretch(words, speaker) {
   const lines = [];
   let from = 0;
   while (from < words.length) {
-    const cut = findSplit(text.slice(starts[from]));
+    const rest = text.slice(starts[from]);
+    let cut = findSplit(rest);
+    // A sentence end further away than the longest line does not wait: the line is cut as the live
+    // segmenter cuts a line that has none.
+    if (cut > MAX_LIVE_CHARS) cut = forcedSplit(rest);
     let to = words.length;
     if (cut) {
       const at = starts[from] + cut;
@@ -76,10 +86,11 @@ function splitStretch(words, speaker) {
 }
 
 /**
- * Sentence-sized lines from words in order: [{ startMs, endMs, speaker, text }] in the words' time.
- * words: [{ startMs, endMs, speaker (null: unknown), text, space? }]; words without text are skipped.
+ * The stretches a line never crosses: [{ speaker, endMs, words }], each the words in order of one
+ * speaker with no pause of `pauseMs` or more. words: as linesFromWords; words without text are
+ * skipped, the others trimmed.
  */
-export function linesFromWords(words, { pauseMs = PAUSE_MS } = {}) {
+export function stretchesFromWords(words, { pauseMs = PAUSE_MS } = {}) {
   const stretches = [];
   let stretch = null;
   for (const raw of words) {
@@ -94,7 +105,15 @@ export function linesFromWords(words, { pauseMs = PAUSE_MS } = {}) {
       stretches.push(stretch);
     }
   }
-  return stretches.flatMap((s) => splitStretch(s.words, s.speaker));
+  return stretches;
+}
+
+/**
+ * Sentence-sized lines from words in order: [{ startMs, endMs, speaker, text }] in the words' time.
+ * words: [{ startMs, endMs, speaker (null: unknown), text, space? }]; words without text are skipped.
+ */
+export function linesFromWords(words, { pauseMs = PAUSE_MS } = {}) {
+  return stretchesFromWords(words, { pauseMs }).flatMap((s) => splitStretch(s.words, s.speaker));
 }
 
 /**
@@ -128,9 +147,11 @@ function numberByLines(lines) {
  * Makes a transcript, with translations, from a recording.
  *   pieces: [{ samples: Int16Array at `rate`, elapsedStart, startedAt? }], the recordings in order;
  *   langs: [{ code, name }] (two or three) and otherInto ('A', 'B', 'C' or 'all') as for translation;
- *   diarizer: upload / analyze / remove as GeminiDiarizer; translator: as GeminiTranslator (its own
- *   onUsage counts the translations); uid(): a new line id; signal: cancels everything;
- *   onProgress({ step: 'upload' | 'analyze', part, parts } | { step: 'translate', done, total });
+ *   diarizer: upload / analyze / remove as GeminiDiarizer; punctuator: as GeminiPunctuator (its own
+ *   onUsage counts its requests; without one, the words are kept as they came); translator: as
+ *   GeminiTranslator (its own onUsage counts the translations); uid(): a new line id; signal:
+ *   cancels everything; onProgress({ step: 'upload' | 'analyze', part, parts } |
+ *   { step: 'punctuate' | 'translate', done, total });
  *   onUsage(usageMetadata, model) for each answer of the transcription model.
  * Resolves with { segments, speakers, uncertain, model, failures, words, recordings }:
  *   segments: [{ id, elapsed, at?, src, tgt, lang?, tgts?, speaker? }] as a session keeps them;
@@ -146,6 +167,7 @@ export async function transcribeRecording({
   langs,
   otherInto = 'all',
   diarizer,
+  punctuator,
   translator,
   uid,
   signal,
@@ -172,7 +194,16 @@ export async function transcribeRecording({
     ...(maxMs && { maxMs }),
     ...(overlapMs && { overlapMs }),
   });
-  const lines = linesFromWords(labelled.words);
+  const stretches = stretchesFromWords(labelled.words).map((s) => s.words);
+  const words = punctuator
+    ? await punctuateStretches(stretches, {
+        punctuator,
+        separator,
+        signal,
+        onProgress: ({ done, total }) => onProgress({ step: 'punctuate', done, total }),
+      })
+    : stretches;
+  const lines = linesFromWords(words.flat());
   if (!lines.length) throw new MessageError('error.speakersNone');
   const ids = numberByLines(lines);
   const segments = lines.map((line) => {

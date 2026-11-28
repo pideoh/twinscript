@@ -173,6 +173,7 @@ export default {
   'rebuild.cancelDialog': '取消',
   'rebuild.confirm': '重新生成',
   'rebuild.transcribing': '正在转写第 {part}/{parts} 部分…',
+  'rebuild.punctuating': '正在补充标点（已完成 {done}/{total} 段）…',
   'rebuild.translating': '正在翻译（已完成 {done}/{total} 行）…',
   'rebuild.done': '已根据录音重新生成转写（{count} 行）。',
   'rebuild.doneFailed': '已根据录音重新生成转写（{count} 行），其中 {failed} 行无法翻译。',

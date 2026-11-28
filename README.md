@@ -211,12 +211,18 @@ with a recording, "Rebuild transcript" (next to "Label speakers") transcribes th
 that transcribes after the fact (`gemini-3.5-transcribe`) and makes the session's lines anew from it: sentence-sized
 lines with their times and their speakers, each translated again into the session's languages.
 
+- Where the transcription model returns speech with too little punctuation for its length (judged on pieces of up to
+  about 300 characters), that piece is sent to the translation model to put punctuation in. Only
+  the punctuation is taken from the answer, and only where the six characters on each side of a mark are the
+  transcript's own, unchanged; the words are always kept as they came. An answer that shares less than half its text
+  with the transcript is not used.
 - Before it starts, the app says what changes: the wording, number and times of the lines; every line is translated
   again; speakers are labeled again; summaries and answers made earlier are marked as made from an earlier
   transcript; it costs one more pass over the recording and the translations; the recording is uploaded for it.
 - The recording is sent in parts and deleted from the Gemini API after each analysis, as for speaker labels; agreeing
   here also covers speaker labels, and the reverse.
-- Progress is shown (uploading and transcribing part 1 of n, then the lines translated so far) and it can be
+- Progress is shown (uploading and transcribing part 1 of n, adding punctuation where it is missing, then the lines
+  translated so far) and it can be
   cancelled. Meanwhile the rest of the session can be read, but its speakers cannot be edited and listening to it
   cannot be started. A cancelled or failed rebuild leaves the session as it was.
 - The new lines replace the old ones all at once, when they and their translations are ready. A line whose translation
@@ -242,7 +248,8 @@ rebuilt (`gemini-3.5-transcribe`, with speakers), and every line is translated.
   line is translated; it costs one pass over the recording with the transcription model and the translation of every
   line; the audio is kept in the app as the session's recording, converted to 16 kHz mono (the file itself is not
   kept). Agreeing here also covers speaker labels and rebuilding.
-- The dialog shows the progress (reading the file, uploading and transcribing part 1 of n, the lines translated so far)
+- The dialog shows the progress (reading the file, uploading and transcribing part 1 of n, adding punctuation where it
+  is missing, the lines translated so far)
   and Cancel stops it. Nothing is added until all of it is done: a cancelled or failed import, or closing the app
   meanwhile, leaves no session and no audio behind. A failure says why (a file that cannot be read, a silent or too
   short file, no speech found, an API error or the rate limit).
@@ -303,7 +310,7 @@ Google Cloud billing), what you send is not used for training, and the prices ar
 | Transcription | about $0.009 per minute (about $0.54 per hour) |
 | Translation | a small token fee per request. A sentence translated into several languages takes one request per language: every sentence with a third language, and speech in a language you did not select when it goes into all of them |
 | Speaker labels (`gemini-3.5-transcribe`) | $2.00 per 1M input tokens (about $0.003 per minute of audio) and $12.00 per 1M output tokens for the transcript with word times. The audio sent is somewhat longer than the recording: each part after the first starts with clips of the known speakers, and parts of a long recording overlap by a minute |
-| Rebuilding a transcript | the price of speaker labels for the pass over the recording, plus a translation request for every line (one per target language where a line has several) |
+| Rebuilding a transcript | the price of speaker labels for the pass over the recording, plus a translation request for every line (one per target language where a line has several), and a request of the translation model for each piece of text that came back with too little punctuation (up to two more for a piece the model leaves without punctuation) |
 | Importing an audio file | the same as rebuilding a transcript, for the length of the file |
 | Summaries and questions | the translation model's token fee; one request each, its input mostly the session's transcript, so a long meeting costs more per question than a short one |
 
@@ -317,7 +324,7 @@ this month, last month and everything recorded, and each saved session.
 
 - Listening time is counted while the transcription is connected; translations, summaries, speaker labels and
   questions by the tokens the API reports for each request. A rebuilt transcript is counted as speaker labels (the pass
-  over the recording) and translation (its lines), also when it is cancelled or fails after requests were made; so is an
+  over the recording) and translation (its lines, and the punctuation put in), also when it is cancelled or fails after requests were made; so is an
   imported audio file, on its new session (in the daily totals only, when the import is cancelled or fails). A session without a usage record shows "Not recorded".
 - The totals are kept in the app per day (the last 400 days) and stay when a session is deleted. The demo (`?mock=1`)
   shows made-up usage for its sessions and never adds it to the totals.
@@ -353,7 +360,7 @@ this month, last month and everything recorded, and each saved session.
 | --- | --- |
 | Transcription (streaming, with interim results) | Gemini Live API `gemini-3.5-transcribe-live` |
 | Translation (streaming) | `gemini-3.5-flash-lite` (can be changed in settings) |
-| Summaries and questions about a meeting | the translation model |
+| Summaries and questions about a meeting, and punctuation missing from a rebuilt or imported transcript | the translation model |
 | Speaker labels and rebuilt transcripts (after a session, from its recording) | `gemini-3.5-transcribe` |
 
 The app is built with web technology and packaged with Electron. It has one runtime library,

@@ -185,6 +185,7 @@ export default {
   'rebuild.cancelDialog': 'キャンセル',
   'rebuild.confirm': '作り直す',
   'rebuild.transcribing': 'パート {part}/{parts} を文字起こししています…',
+  'rebuild.punctuating': '句読点を補っています（{done}/{total} 箇所）…',
   'rebuild.translating': '翻訳しています（{done}/{total} 行）…',
   'rebuild.done': '録音から文字起こしを作り直しました（{count} 行）。',
   'rebuild.doneFailed':

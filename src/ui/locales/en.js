@@ -197,6 +197,7 @@ export default {
   'rebuild.cancelDialog': 'Cancel',
   'rebuild.confirm': 'Rebuild',
   'rebuild.transcribing': 'Transcribing part {part} of {parts}…',
+  'rebuild.punctuating': 'Adding punctuation: {done} of {total} passages done…',
   'rebuild.translating': 'Translating: {done} of {total} lines done…',
   'rebuild.done': 'The transcript was rebuilt from the recording: {count} lines.',
   'rebuild.doneFailed':

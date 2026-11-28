@@ -5,11 +5,11 @@
 // so finished sentences are split off the interim text here. Final results may also be
 // missing or arrive after the next utterance has started; neither may lose text. Nor may a revision
 // of words that were already split off: the next cut is found in the revised text (committedEnd).
-// The rules for where a sentence ends (findSplit) and which characters are written without spaces
-// (CJK) are also used to make lines of a recording's words (src/session/recording-transcript.js).
+// The rules for where a sentence ends (findSplit), where a line too long is cut (forcedSplit,
+// MAX_LIVE_CHARS) and which characters are written without spaces (CJK) are also used to make lines of a recording's words (src/session/recording-transcript.js).
 
 const MIN_SPLIT_CHARS = 10; // shorter sentences are merged with the next one
-const MAX_LIVE_CHARS = 180; // force a split at a clause boundary beyond this
+export const MAX_LIVE_CHARS = 180; // force a split at a clause boundary beyond this
 const SENTENCE_END = /(?:[。！？]+[」』）]*|[.!?]+["')\]]*(?=\s))\s*/g;
 
 const newUtterance = () => ({ committed: '', prevRest: '', full: '' });
@@ -109,19 +109,23 @@ export function findSplit(rest) {
     const end = m.index + m[0].length;
     if (end >= MIN_SPLIT_CHARS && rest.slice(end).trim()) return end;
   }
-  if (rest.length > MAX_LIVE_CHARS) {
-    const head = rest.slice(0, MAX_LIVE_CHARS);
-    const clause = Math.max(
-      head.lastIndexOf('、'),
-      head.lastIndexOf('，'),
-      head.lastIndexOf(', ') + 1,
-      head.lastIndexOf('; ') + 1,
-    );
-    if (clause > MAX_LIVE_CHARS / 2) return clause + 1;
-    const space = head.lastIndexOf(' ');
-    return space > MAX_LIVE_CHARS / 2 ? space + 1 : MAX_LIVE_CHARS;
-  }
-  return 0;
+  return rest.length > MAX_LIVE_CHARS ? forcedSplit(rest) : 0;
+}
+
+// Index at which `rest`, longer than MAX_LIVE_CHARS, is split when no sentence end comes in time:
+// after the last clause boundary in its first MAX_LIVE_CHARS characters when that is past half of
+// them, else after the last space past half, else at MAX_LIVE_CHARS.
+export function forcedSplit(rest) {
+  const head = rest.slice(0, MAX_LIVE_CHARS);
+  const clause = Math.max(
+    head.lastIndexOf('、'),
+    head.lastIndexOf('，'),
+    head.lastIndexOf(', ') + 1,
+    head.lastIndexOf('; ') + 1,
+  );
+  if (clause > MAX_LIVE_CHARS / 2) return clause + 1;
+  const space = head.lastIndexOf(' ');
+  return space > MAX_LIVE_CHARS / 2 ? space + 1 : MAX_LIVE_CHARS;
 }
 
 export class UtteranceTracker {
