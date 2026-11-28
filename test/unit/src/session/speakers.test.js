@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { labelSpeakers } from '../../../../src/session/diarizer.js';
+import { linesFromWords } from '../../../../src/session/recording-transcript.js';
 import {
   assignSpeakers,
   CLIP_GAP_MS,
   CLIP_MS,
   chooseClips,
   LEAD_GAP_MS,
+  MAX_STRAY_RUN_MS,
+  MIN_OVERLAP_DECIDE_SHARE,
+  MIN_OVERLAP_DECIDE_WORDS,
+  MIN_OVERLAP_WORDS,
   mergeWords,
   numberSpeakers,
   OVERLAP_MS,
@@ -14,11 +19,13 @@ import {
   PIECE_GAP_MS,
   parseSeconds,
   partAudio,
+  placeStrayWords,
   planParts,
   recordingTimeline,
   referenceLayout,
   resolvePart,
   SEGMENT_LEAD_MS,
+  STRAY_MS,
   segmentSpans,
   toInt16,
   wavBytes,
@@ -159,6 +166,130 @@ test('words given no speaker take part in no match, keep their text and stay unk
       ['one', 'p1'],
       ['two', null],
       ['three', 'p1'],
+    ],
+  );
+});
+
+// ---------- words out of place ----------
+
+// An answer listing `words` ([text, startSeconds, endSeconds, label]) in that order, as the service does.
+const answerOf = (words) => ({
+  content: [
+    {
+      type: 'text',
+      annotations: words.map(([text, start, end, speaker]) => ({
+        type: 'word_info',
+        text,
+        speaker,
+        start_offset: `${start}s`,
+        end_offset: `${end}s`,
+      })),
+    },
+  ],
+});
+// The same words as placeStrayWords takes them: in the order given.
+const listedWords = (words) =>
+  words.map(([text, start, end, label]) => ({
+    startMs: Math.round(start * 1000),
+    endMs: Math.round(end * 1000),
+    label,
+    text,
+  }));
+// `count` words of `ms` each from `fromS` seconds, named `${name}1`, `${name}2`, …
+const spoken = (name, fromS, count, { ms = 300, label = 'spk:0' } = {}) =>
+  Array.from({ length: count }, (_, i) => [
+    `${name}${i + 1}`,
+    (fromS * 1000 + i * ms) / 1000,
+    (fromS * 1000 + (i + 1) * ms) / 1000,
+    label,
+  ]);
+const textsOf = (words) => words.map((w) => (Array.isArray(w) ? w[0] : w.text));
+const movedOf = (words) => words.filter((w) => w.moved).map((w) => w.text);
+
+test('a word whose time is 1,455 seconds too early is placed between its neighbours in the answer', () => {
+  // As measured: 1470.0 s, then 14.7 s, then 1470.6 s, in the order the answer lists them.
+  const listed = [...spoken('a', 1469.1, 3), ['stray', 14.7, 15, 'spk:0'], ...spoken('b', 1470.6, 2)];
+  const words = wordsFromAnswer(answerOf(listed));
+  assert.deepEqual(textsOf(words), textsOf(listed), 'in the order of the answer');
+  assert.deepEqual(
+    words.find((w) => w.text === 'stray'),
+    { startMs: 1_470_000, endMs: 1_470_600, label: 'spk:0', text: 'stray', moved: true },
+  );
+  assert.deepEqual(movedOf(words), ['stray']);
+});
+
+test('a ten-second run 1,000 seconds early is spread evenly between its neighbours, keeping text and speakers', () => {
+  const early = spoken('r', 200, 25, { ms: 400, label: 'spk:1' }); // really from 1200 s
+  const listed = [...spoken('a', 1190, 32), ...early, ...spoken('b', 1210, 10)];
+  const words = wordsFromAnswer(answerOf(listed));
+  assert.deepEqual(textsOf(words), textsOf(listed), 'the order of the answer is kept');
+  const run = words.filter((w) => w.moved);
+  assert.deepEqual(textsOf(run), textsOf(early));
+  assert.ok(
+    run.every((w) => w.label === 'spk:1'),
+    'the speaker is kept',
+  );
+  // From the end of a32 (1199.6 s) to the start of b1 (1210 s), shared out evenly.
+  assert.equal(run[0].startMs, 1_199_600);
+  assert.equal(run.at(-1).endMs, 1_210_000);
+  const lengths = run.map((w) => w.endMs - w.startMs);
+  assert.ok(Math.max(...lengths) - Math.min(...lengths) <= 1, 'evenly');
+});
+
+test('a run whose times are far too late is placed between its neighbours too', () => {
+  const listed = [...spoken('a', 100, 5), ...spoken('late', 1100, 4), ...spoken('b', 101.5, 5)];
+  const words = wordsFromAnswer(answerOf(listed));
+  assert.deepEqual(movedOf(words), ['late1', 'late2', 'late3', 'late4']);
+  assert.deepEqual(textsOf(words), textsOf(listed));
+});
+
+test('a long pause and the step from the reference clips to the part are kept as they are', () => {
+  // Ten minutes of silence between two passages.
+  const pause = [...spoken('a', 10, 5), ...spoken('b', 610, 5)];
+  assert.deepEqual(placeStrayWords(listedWords(pause)), listedWords(pause));
+  // Clips, then a part that starts with five minutes of silence: times step forward only.
+  const layout = referenceLayout([
+    { speaker: 'A', pieces: [{ startMs: 0, endMs: 20_000 }] },
+    { speaker: 'B', pieces: [{ startMs: 30_000, endMs: 50_000 }] },
+  ]);
+  const clipsThenPart = [
+    ...spoken('clipA', 0, 10, { ms: 2000 }),
+    ...spoken('clipB', 21, 10, { ms: 2000, label: 'spk:1' }),
+    ...spoken('part', layout.refMs / 1000 + 300, 10),
+  ];
+  assert.deepEqual(placeStrayWords(listedWords(clipsThenPart)), listedWords(clipsThenPart));
+});
+
+test('when it cannot be told which words are out of place, none is moved', () => {
+  const untouched = (listed) => assert.deepEqual(placeStrayWords(listedWords(listed)), listedWords(listed));
+  // B is far later than A and C, and C far earlier than B and D: either B or C is wrong.
+  untouched([...spoken('a', 0, 5), ...spoken('b', 1000, 5), ...spoken('c', 20, 5), ...spoken('d', 1020, 5)]);
+  // A run longer than the longest that is moved.
+  untouched([...spoken('a', 1000, 5), ...spoken('long', 10, (MAX_STRAY_RUN_MS + 3000) / 300), ...spoken('b', 1002, 5)]);
+  // A run with no word after it.
+  untouched([...spoken('a', 1000, 5), ...spoken('end', 10, 3)]);
+  // Neighbours further apart than the run is from them.
+  untouched([...spoken('a', 200, 5), ...spoken('x', 10, 2), ...spoken('b', 600, 5)]);
+  // A step back shorter than STRAY_MS (speech that overlaps) is not a word out of place.
+  untouched([...spoken('a', 100, 5), ...spoken('n', 100 - STRAY_MS / 1000 + 5, 1), ...spoken('b', 101.5, 5)]);
+});
+
+test('a transcript made from words placed again reads in whole sentences, not one word per line', () => {
+  const sentence = (fromS, list) => list.map((text, i) => [text, fromS + i * 0.25, fromS + (i + 1) * 0.25, 'spk:0']);
+  const earlier = sentence(10, ['Earlier', 'we', 'talked', 'about', 'something', 'else.']);
+  const first = sentence(1468, ['We', 'start', 'with', 'the', 'budget', 'for', 'next', 'year.']);
+  const second = sentence(1470.5, ['Then', 'we', 'look', 'at', 'the', 'dates.']);
+  first[4] = ['budget', 14.7, 15, 'spk:0']; // 1,455 s too early, inside the earlier sentence
+  const words = wordsFromAnswer(answerOf([...earlier, ...first, ...second])).map(({ label, ...w }) => ({
+    ...w,
+    speaker: label,
+  }));
+  assert.deepEqual(
+    linesFromWords(words).map((l) => l.text),
+    [
+      'Earlier we talked about something else.',
+      'We start with the budget for next year.',
+      'Then we look at the dates.',
     ],
   );
 });
@@ -347,15 +478,17 @@ test('two clips given the same label are both left unknown', () => {
   assert.equal(result.uncertain, true);
 });
 
-test('when the overlap with the previous part contradicts the clips, the part is uncertain', () => {
+test('when the overlap with the previous part clearly contradicts the clips, the overlap decides', () => {
   const layout = twoClips();
   const part = { startMs: 10 * MIN, endMs: 20 * MIN };
-  // Earlier, A was speaking in the first ten seconds of this part; here that speech is labelled B.
+  // Earlier, A was speaking in the first ten seconds of this part; here that speech has B's clip label.
   const previous = [said('A', part.startMs, part.startMs + 10_000)];
   const words = [...run('spk:0', 0, 10_000), ...run('spk:1', 11_000, 10_000), ...run('spk:1', layout.refMs, 10_000)];
   const result = resolvePart(words, layout, part, { previous, newSpeaker: () => 'p9' });
-  assert.deepEqual(result.overlap, { compared: 1, agreed: false });
-  assert.equal(result.uncertain, true);
+  assert.deepEqual(result.mapping, { 'spk:1': 'A' }, "A's clip label is not heard in the part, so it maps nothing");
+  assert.ok(result.words.every((w) => w.speaker === 'A'));
+  assert.deepEqual(result.overlap, { compared: 1, agreed: true });
+  assert.equal(result.uncertain, false);
 
   const agreeing = resolvePart(
     [...run('spk:0', 0, 10_000), ...run('spk:1', 11_000, 10_000), ...run('spk:0', layout.refMs, 10_000)],
@@ -368,6 +501,101 @@ test('when the overlap with the previous part contradicts the clips, the part is
   );
   assert.deepEqual(agreeing.overlap, { compared: 1, agreed: true });
   assert.equal(agreeing.uncertain, false);
+});
+
+test('without earlier words, a part is decided by its clips alone, as before', () => {
+  const layout = twoClips();
+  const words = [...run('spk:1', 0, 10_000), ...run('spk:0', 11_000, 10_000), ...run('spk:0', layout.refMs, 10_000)];
+  const result = resolvePart(words, layout, { startMs: 0, endMs: MIN }, { newSpeaker: () => 'p9' });
+  assert.deepEqual(
+    result.labels.map((l) => [l.label, l.speaker, l.by]),
+    [
+      ['spk:1', 'A', 'clip'],
+      ['spk:0', 'B', 'clip'],
+    ],
+  );
+  assert.deepEqual(result.overlap, { compared: 0, agreed: null });
+  assert.equal(result.uncertain, false);
+});
+
+test('an overlap that agrees with the clips decides the label, and the part is certain', () => {
+  const layout = twoClips();
+  const part = { startMs: 10 * MIN, endMs: 20 * MIN };
+  const previous = [said('A', part.startMs, part.startMs + 10_000)];
+  const words = [...run('spk:0', 0, 10_000), ...run('spk:1', 11_000, 10_000), ...run('spk:0', layout.refMs, 10_000)];
+  const result = resolvePart(words, layout, part, { previous, newSpeaker: () => 'p9' });
+  const label = result.labels.find((l) => l.label === 'spk:0');
+  assert.deepEqual(label, { label: 'spk:0', speaker: 'A', by: 'overlap', overlapWords: 25, overlapShare: 1 });
+  assert.ok(label.overlapWords >= MIN_OVERLAP_DECIDE_WORDS && label.overlapShare >= MIN_OVERLAP_DECIDE_SHARE);
+  assert.equal(result.mapping['spk:1'], 'B', 'the other label by its clip');
+  assert.equal(result.uncertain, false);
+});
+
+test('an overlap that contradicts the clips without being clear leaves the label unknown and the part uncertain', () => {
+  const layout = twoClips();
+  const part = { startMs: 10 * MIN, endMs: 20 * MIN };
+  // A was heard for only two seconds of the overlap: a handful of words, below the bar.
+  const previous = [said('A', part.startMs, part.startMs + 2000)];
+  const words = [...run('spk:0', 0, 10_000), ...run('spk:1', 11_000, 10_000), ...run('spk:1', layout.refMs, 10_000)];
+  const result = resolvePart(words, layout, part, { previous, newSpeaker: () => assert.fail('no new speaker') });
+  const label = result.labels.find((l) => l.label === 'spk:1');
+  assert.equal(label.by, 'unknown');
+  assert.equal(label.speaker, null);
+  assert.ok(label.overlapWords >= MIN_OVERLAP_WORDS && label.overlapWords < MIN_OVERLAP_DECIDE_WORDS);
+  assert.ok(
+    result.words.every((w) => w.speaker === null),
+    'neither the clip nor a guess',
+  );
+  assert.equal(result.uncertain, true);
+});
+
+test('when the earlier words of the overlap have no speaker, the clips decide as before', () => {
+  const layout = twoClips();
+  const part = { startMs: 10 * MIN, endMs: 20 * MIN };
+  const previous = [said(null, part.startMs, part.startMs + 30_000)];
+  const words = [...run('spk:0', 0, 10_000), ...run('spk:1', 11_000, 10_000), ...run('spk:1', layout.refMs, 10_000)];
+  const result = resolvePart(words, layout, part, { previous, newSpeaker: () => 'p9' });
+  assert.deepEqual(result.mapping, { 'spk:0': 'A', 'spk:1': 'B' });
+  assert.ok(result.words.every((w) => w.speaker === 'B'));
+  assert.deepEqual(result.overlap, { compared: 0, agreed: null });
+  assert.equal(result.uncertain, false);
+});
+
+test('a speaker silent in the overlap is still found by the clip, beside a label the overlap decides', () => {
+  const layout = twoClips();
+  const part = { startMs: 10 * MIN, endMs: 20 * MIN };
+  const previous = [said('A', part.startMs, part.startMs + 10_000)];
+  const words = [
+    ...run('spk:0', 0, 10_000),
+    ...run('spk:1', 11_000, 10_000),
+    ...run('spk:0', layout.refMs, 10_000), // A, in the overlap
+    ...run('spk:1', layout.refMs + 2 * MIN, 10_000), // B, only after it
+  ];
+  const result = resolvePart(words, layout, part, { previous, newSpeaker: () => assert.fail('no new speaker') });
+  assert.deepEqual(
+    result.labels.map((l) => [l.label, l.speaker, l.by]),
+    [
+      ['spk:0', 'A', 'overlap'],
+      ['spk:1', 'B', 'clip'],
+    ],
+  );
+  assert.equal(result.uncertain, false);
+});
+
+test('two labels claiming one speaker through the overlap and a clip: the overlap wins, the other is unknown', () => {
+  const layout = twoClips();
+  const part = { startMs: 10 * MIN, endMs: 20 * MIN };
+  const previous = [said('A', part.startMs, part.startMs + 10_000)];
+  const words = [
+    ...run('spk:0', 0, 10_000), // A's clip
+    ...run('spk:1', 11_000, 10_000), // B's clip
+    ...run('spk:1', layout.refMs, 10_000), // the overlap says this is A
+    ...run('spk:0', layout.refMs + 2 * MIN, 10_000), // A's clip label, heard after the overlap
+  ];
+  const result = resolvePart(words, layout, part, { previous, newSpeaker: () => assert.fail('no new speaker') });
+  assert.deepEqual(result.mapping, { 'spk:1': 'A', 'spk:0': null });
+  assert.equal(result.labels.find((l) => l.label === 'spk:0').by, 'unknown');
+  assert.equal(result.uncertain, true);
 });
 
 test('parts are joined at the middle of their overlap', () => {

@@ -244,6 +244,71 @@ test('cancelling stops before the next request and deletes what was uploaded', a
   assert.deepEqual(service.removed, ['files/f1']);
 });
 
+test('when the reference clips come back swapped, the overlap keeps each speaker under one label', async () => {
+  const { pieces, truth } = synthAudio(conversation(60));
+  const service = fakeDiarizer();
+  const analyze = service.analyze;
+  // From the second request on, the words of the clips (before the 2 s of silence that precedes the
+  // part) get each other's label, as the service did in some runs.
+  service.analyze = async (file, options) => {
+    const answer = await analyze(file, options);
+    const words = answer.steps[0].content[0].annotations;
+    const part = words.findIndex(
+      (w, i) => i && parseFloat(w.start_offset) - parseFloat(words[i - 1].end_offset) >= 1.9,
+    );
+    if (service.requests > 1 && part > 0) {
+      const [a, b] = [...new Set(words.slice(0, part).map((w) => w.speaker))];
+      for (const w of words.slice(0, part)) w.speaker = w.speaker === a ? b : a;
+    }
+    return answer;
+  };
+  const reports = [];
+  const result = await labelSpeakers({
+    pieces,
+    rate: RATE,
+    diarizer: service,
+    maxMs: 10 * MIN,
+    onPart: (r) => reports.push(r),
+  });
+  assert.equal(reports.length, 2);
+  assert.deepEqual(
+    reports[1].labels.map((l) => l.by),
+    ['overlap', 'overlap'],
+  );
+  assert.equal(result.uncertain, false);
+  // Every word of one real speaker has one label, and no label is used for two.
+  const idOf = new Map();
+  for (const w of result.words) {
+    const real = truth.find((t) => t.startMs <= w.startMs && w.endMs <= t.endMs)?.speaker;
+    if (real === undefined) continue;
+    if (!idOf.has(real)) idOf.set(real, w.speaker);
+    assert.equal(w.speaker, idOf.get(real), `at ${w.startMs} ms`);
+  }
+  assert.equal(new Set(idOf.values()).size, 2);
+});
+
+test('what decided each label is reported per part, with counts and no speech text', async () => {
+  const { pieces } = synthAudio(conversation(60));
+  const reports = [];
+  await labelSpeakers({
+    pieces,
+    rate: RATE,
+    diarizer: fakeDiarizer(),
+    maxMs: 10 * MIN,
+    onPart: (r) => reports.push(r),
+  });
+  assert.deepEqual(
+    reports[0].labels.map((l) => l.by),
+    ['new', 'new'],
+  );
+  for (const label of reports[1].labels) {
+    assert.deepEqual(Object.keys(label), ['label', 'speaker', 'by', 'overlapWords', 'overlapShare']);
+    assert.equal(label.by, 'overlap');
+    assert.ok(label.overlapWords >= 20 && label.overlapShare === 1);
+  }
+  assert.ok(!JSON.stringify(reports).includes('"text"'), 'no text of the words');
+});
+
 test('a recording without speech or without audio is an error', async () => {
   const silent = synthAudio([{ speaker: null, ms: 5000 }]);
   await assert.rejects(labelSpeakers({ pieces: silent.pieces, rate: RATE, diarizer: fakeDiarizer() }), {
