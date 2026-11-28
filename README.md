@@ -114,9 +114,6 @@ group in settings changes it while you listen:
 - **Let clicks pass through the caption window**: clicks go to the app underneath. While it is on, the caption window
   cannot be moved or closed with the mouse; hide it with the caption window button or the shortcut below.
 
-In a browser the caption window is a picture-in-picture window (Chrome and Edge), which is always opaque, so only the
-first two apply.
-
 ### Reading translations aloud
 
 "Read translations aloud" in settings speaks each finished translation into the language you choose (or, with two
@@ -380,12 +377,14 @@ npm run dist:win   # Windows zips in dist/ (x64 and arm64)
 npm start          # the interface in a browser, at http://localhost:5173
 npm test           # unit tests, no dependencies
 npm run test:e2e   # browser tests with the installed Chrome and a fake microphone
+npm run test:e2e:desktop   # the same tests against the desktop app; they open real windows
 npm run test:app   # desktop app smoke tests; they open real windows
 ```
 
 The Gemini API is mocked in all the tests, so no API key is needed. `http://localhost:5173/?mock=1` is a demo mode
-that needs no API key either; it has no speaker labels, no rebuilding of transcripts and no importing of audio files (they need the real service). In a browser, PC audio comes from
-sharing a tab or screen with its audio, and an API key entered there is kept in memory only, until the page is closed.
+that needs no API key either; it has no speaker labels, no rebuilding of transcripts and no importing of audio files (they need the real service). The browser is for development and testing:
+there, PC audio comes from sharing a tab or screen with its audio, an API key is kept in memory only, until the page is
+closed, and the caption window is a picture-in-picture window (Chrome and Edge), which is always opaque.
 
 ## Questions, ideas and plans
 

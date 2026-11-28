@@ -16,6 +16,7 @@ Sections 1 to 3 apply to everyone, in a clone of the repository or of a fork. Se
 - Tests come with the behavior change, in the same commit. Docs for a visible change come in the same pull request (README in both languages, `docs/`).
 - In a fresh checkout or worktree, run `npm ci` first and use the npm scripts (`npm run lint`, `npm run format`). Never `npx <tool>` without installed dependencies: npx then downloads and runs whatever package has that name (`npx biome` is not `@biomejs/biome`).
 - Before pushing: `npm run lint`, `npm test`, and `npm run test:e2e` when `src/app.js`, `src/speech/audio.js`, HTML or CSS changed.
+- `npm run test:e2e:desktop` runs the browser tests against the desktop app; CI runs it on macOS and Windows, so run it locally when a change is likely to behave differently there (`app/`, dialogs, downloads, windows, what the preload bridge gives the page).
 - Run one browser test suite at a time on a machine. Several at once (for example from parallel agents) make tests time out that are not broken.
 - Code that touches paths, line endings or the file system must work on Windows: `fileURLToPath` instead of `URL.pathname`, and no assumption that a checked-out file ends lines with LF only.
 - The API key never appears in a command, a file, a test or a log. A script reads it from the environment (`read -s GEMINI_API_KEY && export GEMINI_API_KEY`). Recognizer traces, recordings and anything else that holds speech stay on the machine: not in commits, issues or pull requests.
@@ -24,7 +25,7 @@ Sections 1 to 3 apply to everyone, in a clone of the repository or of a fork. Se
 
 - Open it against `main` of `pideoh/twinscript` (from a fork: from the fork's branch), as a draft, with the headings of `.github/PULL_REQUEST_TEMPLATE.md`. The title follows Conventional Commits and becomes the changelog line, so it says what users get. End the summary with `Closes #N` when there is an issue.
 - Describe only what the merged product will contain.
-- It is ready for review when three checks are green: `test`, and `unit-other-os` on macOS and on Windows. A change is verified when it has passed on every system it ships for, not on the one it was written on. On a first contribution from a fork the checks start only after the maintainer approves the run.
+- It is ready for review when five checks are green: `test`, `unit-other-os` on macOS and on Windows, and `e2e-desktop` (the browser tests against the desktop app) on macOS and on Windows. A change is verified when it has passed on every system it ships for, not on the one it was written on. On a first contribution from a fork the checks start only after the maintainer approves the run.
 - The maintainer merges. Do not push to a branch after its pull request is merged; a follow-up is a new branch from `main`.
 - Never edit `version` in `package.json` or `CHANGELOG.md`: releases are made from a release pull request (see `CLAUDE.md`).
 

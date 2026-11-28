@@ -36,6 +36,7 @@ comment rather than expecting a description here, and keep it true when the file
 - `npm run lint`: Biome checks formatting and lint rules; `npm run format` applies the fixes. Run before committing.
 - `npm test`: unit tests. Run after every logic change.
 - `npm run test:e2e`: only when `src/app.js`, `src/speech/audio.js`, HTML or CSS changed.
+- `npm run test:e2e:desktop`: the same browser tests against the desktop app (opens windows; CI runs it on macOS and Windows).
 - `npm run test:e2e:coverage`: the browser tests, then a table of what they cover in `src/` (line % per file, uncovered ranges).
 - `npm start`: http://localhost:5173 (`?mock=1` for a demo without a key, `?debug=1` to log raw recognizer output, download a recognizer trace and use an audio file as input; see `docs/tuning.md`).
 - `npm run app`: start the desktop app. `npm run test:app` only when `app/` or the caption window changed.
@@ -60,7 +61,7 @@ Each rule is written once. Open the file for what you are about to touch.
 
 - Tests come in the same commit as a behavior change; docs for a change users can see come in the same pull request (README in both languages, `docs/`). Regenerate the README pictures only when what they show looks different: the animation (`node scripts/demo.mjs`, several megabytes per version) for the two-language listening screen, the stills (`node scripts/demo.mjs --stills`) for the three-language transcript and the Summary and Questions tabs.
 - No new dependencies. At runtime there is one, `mediabunny` (reads audio files in pieces): pinned to an exact version, imported only by `src/session/audio-reader.js`, served and packaged as its one bundle file; a second one would be a decision of its own (`test/unit/rules/structure.test.js` checks all of this). Dev dependencies are `playwright-core`, `electron`, `electron-builder`, `@biomejs/biome` and `axe-core` only.
-- The interface keeps running in a plain browser. Desktop-only code lives in `app/`; `src/` only detects Electron.
+- The desktop app is what is verified: what a user does on the screen is tested against it in CI (`e2e-desktop`). The interface keeps running in a plain browser, which is the tool for developing, testing and making the README pictures, not something offered to users. Desktop-only code lives in `app/`; `src/` only detects Electron.
 - User-visible text goes through i18n; code, comments and commit messages are in English.
 - When a change depends on how the Gemini API behaves, read the official documentation; do not rely on memory. Two assumptions about the Live API are unverified against the service: interim text is the whole utterance so far, and there is one final result per utterance.
 - Commit subjects and pull request titles follow Conventional Commits (`scripts/check-commits.js` checks them). Releases are made by merging the release pull request; never edit `version` or `CHANGELOG.md`.
