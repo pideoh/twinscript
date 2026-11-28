@@ -151,6 +151,11 @@ a separate setting, are used [for translation](#how-it-translates-modeled-on-sim
 - The download button exports the transcript with a timeline (text / Markdown table / CSV / SRT subtitles; source and
   translation, source only, or translation only) and the recordings.
 
+Here a recorded session is open, with the speakers' names on its lines and its actions in the header (Speakers, Label
+speakers, Rebuild transcript, Download):
+
+![A recorded session between two people: earlier sessions in the list on the left, each line with its time, its speaker's name, the text and its translation, and in the header Speakers, Label speakers, Rebuild transcript and Download](docs/recorded-session.png)
+
 ### Summaries
 
 The Summary tab, next to the Transcript tab, summarizes a finished session with a template: quick summary, executive
@@ -258,7 +263,7 @@ rebuilt (`gemini-3.5-transcribe`, with speakers), and every line is translated.
   converted to a 16 kHz mono WAV (about 115 MB an hour): it can be downloaded, its speakers labeled again and its
   transcript rebuilt like any other session's.
 - Lines whose translation failed show their error, as while listening.
-- Not offered while listening, or in the demo.
+- Not offered while listening.
 
 ## How it translates (modeled on simultaneous interpreting)
 
@@ -382,7 +387,9 @@ npm run test:app   # desktop app smoke tests; they open real windows
 ```
 
 The Gemini API is mocked in all the tests, so no API key is needed. `http://localhost:5173/?mock=1` is a demo mode
-that needs no API key either; it has no speaker labels, no rebuilding of transcripts and no importing of audio files (they need the real service). The browser is for development and testing:
+that needs no API key either. It shows the same screen as the app, including the controls for speaker labels, rebuilding
+a transcript and importing an audio file; pressing one of them says that it needs the real service and is not part of
+the demo. The browser is for development and testing:
 there, PC audio comes from sharing a tab or screen with its audio, an API key is kept in memory only, until the page is
 closed, and the caption window is a picture-in-picture window (Chrome and Edge), which is always opaque.
 
