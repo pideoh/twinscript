@@ -319,7 +319,7 @@ test('speech that came back without punctuation gets it; a word the model change
   }
 });
 
-test('rebuilding is not offered without a recording, while listening, or in the demo', async () => {
+test('rebuilding is not offered without a recording or while listening', async () => {
   const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
   await seedRecordedSession(page);
   assert.ok(await page.isVisible('#rebuild'));
@@ -356,13 +356,4 @@ test('rebuilding is not offered without a recording, while listening, or in the 
   assert.ok(await page.isHidden('#rebuildTools'));
   assert.deepEqual(errors, []);
   await close();
-
-  const demo = await openApp('?mock=1', { apiKey: 'test-key' });
-  const service = await mockSpeakers(demo.page);
-  await seedRecordedSession(demo.page);
-  assert.ok(await demo.page.isHidden('#rebuild'));
-  assert.ok(await demo.page.isHidden('#rebuildTools'));
-  assert.deepEqual([service.uploads, service.analyses], [[], []]);
-  assert.deepEqual(demo.errors, []);
-  await demo.close();
 });

@@ -284,6 +284,20 @@ for (const colorScheme of ['light', 'dark']) {
     await close();
   });
 
+  test(`the demo with a recorded session, its importing, labelling and rebuilding controls and their notice pass the accessibility checks in the ${colorScheme} theme`, async () => {
+    const { page, errors, close } = await openApp('?mock=1', undefined, undefined, { colorScheme });
+    await seedRecordedSession(page);
+    await page.waitForSelector('#labelSpeakers:not([hidden])');
+    assert.ok(await page.isVisible('#importAudio'));
+    assert.ok(await page.isVisible('#rebuild'));
+    await assertAccessible(page, 'the demo with a recorded session');
+    await page.click('#rebuild');
+    await page.waitForFunction(() => !document.getElementById('toast').hidden);
+    await assertAccessible(page, 'the demo saying rebuilding needs the real service');
+    assert.deepEqual(errors, []);
+    await close();
+  });
+
   test(`the desktop app's notice of a newer version and its setting pass the accessibility checks in the ${colorScheme} theme`, async () => {
     const { page, errors, close } = await openApp('', {}, updatesBridge(), { colorScheme });
     await page.waitForSelector('#updateNotice:not([hidden])');

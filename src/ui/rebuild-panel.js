@@ -49,7 +49,8 @@ export function progressKey({ step }) {
 // being labelled; showTranscript(sess): puts the session's lines on the page again;
 // showLineError(seg, code, text): shows a line's translation error (code: its target, or null for its
 // single translation); renderSummary(): redraws the summary panel and the header's actions (renderTools);
-// demo: the demo (?mock=1), which has no engine for it.
+// demo: the demo (?mock=1), which offers rebuilding under the same rule but has no engine for it:
+// pressing it says so (toast.notInDemo) and opens no confirmation.
 export function createRebuildPanel({
   els,
   t,
@@ -83,7 +84,7 @@ export function createRebuildPanel({
     if (!sess) return;
     const running = !!getRun();
     const busy = rebuilding?.session === sess;
-    const offer = canRebuild(sess, running, demo);
+    const offer = canRebuild(sess, running);
     const restore = !busy && canRestore(sess, running);
     els.rebuildTools.hidden = running || (!busy && !offer && !restore);
     els.rebuild.hidden = !busy && !offer;
@@ -109,7 +110,8 @@ export function createRebuildPanel({
 
   els.rebuild.onclick = () => {
     const sess = getCurrent();
-    if (rebuilding || isLabeling() || !canRebuild(sess, !!getRun(), demo)) return;
+    if (rebuilding || isLabeling() || !canRebuild(sess, !!getRun())) return;
+    if (demo) return toast(t('toast.notInDemo'), 6000, 'warning');
     if (!getApiKey()) {
       toast(t('toast.apiKeyFirst'), 6000, 'warning');
       return openSettings();
@@ -132,7 +134,7 @@ export function createRebuildPanel({
     const sess = asked;
     asked = null;
     els.rebuildDialog.close();
-    if (!sess || sess !== getCurrent() || rebuilding || isLabeling() || !canRebuild(sess, !!getRun(), demo)) return;
+    if (!sess || sess !== getCurrent() || rebuilding || isLabeling() || !canRebuild(sess, !!getRun())) return;
     giveRecordingConsent(storage);
     rebuild(sess);
   };

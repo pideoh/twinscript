@@ -21,11 +21,11 @@ const recorded = (extra = {}) => ({
   ...extra,
 });
 
-test('rebuilding is offered for a stopped session with a recording, also one without lines, never in the demo', () => {
+test('rebuilding is offered for a stopped session with a recording, also one without lines, in the demo too', () => {
   assert.equal(canRebuild(recorded(), false), true);
   assert.equal(canRebuild(recorded({ segments: [] }), false), true, 'a recording whose live transcript is empty');
   assert.equal(canRebuild(recorded(), true), false, 'not while listening');
-  assert.equal(canRebuild(recorded(), false, true), false, 'not in the demo');
+  assert.equal(canRebuild(recorded(), false, true), true, 'the demo flag the rule once took changes nothing');
   assert.equal(canRebuild(recorded({ recordings: [] }), false), false, 'no recording');
   assert.equal(canRebuild(recorded({ recordings: [{ id: 'r', durationMs: 0 }] }), false), false, 'an empty one');
   assert.equal(canRebuild(null, false), false);

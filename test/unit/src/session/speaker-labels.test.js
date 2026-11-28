@@ -50,9 +50,10 @@ test('speakers cannot be labelled while listening, without speech or without a r
   assert.equal(canLabel({ ...finished, recordings: [{ durationMs: 0 }] }, false), false);
 });
 
-test('speakers are not labelled in the demo, which has no engine for it', () => {
-  assert.equal(canLabel(finished, false, true), false);
-  assert.equal(canLabel(finished, false, false), true);
+test('labelling is offered by the same rule in the demo: what the screen offers does not depend on the mode', () => {
+  // A third argument (the demo flag the rule once took) changes nothing.
+  assert.equal(canLabel(finished, false, true), true);
+  assert.equal(canLabel(finished, true, true), false);
 });
 
 test('a speaker name is kept on one line,trimmed and cut to the longest name allowed', () => {

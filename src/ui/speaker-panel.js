@@ -33,7 +33,8 @@ import { addTokens, emptyUsage } from '../usage/usage.js';
 // markDirty(sess): saves it soon; isDeleted(sess): the user deleted it (labels that arrive after
 // that are dropped quietly); recordUsage(sess, usage): counts what a request used;
 // renderSummary(): redraws the summary panel, which redraws the speaker tools too (renderTools);
-// debug: logs how the parts were matched; demo: the demo (?mock=1), where speakers are not labelled;
+// debug: logs how the parts were matched; demo: the demo (?mock=1), which offers labelling under the
+// same rule but has no engine for it: pressing it says so (toast.notInDemo) and asks nothing;
 // isRebuilding(sess): the transcript of `sess` is being rebuilt (null: any session's), while which
 // nothing here changes it.
 export function createSpeakerPanel({
@@ -91,7 +92,7 @@ export function createSpeakerPanel({
   function renderSpeakerTools() {
     const sess = getCurrent();
     const busy = labeling?.session === sess;
-    const ready = canLabel(sess, !!getRun(), demo);
+    const ready = canLabel(sess, !!getRun());
     const rebuilding = isRebuilding(null);
     // In the header; it steps aside while listening.
     els.speakerTools.hidden = !!getRun() || (!busy && !ready && !hasLabels(sess));
@@ -117,7 +118,8 @@ export function createSpeakerPanel({
 
   els.labelSpeakers.onclick = async () => {
     const sess = getCurrent();
-    if (labeling || isRebuilding(null) || !canLabel(sess, !!getRun(), demo)) return;
+    if (labeling || isRebuilding(null) || !canLabel(sess, !!getRun())) return;
+    if (demo) return toast(t('toast.notInDemo'), 6000, 'warning');
     if (!getApiKey()) {
       toast(t('toast.apiKeyFirst'), 6000, 'warning');
       return openSettings();

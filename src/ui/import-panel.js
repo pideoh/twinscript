@@ -68,7 +68,8 @@ function metadataLength(file) {
 // progress (or null) and the session on screen; getApiKey(): the API key now; openSettings(): opens
 // the settings dialog; recordUsage(sess, usage): counts what a request used; onImported(sess): lists
 // the new session and shows it (resolves once it is on screen); showLineError(seg, code, text): shows
-// a line's translation error; demo: the demo (?mock=1), which has no engine for it.
+// a line's translation error; demo: the demo (?mock=1), which shows the control but has no engine for
+// it: pressing it says so (toast.notInDemo) and opens no file picker.
 export function createImportPanel({
   els,
   t,
@@ -91,7 +92,6 @@ export function createImportPanel({
   // While the dialog is open: { file, audio, controller, importing, heldToggle }.
   let job = null;
 
-  els.importAudio.hidden = demo;
   els.importFile.accept = ACCEPT;
 
   // Disabled while listening, with the reason as its title (data-i18n-title keeps it in step with the display language).
@@ -144,7 +144,8 @@ export function createImportPanel({
   }
 
   els.importAudio.onclick = () => {
-    if (getRun() || job || demo) return;
+    if (getRun() || job) return;
+    if (demo) return toast(t('toast.notInDemo'), 6000, 'warning');
     if (!getApiKey()) {
       toast(t('toast.apiKeyFirst'), 6000, 'warning');
       return openSettings();
