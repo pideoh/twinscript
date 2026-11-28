@@ -406,6 +406,7 @@ export default {
   'toast.upgradeBlocked':
     'Close the other Twinscript windows: an older version is open, and saved sessions appear once it is closed',
   'toast.demo': 'Demo mode: no real speech recognition or translation',
+  'toast.notInDemo': 'This needs the Gemini API and is not part of the demo',
   'toast.summaryFailed': 'Could not summarize: {message}',
   'toast.speakersFailed': 'Could not label the speakers: {message}',
   'toast.rebuildFailed': 'Could not rebuild the transcript: {message} Nothing was changed.',

@@ -389,6 +389,7 @@ export default {
   'toast.upgradeBlocked':
     'ほかの Twinscript のウィンドウを閉じてください。古い版が開いていて、閉じると保存済みのセッションが表示されます',
   'toast.demo': 'デモモード: 実際の音声認識・翻訳は行いません',
+  'toast.notInDemo': 'この操作には Gemini API が必要なため、デモでは行いません',
   'toast.summaryFailed': '要約できませんでした: {message}',
   'toast.speakersFailed': '話者を識別できませんでした: {message}',
   'toast.rebuildFailed': '文字起こしを作り直せませんでした: {message} 何も変わっていません。',

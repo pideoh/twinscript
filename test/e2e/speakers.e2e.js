@@ -273,17 +273,3 @@ test('a session without a recording offers no speaker labels', async () => {
   assert.deepEqual(errors, []);
   await close();
 });
-
-test('the demo offers no speaker labels and sends nothing to the speaker endpoints', async () => {
-  // The demo has no engine for it. A recording made outside the demo is still in the same storage,
-  // so a finished, recorded session can be on screen in the demo.
-  const { page, errors, close } = await openApp('?mock=1', { apiKey: 'test-key' });
-  const service = await mockSpeakers(page);
-  await seedRecordedSession(page);
-  await page.waitForSelector('#summary:not([hidden])', { state: 'attached' });
-  assert.ok(await page.isHidden('#labelSpeakers'), 'no action to identify speakers');
-  assert.ok(await page.isHidden('#speakerTools'));
-  assert.deepEqual([service.uploads, service.analyses, service.deleted], [[], [], []]);
-  assert.deepEqual(errors, []);
-  await close();
-});

@@ -368,6 +368,7 @@ export default {
   'toast.storageUnavailable': '浏览器存储不可用，关闭此标签页后内容将丢失',
   'toast.upgradeBlocked': '请关闭其他 Twinscript 窗口：旧版本仍在运行，关闭后即可显示已保存的会话',
   'toast.demo': '演示模式：不进行实际的语音识别和翻译',
+  'toast.notInDemo': '此操作需要 Gemini API，演示中不执行',
   'toast.summaryFailed': '无法生成摘要：{message}',
   'toast.speakersFailed': '无法识别说话人：{message}',
   'toast.rebuildFailed': '无法重新生成转写：{message} 没有任何更改。',

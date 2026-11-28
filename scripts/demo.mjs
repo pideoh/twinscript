@@ -1,13 +1,17 @@
 // Pictures of the demo mode (?mock=1) for the README: the animation of two-language listening at the
-// top, and stills of what it does not show (three languages, a summary, questions).
+// top, and stills of what it does not show (three languages, a summary, questions, a recorded session
+// with speaker names).
 //
 //   node scripts/demo.mjs [out.png]          the animation; default docs/demo.png
-//   node scripts/demo.mjs --stills [dir]     three-languages.png, summary.png, questions.png; default docs/
+//   node scripts/demo.mjs --stills [dir]     three-languages.png, summary.png, questions.png,
+//                                            recorded-session.png; default docs/
 //
 // No API key or microphone is needed. Needs Chrome (set PW_CHANNEL to use another installed
 // browser). Animation frames are plain screenshots joined into an APNG here, so no encoder is
-// required. The stills run on a fixed clock that only moves when the script moves it, so the dates
-// and times they show are the same on every run.
+// required. Every picture starts from the same fixed time, so the name of the new session is the
+// same on every run; the stills' clock only moves when the script moves it, so every date and time
+// they show is the same too. The demo cannot record, so the recorded session is written into the
+// page's storage the way the app stores one: an invented meeting and a silent recording.
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -58,8 +62,11 @@ async function openDemo({ scale = 1, clock } = {}) {
   return page;
 }
 
+// The time every picture starts from.
+const START = Date.UTC(2026, 0, 15, 9, 0, 0);
+
 async function record() {
-  const page = await openDemo();
+  const page = await openDemo({ clock: START });
   const frames = [];
   const snap = async () => frames.push(await page.screenshot({ type: 'png' }));
   await snap();
@@ -77,8 +84,7 @@ async function record() {
 // --- Stills: one demo session with three languages, then its summary and two questions about it.
 // The page's clock is stopped once it has loaded and moved on by the script in small steps, so the
 // session starts at the same time on every run and every time it shows comes out the same.
-const START = Date.UTC(2026, 0, 15, 9, 0, 0);
-async function takeStills() {
+async function stillPage() {
   const page = await openDemo({ scale: 2, clock: START });
   await page.clock.pauseAt(START + 10_000);
   // Runs the page's clock until the condition holds in the page.
@@ -94,6 +100,11 @@ async function takeStills() {
     await page.screenshot({ path: join(out, name) });
     console.log(join(out, name));
   };
+  return { page, until, shoot };
+}
+
+async function takeStills() {
+  const { page, until, shoot } = await stillPage();
 
   // Three languages: each sentence of the demo meeting, translated into the other two.
   await page.click('#listenChoices'); // the languages are chosen in the bottom bar's popover
@@ -132,6 +143,168 @@ async function takeStills() {
   }
   await page.locator('#question').blur();
   await shoot('questions.png');
+}
+
+// --- A recorded session as users see it: earlier sessions in the sidebar, the speakers' names on the
+// lines, and the session's actions in the header. Invented content; the recording is silence.
+const HOUR = 3_600_000;
+const EARLIER = [
+  {
+    title: 'Design review',
+    at: START - 2 * 24 * HOUR + 5 * HOUR,
+    lines: [
+      ['en-US', 'The new settings page is ready for review.', '新しい設定画面のレビューの準備ができました。'],
+      ['ja-JP', '色のコントラストを確認しておきます。', 'I will check the color contrast.'],
+    ],
+  },
+  {
+    title: 'Vendor call',
+    at: START - 24 * HOUR + 1.5 * HOUR,
+    lines: [
+      ['en-US', 'Can you confirm the delivery date?', '納品日を確認していただけますか。'],
+      ['ja-JP', '来月の十日でお願いします。', 'The tenth of next month, please.'],
+    ],
+  },
+];
+const RECORDED = {
+  title: 'Release planning',
+  at: START - HOUR,
+  speakers: [
+    { id: 's1', name: 'Maya' },
+    { id: 's2', name: 'Kenji' },
+  ],
+  // [speaker, language, elapsed ms, what was said, its translation]
+  lines: [
+    ['s1', 'en-US', 2000, "Let's go over the release plan for next week.", '来週のリリース計画を確認しましょう。'],
+    [
+      's2',
+      'ja-JP',
+      8000,
+      'テストはほぼ終わっていて、残りは決済画面だけです。',
+      'Testing is almost done; only the payment screen is left.',
+    ],
+    ['s1', 'en-US', 15000, 'How long do you need for the payment screen?', '決済画面にはどれくらい必要ですか。'],
+    [
+      's2',
+      'ja-JP',
+      21000,
+      '二日あれば終わります。水曜日には共有できます。',
+      'Two days should do it. I can share it on Wednesday.',
+    ],
+    [
+      's1',
+      'en-US',
+      28000,
+      'Good. Then we freeze the build on Thursday.',
+      'いいですね。では木曜日にビルドを確定します。',
+    ],
+    ['s2', 'ja-JP', 34000, '了解です。リリースノートは私が書きます。', 'Understood. I will write the release notes.'],
+  ],
+  recordingMs: 40_000,
+};
+
+async function takeRecordedStill() {
+  const { page, until, shoot } = await stillPage();
+  await page.evaluate(
+    ({ earlier, recorded }) => {
+      // A silent WAV as long as the recording.
+      const rate = 8000;
+      const n = (rate * recorded.recordingMs) / 1000;
+      const bytes = new DataView(new ArrayBuffer(44 + n * 2));
+      const text = (at, s) => {
+        for (let i = 0; i < s.length; i++) bytes.setUint8(at + i, s.charCodeAt(i));
+      };
+      text(0, 'RIFF');
+      bytes.setUint32(4, 36 + n * 2, true);
+      text(8, 'WAVEfmt ');
+      bytes.setUint32(16, 16, true);
+      bytes.setUint16(20, 1, true);
+      bytes.setUint16(22, 1, true);
+      bytes.setUint32(24, rate, true);
+      bytes.setUint32(28, rate * 2, true);
+      bytes.setUint16(32, 2, true);
+      bytes.setUint16(34, 16, true);
+      text(36, 'data');
+      bytes.setUint32(40, n * 2, true);
+      const blob = new Blob([bytes.buffer], { type: 'audio/wav' });
+
+      const session = (id, title, at, lines, extra) => ({
+        session: {
+          id,
+          title,
+          customTitle: true,
+          createdAt: at,
+          updatedAt: at + lines.at(-1).elapsed,
+          langA: 'en-US',
+          langB: 'ja-JP',
+          activeMs: lines.at(-1).elapsed + 5000,
+          usage: { version: 1, transcription: {}, translation: {}, summary: {} },
+          segmentCount: lines.length,
+          ...extra,
+        },
+        segments: lines.map((line, pos) => ({
+          sessionId: id,
+          pos,
+          id: `${id}-${pos}`,
+          at: at + line.elapsed,
+          ...line,
+        })),
+      });
+      const all = [
+        ...earlier.map((s, i) =>
+          session(
+            `earlier-${i}`,
+            s.title,
+            s.at,
+            s.lines.map(([lang, src, tgt], j) => ({ elapsed: 2000 + j * 6000, lang, src, tgt })),
+          ),
+        ),
+        session(
+          'recorded',
+          recorded.title,
+          recorded.at,
+          recorded.lines.map(([speaker, lang, elapsed, src, tgt]) => ({ elapsed, lang, src, tgt, speaker })),
+          {
+            activeMs: recorded.recordingMs,
+            recordings: [
+              {
+                id: 'rec-1',
+                startedAt: recorded.at,
+                elapsedStart: 0,
+                durationMs: recorded.recordingMs,
+                mime: 'audio/wav',
+              },
+            ],
+            speakerLabels: { speakers: recorded.speakers, madeAt: recorded.at + 1_800_000, uncertain: false },
+          },
+        ),
+      ];
+      return new Promise((resolve, reject) => {
+        const open = indexedDB.open('twinscript');
+        open.onsuccess = () => {
+          const tx = open.result.transaction(['sessions', 'segments', 'audio'], 'readwrite');
+          for (const { session, segments } of all) {
+            tx.objectStore('sessions').put(session);
+            for (const seg of segments) tx.objectStore('segments').put(seg);
+          }
+          tx.objectStore('audio').add({ sessionId: 'recorded', recId: 'rec-1', blob });
+          tx.oncomplete = () => {
+            open.result.close();
+            localStorage.setItem('rt-current', 'recorded');
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      });
+    },
+    { earlier: EARLIER, recorded: RECORDED },
+  );
+  await page.reload();
+  await until(
+    (n) => document.querySelectorAll('#log .seg .speaker').length === n && !document.getElementById('rebuild').hidden,
+    RECORDED.lines.length,
+  );
+  await shoot('recorded-session.png');
 }
 
 // --- APNG: the first frame's header, then every frame's image data as an animation frame.
@@ -189,6 +362,7 @@ function toApng(frames) {
 if (stills) {
   await mkdir(out, { recursive: true });
   await takeStills();
+  await takeRecordedStill();
 } else await record();
 await browser.close();
 server.close();

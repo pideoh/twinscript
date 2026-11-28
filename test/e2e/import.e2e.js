@@ -306,7 +306,7 @@ test('a line whose translation fails shows its error in the imported session; th
   await close();
 });
 
-test('without an API key the settings open; the control is disabled while listening and hidden in the demo', async () => {
+test('without an API key the settings open; the control is disabled while listening', async () => {
   const noKey = await openApp('');
   await noKey.page.click('#importAudio');
   await noKey.page.waitForSelector('#settings[open]');
@@ -325,11 +325,6 @@ test('without an API key the settings open; the control is disabled while listen
   assert.equal(await page.getAttribute('#importAudio', 'title'), '音声ファイルを読み込む');
   assert.deepEqual(errors, []);
   await close();
-
-  const demo = await openApp('?mock=1', { apiKey: 'test-key' });
-  assert.ok(await demo.page.isHidden('#importAudio'));
-  assert.deepEqual(demo.errors, []);
-  await demo.close();
 });
 
 test('the dialog and the control are in English with the English display language', async () => {

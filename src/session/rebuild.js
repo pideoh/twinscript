@@ -13,11 +13,10 @@
 import { hasLabels } from './speaker-labels.js';
 import { MIN_CLIP_SHARE, MIN_OVERLAP_WORDS, recordingTimeline, segmentSpans } from './speakers.js';
 
-// A stopped session with a recording can be rebuilt, except in the demo, which has no engine for it.
-// Unlike speaker labels it needs no line: a recording whose live transcript is empty is the case it
-// helps most. running: whether a run is in progress.
-export const canRebuild = (sess, running, demo = false) =>
-  !demo && !running && !!sess && sess.recordings.some((rec) => rec.durationMs > 0);
+// A stopped session with a recording can be rebuilt (the demo offers it under the same rule). Unlike
+// speaker labels it needs no line: a recording whose live transcript is empty is the case it helps
+// most. running: whether a run is in progress.
+export const canRebuild = (sess, running) => !running && !!sess && sess.recordings.some((rec) => rec.durationMs > 0);
 
 // Whether the transcript made while listening is kept, and can be put back.
 export const canRestore = (sess, running) => !running && !!sess?.rebuilt;
