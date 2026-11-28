@@ -2,6 +2,7 @@
 // everything from here:
 //   audio-reader.js  audio files read in pieces against a whole-file decode: test files, the comparison
 //   app.js      the static server, setup / openApp, ready, reload, rows, saved, listening, ...
+//   desktop.js  E2E_TARGET=desktop: each page is a window of the desktop app instead of Chrome
 //   gemini.js   the Gemini mocks (WebSocket, token, translation), MOCK_USAGE, translated
 //   targets.js  the translation mock for a third language, tagged, linesDone
 //   summary.js  the summary mock
@@ -16,9 +17,14 @@
 //   rebuild.js  a transcript rebuilt from the recording: its answer, the named session, translation, the kept transcript
 //   translation-errors.js  the translation mock a test answers itself, speech said on demand, a movable clock
 //   updates.js  the desktop app's update bridge (window.appUpdates)
+//   bridge.js   stand-ins for the desktop app's preload bridge, the same in both targets
+//   download.js a file the page downloads, the same in both targets
 
 export * from './helpers/app.js';
 export * from './helpers/audio-reader.js';
+export * from './helpers/bridge.js';
+export { browserOnly, DESKTOP, desktopOnly } from './helpers/desktop.js';
+export * from './helpers/download.js';
 export * from './helpers/gemini.js';
 export * from './helpers/import.js';
 export * from './helpers/import-languages.js';

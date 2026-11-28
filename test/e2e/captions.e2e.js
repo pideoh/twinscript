@@ -2,7 +2,16 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chooseListening, listening, mockGemini, reload, setup, swapLanguages } from './helpers.js';
+import {
+  browserOnly,
+  chooseListening,
+  desktopOnly,
+  listening,
+  mockGemini,
+  reload,
+  setup,
+  swapLanguages,
+} from './helpers.js';
 
 const { openApp } = setup();
 
@@ -138,61 +147,65 @@ test('the number of sentences kept in the caption zone can be changed while list
   await close();
 });
 
-test('the caption zone can be moved into an always-on-top window and comes back when it closes', async () => {
-  const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
-  // Headless browsers cannot open a real picture-in-picture window; stand in with an iframe.
-  await page.evaluate(() => {
-    // The real property is read-only, so it has to be redefined rather than assigned.
-    Object.defineProperty(window, 'documentPictureInPicture', {
-      configurable: true,
-      value: {
-        requestWindow: async () => {
-          const frame = document.createElement('iframe');
-          frame.id = 'fakePip';
-          document.body.append(frame);
-          return frame.contentWindow;
+test(
+  'the caption zone can be moved into an always-on-top window and comes back when it closes',
+  browserOnly('it stands in for Document Picture-in-Picture; the desktop app opens its own window'),
+  async () => {
+    const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
+    // Headless browsers cannot open a real picture-in-picture window; stand in with an iframe.
+    await page.evaluate(() => {
+      // The real property is read-only, so it has to be redefined rather than assigned.
+      Object.defineProperty(window, 'documentPictureInPicture', {
+        configurable: true,
+        value: {
+          requestWindow: async () => {
+            const frame = document.createElement('iframe');
+            frame.id = 'fakePip';
+            document.body.append(frame);
+            return frame.contentWindow;
+          },
         },
-      },
+      });
+      document.getElementById('pip').hidden = false;
     });
-    document.getElementById('pip').hidden = false;
-  });
-  await mockGemini(page, [
-    [3, 'final', 'Shown in the window.'],
-    [6, 'interim', 'Still talking'],
-  ]);
-  await page.click('#pip');
-  const inWindow = page.frameLocator('#fakePip');
-  await inWindow.locator('#now').waitFor({ state: 'attached' });
-  assert.equal(await page.locator('#now').count(), 0, 'the zone left the main page');
-  const fill = await page.evaluate(() => {
-    const frame = document.getElementById('fakePip');
-    const box = frame.contentDocument.getElementById('now').getBoundingClientRect();
-    return [Math.round(box.width) === frame.clientWidth, Math.round(box.height) === frame.clientHeight];
-  });
-  assert.deepEqual(fill, [true, true], 'the zone fills the whole window');
-  assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'true');
+    await mockGemini(page, [
+      [3, 'final', 'Shown in the window.'],
+      [6, 'interim', 'Still talking'],
+    ]);
+    await page.click('#pip');
+    const inWindow = page.frameLocator('#fakePip');
+    await inWindow.locator('#now').waitFor({ state: 'attached' });
+    assert.equal(await page.locator('#now').count(), 0, 'the zone left the main page');
+    const fill = await page.evaluate(() => {
+      const frame = document.getElementById('fakePip');
+      const box = frame.contentDocument.getElementById('now').getBoundingClientRect();
+      return [Math.round(box.width) === frame.clientWidth, Math.round(box.height) === frame.clientHeight];
+    });
+    assert.deepEqual(fill, [true, true], 'the zone fills the whole window');
+    assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'true');
 
-  await page.click('#toggle');
-  await page.waitForFunction(
-    () =>
-      document.getElementById('fakePip').contentDocument.querySelector('.seg.live .src')?.textContent ===
-      'Still talking',
-  );
-  assert.deepEqual(await inWindow.locator('.seg .src').allTextContents(), ['Shown in the window.', 'Still talking']);
-  assert.equal(await inWindow.locator('.seg .tgt').first().textContent(), '訳:Shown in the window.');
+    await page.click('#toggle');
+    await page.waitForFunction(
+      () =>
+        document.getElementById('fakePip').contentDocument.querySelector('.seg.live .src')?.textContent ===
+        'Still talking',
+    );
+    assert.deepEqual(await inWindow.locator('.seg .src').allTextContents(), ['Shown in the window.', 'Still talking']);
+    assert.equal(await inWindow.locator('.seg .tgt').first().textContent(), '訳:Shown in the window.');
 
-  await page.evaluate(() => document.getElementById('fakePip').contentWindow.dispatchEvent(new Event('pagehide')));
-  assert.deepEqual(await page.locator('#now .seg .src').allTextContents(), ['Shown in the window.', 'Still talking']);
-  assert.ok(
-    await page.locator('#now').evaluate((n) => n.previousElementSibling.classList.contains('views')),
-    'back in its place under the tabs',
-  );
-  assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'false');
-  assert.equal(await page.getAttribute('#now', 'style'), '', 'window-only layout is removed');
-  await page.click('#toggle');
-  assert.deepEqual(errors, []);
-  await close();
-});
+    await page.evaluate(() => document.getElementById('fakePip').contentWindow.dispatchEvent(new Event('pagehide')));
+    assert.deepEqual(await page.locator('#now .seg .src').allTextContents(), ['Shown in the window.', 'Still talking']);
+    assert.ok(
+      await page.locator('#now').evaluate((n) => n.previousElementSibling.classList.contains('views')),
+      'back in its place under the tabs',
+    );
+    assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'false');
+    assert.equal(await page.getAttribute('#now', 'style'), '', 'window-only layout is removed');
+    await page.click('#toggle');
+    assert.deepEqual(errors, []);
+    await close();
+  },
+);
 
 // Which lines of the caption zone are on screen, sentence by sentence.
 const shownLines = (page) =>
@@ -252,51 +265,133 @@ test('translation only hides the source of translated sentences, but shows it un
   await close();
 });
 
-test('the caption window has its own text size, applied live and kept; desktop-only options are left out in a browser', async () => {
-  const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
-  await page.evaluate(() => {
-    Object.defineProperty(window, 'documentPictureInPicture', {
-      configurable: true,
-      value: {
-        requestWindow: async () => {
-          const frame = document.createElement('iframe');
-          frame.id = 'fakePip';
-          document.body.append(frame);
-          return frame.contentWindow;
+test(
+  'the caption window has its own text size, applied live and kept; desktop-only options are left out in a browser',
+  browserOnly('it stands in for Document Picture-in-Picture; the desktop app opens its own window'),
+  async () => {
+    const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
+    await page.evaluate(() => {
+      Object.defineProperty(window, 'documentPictureInPicture', {
+        configurable: true,
+        value: {
+          requestWindow: async () => {
+            const frame = document.createElement('iframe');
+            frame.id = 'fakePip';
+            document.body.append(frame);
+            return frame.contentWindow;
+          },
         },
-      },
+      });
+      document.getElementById('pip').hidden = false;
     });
-    document.getElementById('pip').hidden = false;
-  });
-  await page.click('#pip');
-  await page.frameLocator('#fakePip').locator('#now').waitFor({ state: 'attached' });
-  const sizes = () =>
-    page.evaluate(() => [
-      document.documentElement.style.getPropertyValue('--fs'),
-      document.getElementById('fakePip').contentDocument.documentElement.style.getPropertyValue('--fs'),
+    await page.click('#pip');
+    await page.frameLocator('#fakePip').locator('#now').waitFor({ state: 'attached' });
+    const sizes = () =>
+      page.evaluate(() => [
+        document.documentElement.style.getPropertyValue('--fs'),
+        document.getElementById('fakePip').contentDocument.documentElement.style.getPropertyValue('--fs'),
+      ]);
+    assert.deepEqual(await sizes(), ['18px', '20px'], 'the defaults: main window 18, caption window 20');
+
+    await page.click('#openSettings');
+    assert.ok(await page.locator('#captionFontSize').isVisible());
+    assert.ok(await page.locator('#captionOpacity').isHidden(), 'opacity needs the desktop overlay');
+    assert.ok(await page.locator('#clickThrough').isHidden(), 'click-through needs the desktop overlay');
+    assert.ok(await page.locator('#captionDesktopOnly').isVisible());
+    assert.ok(await page.locator('#shortcutsGroup').isHidden(), 'no global shortcuts in a browser');
+    await page.locator('#captionFontSize').fill('32');
+    assert.equal(await page.textContent('#captionFontSizeOut'), '32 px');
+    assert.deepEqual(await sizes(), ['18px', '32px'], 'only the caption window changes, at once');
+    await page.locator('#fontSize').fill('22');
+    assert.deepEqual(await sizes(), ['22px', '32px']);
+    await page.click('#settings button[value=ok]');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('rt-settings')).captionFontSize === 32);
+
+    await reload(page);
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('rt-settings')));
+    assert.equal(stored.captionFontSize, 32);
+    assert.equal(stored.fontSize, 22);
+    await page.click('#openSettings');
+    assert.equal(await page.inputValue('#captionFontSize'), '32');
+    assert.deepEqual(errors, []);
+    await close();
+  },
+);
+
+// The desktop app's own caption window: what the two tests above check with a stand-in in a browser.
+const CAPTION_WINDOW = "it opens the desktop app's own caption window";
+const openCaptionWindow = async (page) => {
+  const [overlay] = await Promise.all([page.context().waitForEvent('page'), page.click('#pip')]);
+  await overlay.locator('#now').waitFor({ state: 'attached' });
+  return overlay;
+};
+
+test(
+  'in the desktop app the caption zone moves into the always-on-top caption window and comes back when it closes',
+  desktopOnly(CAPTION_WINDOW),
+  async () => {
+    const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
+    await mockGemini(page, [
+      [3, 'final', 'Shown in the window.'],
+      [6, 'interim', 'Still talking'],
     ]);
-  assert.deepEqual(await sizes(), ['18px', '20px'], 'the defaults: main window 18, caption window 20');
+    const overlay = await openCaptionWindow(page);
+    assert.equal(await page.locator('#now').count(), 0, 'the zone left the main window');
+    assert.ok(await overlay.locator('body').evaluate((b) => b.classList.contains('overlay')));
+    assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'true');
 
-  await page.click('#openSettings');
-  assert.ok(await page.locator('#captionFontSize').isVisible());
-  assert.ok(await page.locator('#captionOpacity').isHidden(), 'opacity needs the desktop overlay');
-  assert.ok(await page.locator('#clickThrough').isHidden(), 'click-through needs the desktop overlay');
-  assert.ok(await page.locator('#captionDesktopOnly').isVisible());
-  assert.ok(await page.locator('#shortcutsGroup').isHidden(), 'no global shortcuts in a browser');
-  await page.locator('#captionFontSize').fill('32');
-  assert.equal(await page.textContent('#captionFontSizeOut'), '32 px');
-  assert.deepEqual(await sizes(), ['18px', '32px'], 'only the caption window changes, at once');
-  await page.locator('#fontSize').fill('22');
-  assert.deepEqual(await sizes(), ['22px', '32px']);
-  await page.click('#settings button[value=ok]');
-  await page.waitForFunction(() => JSON.parse(localStorage.getItem('rt-settings')).captionFontSize === 32);
+    await page.click('#toggle');
+    await overlay.waitForFunction(() => document.querySelector('.seg.live .src')?.textContent === 'Still talking');
+    await overlay.waitForFunction(() => document.querySelector('.seg .tgt')?.textContent === '訳:Shown in the window.');
+    assert.deepEqual(await overlay.locator('.seg .src').allTextContents(), ['Shown in the window.', 'Still talking']);
 
-  await reload(page);
-  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('rt-settings')));
-  assert.equal(stored.captionFontSize, 32);
-  assert.equal(stored.fontSize, 22);
-  await page.click('#openSettings');
-  assert.equal(await page.inputValue('#captionFontSize'), '32');
-  assert.deepEqual(errors, []);
-  await close();
-});
+    await Promise.all([overlay.waitForEvent('close'), overlay.click('.overlay-close')]);
+    await page.locator('#now').waitFor({ state: 'attached' });
+    assert.deepEqual(await page.locator('#now .seg .src').allTextContents(), ['Shown in the window.', 'Still talking']);
+    assert.ok(
+      await page.locator('#now').evaluate((n) => n.previousElementSibling.classList.contains('views')),
+      'back in its place under the tabs',
+    );
+    assert.equal(await page.getAttribute('#pip', 'aria-pressed'), 'false');
+    assert.equal(await page.getAttribute('#now', 'style'), '', 'window-only layout is removed');
+    await page.click('#toggle');
+    assert.deepEqual(errors, []);
+    await close();
+  },
+);
+
+test(
+  'in the desktop app the caption window has its own text size, applied live and kept, and the desktop options are offered',
+  desktopOnly(CAPTION_WINDOW),
+  async () => {
+    const { page, errors, close } = await openApp('', { apiKey: 'test-key', interimTranslate: false });
+    const overlay = await openCaptionWindow(page);
+    const fontSize = (p) => p.evaluate(() => document.documentElement.style.getPropertyValue('--fs'));
+    const sizes = async () => [await fontSize(page), await fontSize(overlay)];
+    assert.deepEqual(await sizes(), ['18px', '20px'], 'the defaults: main window 18, caption window 20');
+
+    await page.click('#openSettings');
+    assert.ok(await page.locator('#captionFontSize').isVisible());
+    assert.ok(await page.locator('#captionOpacity').isVisible(), 'opacity of the desktop overlay');
+    assert.ok(await page.locator('#clickThrough').isVisible(), 'click-through of the desktop overlay');
+    assert.ok(await page.locator('#captionDesktopOnly').isHidden());
+    assert.ok(await page.locator('#shortcutsGroup').isVisible(), 'global shortcuts in the desktop app');
+    await page.locator('#captionFontSize').fill('32');
+    assert.equal(await page.textContent('#captionFontSizeOut'), '32 px');
+    assert.deepEqual(await sizes(), ['18px', '32px'], 'only the caption window changes, at once');
+    await page.locator('#fontSize').fill('22');
+    assert.deepEqual(await sizes(), ['22px', '32px']);
+    await page.click('#settings button[value=ok]');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('rt-settings')).captionFontSize === 32);
+
+    await Promise.all([overlay.waitForEvent('close'), overlay.click('.overlay-close')]);
+    await reload(page);
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('rt-settings')));
+    assert.equal(stored.captionFontSize, 32);
+    assert.equal(stored.fontSize, 22);
+    await page.click('#openSettings');
+    assert.equal(await page.inputValue('#captionFontSize'), '32');
+    assert.deepEqual(errors, []);
+    await close();
+  },
+);

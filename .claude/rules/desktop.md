@@ -12,6 +12,6 @@ paths:
 - IPC handlers check the caller (`isAppCaller`): main window, top frame, `app://rt`.
 - PC audio uses Electron's loopback capture on both platforms. On macOS the video of the answer is the requesting frame, so only the System Audio Recording permission is needed (macOS 14.2 or later); do not use `useSystemPicker`.
 - The interface must keep working in a plain browser, which development and the browser tests rely on: code under `src/` may detect Electron but must not depend on it.
-- Run `npm run test:app` after changes here. It opens windows and is not part of CI.
+- Run `npm run test:app` after changes here. It opens windows and is not part of CI. The browser tests also run against the desktop app, locally with `npm run test:e2e:desktop` and in CI (`e2e-desktop`).
 - The update check is made by the main process (`app/updates.js`, exposed as `window.appUpdates`: `version()`, `check()`, `openReleasePage(version)`), never by the page: the page's content security policy stays limited to the Gemini API. Only `tag_name` (validated as `vX.Y.Z`) is used from GitHub's answer; the release page opened is built from that version, and `update:open-release` takes a version, never a URL. Tests never call GitHub: `test/desktop/desktop.app.js` launches with `RT_NO_UPDATE_CHECK=1`.
 - Of `node_modules`, only `node_modules/mediabunny/dist/bundles/mediabunny.mjs` is served (`app/policy.js`) and packaged (`build.files` in `package.json`). Anything else under `node_modules` stays refused.

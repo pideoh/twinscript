@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  download,
   mockGemini,
   mockSummary,
   reload,
@@ -40,7 +41,7 @@ async function finishedSession(page, text) {
   return gemini;
 }
 async function readDownload(page, click) {
-  const [file] = await Promise.all([page.waitForEvent('download'), click()]);
+  const file = await download(page, click);
   let text = '';
   for await (const chunk of await file.createReadStream()) text += chunk;
   return { name: file.suggestedFilename(), text };

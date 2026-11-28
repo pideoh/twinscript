@@ -1,5 +1,8 @@
 // A stand-in for the desktop app's window.appUpdates (app/preload.js), so the browser tests see
-// the page as the desktop app shows it. Nothing is asked of GitHub.
+// the page as the desktop app shows it; in the desktop app it answers through the real bridge
+// (bridge.js). Nothing is asked of GitHub.
+
+import { settleBridge } from './bridge.js';
 
 // The init script for openApp. The running version is `current`; check() answers `latest` (or
 // the version in sessionStorage 'e2e-latest', so a test can release a later one), or fails when
@@ -18,28 +21,31 @@ export function updatesBridge({ current = '0.13.0', latest = '0.14.0', fail = ''
         const i = x.findIndex((n, k) => n !== y[k]);
         return i >= 0 && x[i] > y[i];
       };
-      window.appUpdates = Object.freeze({
-        version: async () => {
-          calls.version++;
-          return current;
-        },
-        check: async () => {
-          calls.check++;
-          if (sessionStorage.getItem('e2e-hold')) {
-            await new Promise((resolve) => {
-              window.__releaseUpdateCheck = resolve;
-            });
-          }
-          const failing = sessionStorage.getItem('e2e-fail') ?? fail;
-          if (failing === 'throw') throw new Error('net::ERR_INTERNET_DISCONNECTED');
-          if (failing === 'null') return null;
-          const l = sessionStorage.getItem('e2e-latest') ?? latest;
-          return { current, latest: l, newer: newer(l, current) };
-        },
-        openReleasePage: async (version) => {
-          calls.opened.push(version);
-        },
-      });
+      window.__e2eStandIn(
+        'appUpdates',
+        Object.freeze({
+          version: async () => {
+            calls.version++;
+            return current;
+          },
+          check: async () => {
+            calls.check++;
+            if (sessionStorage.getItem('e2e-hold')) {
+              await new Promise((resolve) => {
+                window.__releaseUpdateCheck = resolve;
+              });
+            }
+            const failing = sessionStorage.getItem('e2e-fail') ?? fail;
+            if (failing === 'throw') throw new Error('net::ERR_INTERNET_DISCONNECTED');
+            if (failing === 'null') return null;
+            const l = sessionStorage.getItem('e2e-latest') ?? latest;
+            return { current, latest: l, newer: newer(l, current) };
+          },
+          openReleasePage: async (version) => {
+            calls.opened.push(version);
+          },
+        }),
+      );
     },
     arg: { current, latest, fail },
   };
@@ -49,6 +55,6 @@ export function updatesBridge({ current = '0.13.0', latest = '0.14.0', fail = ''
 // update checks) and settled.
 export async function updateCalls(page) {
   await page.waitForFunction(() => window.__updates?.version > 0);
-  await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
+  await settleBridge(page);
   return page.evaluate(() => ({ ...window.__updates, opened: [...window.__updates.opened] }));
 }

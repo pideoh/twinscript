@@ -52,3 +52,28 @@ jobs:
         with:
           node-version: 22
       - run: npm test
+
+  # The browser tests against the desktop app (Electron), on the systems it ships for. No secrets and
+  # no API key: the Gemini endpoints are mocked as in the browser run. Nothing asks the runner for a
+  # permission: the microphone is Chromium's fake device, PC audio is a stand-in in the page, and the
+  # API key store is kept in memory instead of the keychain (test/e2e/helpers/desktop.js).
+  e2e-desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+        shard: [1, 2, 3]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Each job runs a third of the test files (Node's --test-shard). It is given through
+      # NODE_OPTIONS because Node reads it only before the file pattern, which the npm script ends with.
+      - run: npm run test:e2e:desktop
+        env:
+          NODE_OPTIONS: --test-shard=${{ matrix.shard }}/3

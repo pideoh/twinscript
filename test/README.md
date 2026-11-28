@@ -19,6 +19,24 @@ Run one file with `node --test test/unit/src/speech/segmenter.test.js`.
 `npm run test:e2e:coverage` runs them with Chrome's coverage on (raw files in `dist/e2e-coverage/`) and
 prints a table per file; `scripts/e2e-coverage.mjs` says how a line is counted.
 
+`npm run test:e2e:desktop` runs the same browser tests against the desktop app instead of Chrome: it
+first has the `electron` package fetch its binary if it is missing (`install-electron`; otherwise the
+first test files to start would all fetch it at once), sets `E2E_TARGET=desktop` (from `e2e/desktop.env`), and `e2e/helpers/desktop.js` then launches the app
+for each page, with its own temporary profile, the fake microphone and the same mocks. It opens real
+windows, so it needs a display; CI runs it on macOS and Windows (`e2e-desktop`, three jobs per system, each
+with a third of the files through Node's `--test-shard`, given in `NODE_OPTIONS`:
+`NODE_OPTIONS=--test-shard=1/3 npm run test:e2e:desktop` runs the first third locally). The differences are
+kept in the helpers, so a test reads the same for both:
+
+- `download(page, action)` (`e2e/helpers/download.js`) instead of waiting for Playwright's download
+  event: the desktop app saves a download into its profile without a dialog.
+- A stand-in for the desktop app's bridge (`window.secretStore`, `window.appUpdates`) is handed to
+  `window.__e2eStandIn` (`e2e/helpers/bridge.js`): in Chrome it becomes the bridge, in the desktop app
+  the main process answers the real bridge's calls from it. Without one, the desktop app's API key
+  store is kept in memory, so the system keychain is never asked.
+- `browserOnly(why)` and `desktopOnly(why)` skip a test of what only one of them has, with the reason
+  in the output.
+
 ## Where a new test goes
 
 - A module in `src/<group>/`: `unit/src/<group>/<module>.test.js`. A module in `app/` or `scripts/`: the same name under `unit/app/` or `unit/scripts/`.

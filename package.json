@@ -13,6 +13,7 @@
     "format": "biome check --write .",
     "test": "node --test \"test/unit/**/*.test.js\"",
     "test:e2e": "node --test \"test/e2e/*.e2e.js\"",
+    "test:e2e:desktop": "install-electron && node --env-file=test/e2e/desktop.env --test \"test/e2e/*.e2e.js\"",
     "test:e2e:coverage": "node scripts/e2e-coverage.mjs --run dist/e2e-coverage",
     "test:app": "node --test \"test/desktop/*.app.js\"",
     "app": "electron .",

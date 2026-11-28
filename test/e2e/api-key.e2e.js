@@ -3,7 +3,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { reload, saved, setup } from './helpers.js';
+import { browserOnly, reload, saved, setup } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -22,25 +22,29 @@ const webStorage = (page) =>
     [localStorage, sessionStorage].flatMap((s) => Object.keys(s).map((k) => `${k}=${s.getItem(k)}`)).join('\n'),
   );
 
-test('in a browser the API key entered in settings stays in memory and never reaches storage', async () => {
-  const { page, errors, close } = await openApp();
-  await page.click('#openSettings');
-  assert.equal(await page.textContent('#apiKeyStorage'), 'キーはこのページを閉じるまでの間だけ保持されます。');
-  await page.fill('#apiKey', 'AIza-entered-key');
-  await page.click('#settings button[value=ok]');
-  await saved(page);
-  assert.ok(!(await webStorage(page)).includes('AIza-entered-key'));
-  assert.ok(!(await webStorage(page)).includes('apiKey'));
-  await page.click('#openSettings');
-  assert.equal(await page.inputValue('#apiKey'), 'AIza-entered-key', 'kept for the life of the page');
-  await page.click('#settings button[value=ok]');
+test(
+  'in a browser the API key entered in settings stays in memory and never reaches storage',
+  browserOnly('the desktop app keeps the key in its encrypted store'),
+  async () => {
+    const { page, errors, close } = await openApp();
+    await page.click('#openSettings');
+    assert.equal(await page.textContent('#apiKeyStorage'), 'キーはこのページを閉じるまでの間だけ保持されます。');
+    await page.fill('#apiKey', 'AIza-entered-key');
+    await page.click('#settings button[value=ok]');
+    await saved(page);
+    assert.ok(!(await webStorage(page)).includes('AIza-entered-key'));
+    assert.ok(!(await webStorage(page)).includes('apiKey'));
+    await page.click('#openSettings');
+    assert.equal(await page.inputValue('#apiKey'), 'AIza-entered-key', 'kept for the life of the page');
+    await page.click('#settings button[value=ok]');
 
-  await reload(page);
-  await page.click('#openSettings');
-  assert.equal(await page.inputValue('#apiKey'), '', 'gone once the page is closed');
-  assert.deepEqual(errors, []);
-  await close();
-});
+    await reload(page);
+    await page.click('#openSettings');
+    assert.equal(await page.inputValue('#apiKey'), '', 'gone once the page is closed');
+    assert.deepEqual(errors, []);
+    await close();
+  },
+);
 
 test('an API key stored by an older version is moved out of storage', async () => {
   const { page, errors, close } = await openApp('', { apiKey: 'AIza-legacy-key', glossary: 'Twinscript' });
@@ -55,18 +59,18 @@ test('an API key stored by an older version is moved out of storage', async () =
 });
 
 test('in the desktop app the API key goes to the encrypted store, including one from older versions', async () => {
-  // Stands in for app/preload.js's window.secretStore.
+  // Stands in for app/preload.js's window.secretStore (in the desktop app, behind the real one).
   const fakeSecretStore = () => {
     const values = { apiKey: '' };
     window.secretCalls = [];
-    window.secretStore = {
+    window.__e2eStandIn('secretStore', {
       get: async (name) => ({ value: values[name], available: true }),
       set: async (name, value) => {
         window.secretCalls.push([name, value]);
         values[name] = value;
         return { persisted: true };
       },
-    };
+    });
   };
   const { page, errors, close } = await openApp('', { apiKey: 'AIza-legacy-key' }, { script: fakeSecretStore });
   assert.deepEqual(await page.evaluate(() => window.secretCalls), [['apiKey', 'AIza-legacy-key']]);
@@ -85,10 +89,10 @@ test('in the desktop app the API key goes to the encrypted store, including one 
 
 test('when the desktop app cannot encrypt, settings say the key will be asked for again', async () => {
   const noEncryption = () => {
-    window.secretStore = {
+    window.__e2eStandIn('secretStore', {
       get: async () => ({ value: '', available: false }),
       set: async () => ({ persisted: false }),
-    };
+    });
   };
   const { page, errors, close } = await openApp('', { uiLang: 'en' }, { script: noEncryption });
   await page.click('#openSettings');

@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mockGemini, reload, rows, saved, sessionNames, setup, translated } from './helpers.js';
+import { download, mockGemini, reload, rows, saved, sessionNames, setup, translated } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -66,7 +66,7 @@ test('the transcript downloads with a timeline in the chosen format', async () =
   await page.click('#export');
 
   const grab = async () => {
-    const [file] = await Promise.all([page.waitForEvent('download'), page.click('#exportTranscript')]);
+    const file = await download(page, () => page.click('#exportTranscript'));
     const stream = await file.createReadStream();
     let text = '';
     for await (const chunk of stream) text += chunk;
@@ -97,7 +97,7 @@ test('the audio is recorded, kept across a reload and can be downloaded', async 
 
   await page.click('#export');
   assert.match(await page.textContent('#recordings .rec span'), /^録音 1 ・ .* ・ 00:00:0\d$/);
-  const [file] = await Promise.all([page.waitForEvent('download'), page.click('#recordings .rec button')]);
+  const file = await download(page, () => page.click('#recordings .rec button'));
   assert.match(file.suggestedFilename(), /^Recorded sentence\.-1\.(webm|m4a)$/);
   let bytes = 0;
   for await (const chunk of await file.createReadStream()) bytes += chunk.length;

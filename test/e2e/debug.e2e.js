@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chooseListening, mockGemini, reload, rows, saved, setup, translated } from './helpers.js';
+import { chooseListening, download, mockGemini, reload, rows, saved, setup, translated } from './helpers.js';
 
 const { openApp } = setup();
 
@@ -62,7 +62,7 @@ test('in debug mode a run records the raw recognizer results, which can be downl
 
   await page.click('#export');
   assert.equal(await page.textContent('#saveTrace'), '認識トレースをダウンロード（デバッグ）');
-  const [file] = await Promise.all([page.waitForEvent('download'), page.click('#saveTrace')]);
+  const file = await download(page, () => page.click('#saveTrace'));
   assert.match(file.suggestedFilename(), /^twinscript-trace-\d{8}-\d{6}\.json$/);
   let text = '';
   for await (const chunk of await file.createReadStream()) text += chunk;
