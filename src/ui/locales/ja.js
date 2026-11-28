@@ -347,6 +347,12 @@ export default {
   'settings.checkUpdates': '新しいバージョンを確認する',
   'settings.checkUpdates.help':
     '1 日に 1 回、最新バージョンの番号を GitHub に問い合わせます。あなたやセッションの情報は送信しません。',
+  'settings.version': 'バージョン {version}',
+  'settings.checkNow': '今すぐ確認',
+  'settings.checkNow.checking': '確認しています…',
+  'settings.checkNow.current': '最新のバージョンです。',
+  'settings.checkNow.newer': 'バージョン {version} が利用できます。',
+  'settings.checkNow.failed': '確認できませんでした。しばらくしてからもう一度お試しください。',
   'update.available': 'バージョン {version} が利用できます',
   'update.open': 'リリースを見る',
   'update.dismiss': '閉じる',

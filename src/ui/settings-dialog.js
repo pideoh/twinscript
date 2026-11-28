@@ -37,7 +37,9 @@ import { followLangChange, followPlace, followThirdLangChange, LANGS, langLabel 
 // showCaptionControls(): the caption zone and window; showShortcuts(), applyGlobalShortcuts(): the
 // global shortcuts; closeTemplateEditor(), renderTemplateList(): the summary templates;
 // openPriceFields(), pendingOverrides(): the price fields (the overrides, or null while one is not a
-// price); checkForUpdates(): asks for a newer version if it is time, or hides the notice.
+// price); checkForUpdates(): asks for a newer version if it is time, or hides the notice;
+// checkUpdatesNow(): asks at once ("Check now"), resolving to { outcome: 'newer' | 'current' |
+// 'failed', version }.
 export function createSettingsDialog({
   els,
   t,
@@ -64,6 +66,7 @@ export function createSettingsDialog({
   openPriceFields,
   pendingOverrides,
   checkForUpdates,
+  checkUpdatesNow,
 }) {
   let languageNames = null; // Intl.DisplayNames for the UI language
   let key = apiKey; // the key in use; a new one is stored when the dialog closes
@@ -91,6 +94,7 @@ export function createSettingsDialog({
     fillReadAloud();
     showTuning();
     showKeyStorage();
+    showManualCheck();
     onRelocalize();
   }
   applyLocale();
@@ -207,8 +211,36 @@ export function createSettingsDialog({
     renderTemplateList();
     openPriceFields();
     els.settingsRunning.hidden = !getRun();
+    if (manualCheck?.outcome !== 'checking') manualCheck = null; // what it found belongs to that moment
+    showManualCheck();
     els.settings.showModal();
   }
+
+  // ---------- "Check now" (desktop app) ----------
+  // null, { outcome: 'checking' } while asking, or what checkUpdatesNow() found: { outcome, version }.
+  let manualCheck = null;
+  function showManualCheck() {
+    const { outcome = '', version = null } = manualCheck ?? {};
+    // aria-disabled rather than disabled: the button keeps the focus while it waits.
+    els.checkNow.setAttribute('aria-disabled', String(outcome === 'checking'));
+    els.checkNowStatus.dataset.result = outcome;
+    els.checkNowStatus.textContent = outcome ? t(`settings.checkNow.${outcome}`, { version }) : '';
+    els.checkNowOpen.hidden = outcome !== 'newer';
+  }
+  els.checkNow.onclick = async () => {
+    if (manualCheck?.outcome === 'checking') return; // one request at a time
+    manualCheck = { outcome: 'checking' };
+    showManualCheck();
+    try {
+      manualCheck = await checkUpdatesNow();
+    } catch {
+      manualCheck = { outcome: 'failed', version: null };
+    }
+    showManualCheck();
+  };
+  els.checkNowOpen.onclick = () => {
+    window.appUpdates?.openReleasePage(manualCheck?.version).catch(() => {});
+  };
   function showKeyStorage() {
     els.apiKeyStorage.textContent = t(`settings.apiKey.storage.${storedIn}`);
   }

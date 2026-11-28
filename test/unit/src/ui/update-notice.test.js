@@ -21,6 +21,7 @@ const fakeEls = () => ({
   updateText: { textContent: '' },
   updateOpen: {},
   updateDismiss: {},
+  appVersion: { hidden: true, textContent: '' },
 });
 function memoryStorage(initial = {}) {
   const items = { ...initial };
@@ -145,4 +146,69 @@ test('a failed check says nothing and is tried again at the next look', async ()
   } finally {
     console.warn = warn;
   }
+});
+
+test('the settings show the running version once it is known', async () => {
+  const { notice, els } = setup();
+  await notice.start();
+  assert.equal(els.appVersion.hidden, false);
+  assert.equal(els.appVersion.textContent, t('settings.version', { version: '1.0.0' }));
+});
+
+test('the running version shows while the check at start is still waiting for GitHub', async () => {
+  const bridge = fakeBridge();
+  bridge.check = () => new Promise(() => {});
+  const { notice, els } = setup({ bridge });
+  notice.start();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(els.appVersion.hidden, false);
+  assert.equal(els.appVersion.textContent, t('settings.version', { version: '1.0.0' }));
+});
+
+test('checking now asks at once with checking off, shows the notice it finds and stores the answer', async () => {
+  const storage = memoryStorage({ [UPDATE_KEY]: JSON.stringify(answered({ dismissed: '1.1.0' })) });
+  const { notice, els, bridge } = setup({ storage, checkUpdates: false });
+  await notice.start();
+  assert.equal(bridge.calls.check, 0);
+  assert.deepEqual(await notice.checkNow(), { outcome: 'newer', version: '1.1.0' });
+  assert.equal(bridge.calls.check, 1);
+  assert.equal(els.updateNotice.hidden, false, 'shown although it had been dismissed and checking is off');
+  const stored = JSON.parse(storage.items[UPDATE_KEY]);
+  assert.equal(stored.dismissed, null);
+  assert.equal(stored.checkedAt, NOW);
+  els.updateDismiss.onclick();
+  assert.equal(els.updateNotice.hidden, true, 'it can be dismissed again');
+});
+
+test('checking now while a check is asking makes one request', async () => {
+  let answer;
+  const bridge = fakeBridge();
+  bridge.check = () => {
+    bridge.calls.check++;
+    return new Promise((resolve) => {
+      answer = resolve;
+    });
+  };
+  const { notice } = setup({ bridge, storage: memoryStorage({ [UPDATE_KEY]: JSON.stringify(answered()) }) });
+  await notice.start();
+  const both = Promise.all([notice.checkNow(), notice.checkNow()]);
+  await new Promise((resolve) => setImmediate(resolve));
+  answer({ current: '1.0.0', latest: '1.0.0', newer: false });
+  assert.deepEqual(await both, [
+    { outcome: 'current', version: '1.0.0' },
+    { outcome: 'current', version: '1.0.0' },
+  ]);
+  assert.equal(bridge.calls.check, 1);
+});
+
+test("checking now that fails says so and does not count as the day's check", async () => {
+  const { notice, storage } = setup({ bridge: fakeBridge({ answer: null }), checkUpdates: false });
+  await notice.start();
+  assert.deepEqual(await notice.checkNow(), { outcome: 'failed', version: null });
+  assert.equal(storage.items[UPDATE_KEY], undefined);
+});
+
+test('outside the desktop app checking now asks nothing', async () => {
+  const { notice } = setup({ bridge: null });
+  assert.deepEqual(await notice.checkNow(), { outcome: 'failed', version: null });
 });

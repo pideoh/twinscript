@@ -363,6 +363,12 @@ export default {
   'settings.checkUpdates': 'Check for new versions',
   'settings.checkUpdates.help':
     'Once a day, Twinscript asks GitHub for the number of the latest version. Nothing about you or your sessions is sent.',
+  'settings.version': 'Version {version}',
+  'settings.checkNow': 'Check now',
+  'settings.checkNow.checking': 'Checking…',
+  'settings.checkNow.current': 'You have the latest version.',
+  'settings.checkNow.newer': 'Version {version} is available.',
+  'settings.checkNow.failed': 'Could not check. Try again later.',
   'update.available': 'Version {version} is available',
   'update.open': 'View release',
   'update.dismiss': 'Dismiss',

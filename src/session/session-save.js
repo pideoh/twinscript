@@ -32,6 +32,12 @@ import { formatDateTime } from './exporter.js';
 
 const TITLE_LENGTH = 30;
 
+// A new id for a session or a recording. randomUUID needs a secure context; the fallback takes 128
+// bits from the same CSPRNG.
+export const uid = () =>
+  crypto.randomUUID?.() ??
+  [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+
 // A new session in the languages selected in `settings`; id and now (epoch ms) are passed in.
 // A session with two languages has no langC at all.
 export function blankSession(settings, { id, now }) {

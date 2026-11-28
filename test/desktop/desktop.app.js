@@ -134,6 +134,19 @@ test('the page learns the running version; the update check is answered by the m
   assert.ok(await page.locator('#updateNotice').isHidden());
 });
 
+test('the settings show the running version, and Check now reports a check that did not work', async () => {
+  const page = await app.firstWindow();
+  const { version } = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
+  await page.click('#openSettings');
+  await page.waitForFunction(() => !document.getElementById('appVersion').hidden);
+  assert.ok((await page.textContent('#appVersion')).includes(version));
+  // RT_NO_UPDATE_CHECK: check() answers null, as when offline, so nothing is asked of GitHub.
+  await page.click('#checkNow');
+  await page.waitForFunction(() => document.getElementById('checkNowStatus').dataset.result === 'failed');
+  assert.ok(await page.locator('#checkNowOpen').isHidden());
+  await page.keyboard.press('Escape');
+});
+
 test('the API key is stored encrypted on disk, never in plain text, and reads back', async () => {
   const page = await app.firstWindow();
   const key = 'AIza-desktop-test-key';

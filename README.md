@@ -60,7 +60,8 @@ Then create a Gemini API key in [Google AI Studio](https://aistudio.google.com/a
 
 When a newer version is released, the app says so in a notice above the transcript, with a button that opens its
 release page. To update, download the new zip and replace the app with it. Close the notice to hear no more about that
-version; the next one is announced again. "Check for new versions" in the settings turns this off.
+version; the next one is announced again. "Check for new versions" in the settings turns this off. The settings also
+show the version you are running, and "Check now" there asks at once, whether or not the daily check is on.
 
 ## During a meeting
 
@@ -271,7 +272,7 @@ Everything else is stored on your computer, inside the app, and is not synced an
 | The audio you chose to capture, and the recognized text | Gemini API | While listening, for transcription and translation |
 | The session's transcript (for questions, also its summaries and the earlier questions and answers) | Gemini API | When you make a summary or ask a question |
 | The session's recording, or an audio file you import, deleted after the analysis | Gemini API (Files API) | When you label speakers, rebuild the transcript or import an audio file (the audio is kept on your computer as the session's recording, converted to 16 kHz mono) |
-| A request for the number of the latest version; nothing about you or your sessions | GitHub | Desktop app, at most once a day, unless "Check for new versions" is off |
+| A request for the number of the latest version; nothing about you or your sessions | GitHub | Desktop app, at most once a day, unless "Check for new versions" is off; and when you press "Check now" in the settings |
 
 The API key is stored on your computer, encrypted by the operating system (the Keychain on macOS, DPAPI on Windows).
 If the system cannot encrypt it, the key is not saved and the app asks for it again the next time. On macOS the
