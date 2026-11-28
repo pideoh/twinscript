@@ -8,7 +8,7 @@
 //
 // A session is renamed in its row, in a field in place of its name. The list is made anew whenever
 // the app asks (after each round of saves, for one), except the row being edited, which is kept as
-// it is.
+// it is. A button of a row that had the focus has it again in the new row of the same session.
 
 import { formatDateTime, formatElapsed } from '../session/exporter.js';
 import { autoTitle, isEmpty, typedTitle } from '../session/session-save.js';
@@ -36,6 +36,8 @@ export function createSidebar({
 }) {
   // The row whose name is being edited: { sess, row, editor, input }, or null.
   let editing = null;
+  // The session each row stands for.
+  const sessionOf = new WeakMap();
 
   function renderHeader() {
     const current = getCurrent();
@@ -45,6 +47,25 @@ export function createSidebar({
   }
 
   function renderSidebar() {
+    const focus = focusedButton();
+    drawList();
+    // The button that had the focus was taken out with its row: the same button of the session's new
+    // row takes it, if the session is still listed.
+    if (focus && !focus.button.isConnected) {
+      const row = [...els.sessionList.children].find((r) => sessionOf.get(r) === focus.sess);
+      row?.querySelectorAll('button')[focus.at]?.focus();
+    }
+  }
+
+  // Which button of which session's row has the focus, or null.
+  function focusedButton() {
+    const button = document.activeElement;
+    const row = button?.tagName === 'BUTTON' ? button.closest('.session') : null;
+    if (!row || row.parentElement !== els.sessionList) return null;
+    return { button, sess: sessionOf.get(row), at: [...row.querySelectorAll('button')].indexOf(button) };
+  }
+
+  function drawList() {
     renderHeader();
     const current = getCurrent();
     const sessions = getSessions();
@@ -67,6 +88,7 @@ export function createSidebar({
   function sessionRow(sess, current) {
     const row = document.createElement('div');
     row.className = `session${sess === current ? ' current' : ''}`;
+    sessionOf.set(row, sess);
     const action = (icon, title, fn) => {
       const b = document.createElement('button');
       b.className = 'act icon-btn';
