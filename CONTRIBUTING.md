@@ -37,8 +37,13 @@ npm run lint       # formatting and lint rules (npm run format fixes what it can
 npm test           # unit tests, no dependencies
 npm run test:e2e   # browser tests (needs Chrome); the Gemini API is mocked
 npm run test:e2e:coverage  # the browser tests, then which lines of src/ they ran
+npm run test:e2e:desktop   # the same tests against the desktop app (opens windows)
 npm run test:app   # desktop smoke tests (opens windows)
 ```
+
+A pull request is ready for review when its checks are green: `test` (lint, unit and browser tests on Linux),
+`unit-other-os` (unit tests on macOS and Windows) and `e2e-desktop` (the browser tests against the desktop app on
+macOS and Windows).
 
 - Tests come with every behavior change, and docs with every change users can see (README in English and Japanese, `docs/`).
 - No new dependencies. The one runtime dependency, Mediabunny (exact version, imported only by
