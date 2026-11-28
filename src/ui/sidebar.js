@@ -5,9 +5,13 @@
 //
 // The list itself is the app's (getSessions()); a deleted session is taken out of it through
 // removeSession, since the app replaces the array rather than changing it.
+//
+// A session is renamed in its row, in a field in place of its name. The list is made anew whenever
+// the app asks (after each round of saves, for one), except the row being edited, which is kept as
+// it is.
 
 import { formatDateTime, formatElapsed } from '../session/exporter.js';
-import { autoTitle, isEmpty } from '../session/session-save.js';
+import { autoTitle, isEmpty, typedTitle } from '../session/session-save.js';
 
 // els: the page's elements; t: i18n; octicon(name): an icon; store: the session store
 // (deleteSession); toast(message, ms, variant); getSessions(): the saved sessions, newest first;
@@ -30,62 +34,130 @@ export function createSidebar({
   blankSession,
   markDirty,
 }) {
-  function renderSidebar() {
+  // The row whose name is being edited: { sess, row, editor, input }, or null.
+  let editing = null;
+
+  function renderHeader() {
     const current = getCurrent();
     const title = current ? current.title || autoTitle(current) : '';
     els.sessionName.textContent = title;
     els.sessionName.title = title;
-    els.sessionList.replaceChildren(
-      ...getSessions().map((sess) => {
-        const row = document.createElement('div');
-        row.className = `session${sess === current ? ' current' : ''}`;
-        const open = document.createElement('button');
-        open.className = 'open';
-        if (sess === current) open.setAttribute('aria-current', 'true');
-        const name = document.createElement('span');
-        name.className = 'name';
-        name.textContent = sess.title;
-        const when = document.createElement('span');
-        when.className = 'when';
-        when.textContent = t('session.when', {
-          date: formatDateTime(sess.createdAt),
-          duration: formatElapsed(sess.activeMs),
-        });
-        open.append(name, when);
-        open.onclick = () => {
-          if (canSwitch()) showSession(sess);
-        };
-        const action = (icon, title, fn) => {
-          const b = document.createElement('button');
-          b.className = 'act icon-btn';
-          b.append(octicon(icon));
-          b.title = title;
-          b.setAttribute('aria-label', title);
-          b.onclick = fn;
-          return b;
-        };
-        row.append(
-          open,
-          action('pencil', t('session.rename'), () => renameSession(sess)),
-          action('trash', t('session.delete'), () => deleteSession(sess)),
-        );
-        return row;
-      }),
+  }
+
+  function renderSidebar() {
+    renderHeader();
+    const current = getCurrent();
+    const sessions = getSessions();
+    if (editing && !sessions.includes(editing.sess)) editing = null;
+    const rows = sessions.map((sess) => (sess === editing?.sess ? editing.row : sessionRow(sess, current)));
+    if (!editing) {
+      els.sessionList.replaceChildren(...rows);
+      return;
+    }
+    // The row being edited stays in the page, so that what is typed, the focus and the selection
+    // are kept; the rows around it are made anew.
+    const { row } = editing;
+    row.classList.toggle('current', editing.sess === current);
+    for (const other of [...els.sessionList.children]) if (other !== row) other.remove();
+    const at = rows.indexOf(row);
+    row.before(...rows.slice(0, at));
+    row.after(...rows.slice(at + 1));
+  }
+
+  function sessionRow(sess, current) {
+    const row = document.createElement('div');
+    row.className = `session${sess === current ? ' current' : ''}`;
+    const action = (icon, title, fn) => {
+      const b = document.createElement('button');
+      b.className = 'act icon-btn';
+      b.append(octicon(icon));
+      b.title = title;
+      b.setAttribute('aria-label', title);
+      b.onclick = fn;
+      return b;
+    };
+    row.append(
+      openButton(sess, current),
+      action('pencil', t('session.rename'), () => editName(sess, row)),
+      action('trash', t('session.delete'), () => deleteSession(sess)),
     );
+    return row;
+  }
+
+  function openButton(sess, current) {
+    const open = document.createElement('button');
+    open.className = 'open';
+    if (sess === current) open.setAttribute('aria-current', 'true');
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = sess.title;
+    open.append(name, when(sess));
+    open.onclick = () => {
+      if (canSwitch()) showSession(sess);
+    };
+    return open;
+  }
+
+  function when(sess) {
+    const span = document.createElement('span');
+    span.className = 'when';
+    span.textContent = t('session.when', {
+      date: formatDateTime(sess.createdAt),
+      duration: formatElapsed(sess.activeMs),
+    });
+    return span;
+  }
+
+  // The session's name becomes a field in its row (no system dialog: the desktop app has none).
+  // Enter or leaving the field keeps what was typed, Escape leaves the name as it was; Enter and
+  // Escape put the focus back on the row's pencil. One row at a time.
+  function editName(sess, row) {
+    if (editing) finishEditing(true);
+    const editor = document.createElement('div');
+    editor.className = 'renaming';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'text-input';
+    input.autocomplete = 'off';
+    input.value = sess.title;
+    input.setAttribute('aria-label', t('session.renamePrompt'));
+    input.addEventListener('keydown', (e) => {
+      // An Enter or Escape that ends the composition of an input method is the input method's.
+      if (e.isComposing || (e.key !== 'Enter' && e.key !== 'Escape')) return;
+      e.preventDefault();
+      finishEditing(e.key === 'Enter', true);
+    });
+    input.addEventListener('blur', () => {
+      if (editing?.input === input) finishEditing(true);
+    });
+    editor.append(input, when(sess));
+    row.querySelector('.open').replaceWith(editor);
+    editing = { sess, row, editor, input };
+    input.focus();
+    input.select();
+  }
+
+  // keep: whether what was typed becomes the name; refocus: whether the focus goes back to the
+  // row's pencil (not when it has already gone elsewhere). Only this row changes, so that a click
+  // that took the focus away still lands on what was clicked.
+  function finishEditing(keep, refocus = false) {
+    const { sess, row, editor, input } = editing;
+    editing = null;
+    const title = keep ? typedTitle(input.value, sess.title) : null;
+    if (title) {
+      sess.title = title;
+      sess.customTitle = true;
+      markDirty(sess);
+    }
+    editor.replaceWith(openButton(sess, getCurrent()));
+    renderHeader();
+    if (refocus) row.querySelector('.act').focus();
   }
 
   function canSwitch() {
     const run = getRun();
     if (run) toast(t('toast.stopToSwitch'), 6000, 'warning');
     return !run;
-  }
-
-  function renameSession(sess) {
-    const title = prompt(t('session.renamePrompt'), sess.title)?.trim();
-    if (!title) return;
-    sess.title = title;
-    sess.customTitle = true;
-    markDirty(sess);
   }
 
   async function deleteSession(sess) {

@@ -42,8 +42,9 @@ test('sessions survive a reload, can be switched, renamed and deleted', async ()
       .evaluate((n) => n.classList.contains('current')),
   );
 
-  page.once('dialog', (d) => d.accept('週次定例'));
   await page.locator('#sessionList .session').nth(1).locator('.act').first().click();
+  await page.fill('#sessionList .renaming input', '週次定例');
+  await page.keyboard.press('Enter');
   await saved(page);
   page.once('dialog', (d) => d.accept());
   await page.locator('#sessionList .session').first().locator('.act').last().click();

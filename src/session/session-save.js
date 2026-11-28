@@ -1,5 +1,5 @@
 // Saving sessions: what a new session looks like, when a session counts as empty, the title a
-// session gets until the user names it, and the saver that writes changed sessions a moment after
+// session gets until the user names it and the one a typed name gives it, and the saver that writes changed sessions a moment after
 // the last change. DOM-free: the store, the clock and the timers are passed in.
 //
 // The saver writes whole sessions that were marked changed; the store (src/storage/store.js) then
@@ -65,6 +65,13 @@ export const isEmpty = (sess) => !(sess.segments?.length ?? sess.segmentCount) &
 // The title of a session the user has not named: the start of its first sentence, or when it was
 // made while there is none.
 export const autoTitle = (sess) => sess.segments[0]?.src.slice(0, TITLE_LENGTH) || formatDateTime(sess.createdAt);
+
+// The title a name typed by the user gives a session whose title is `title`: the name without the
+// spaces around it, or null when that leaves nothing or the same title (the session keeps its own).
+export function typedTitle(typed, title) {
+  const name = typed.trim();
+  return name && name !== title ? name : null;
+}
 
 // store: saveSession(sess) -> Promise, requestPersistence(); getSessions(): the saved sessions,
 // newest first (a new one is put at the top of this array); beforeSave(sess): brings a session's
