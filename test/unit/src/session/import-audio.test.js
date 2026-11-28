@@ -8,6 +8,7 @@ import {
   checkWhole,
   fileType,
   importedSession,
+  importLanguages,
   MAX_BYTES,
   MAX_MS,
   MIN_MS,
@@ -222,4 +223,36 @@ test('an hour is kept as the header and twelve chunks of five minutes, about 115
     chunks.reduce((n, c) => n + c.length, 0),
     44 + 16000 * 3600 * 2,
   );
+});
+
+const JA = { code: 'ja-JP', display: 'ja', name: 'Japanese' };
+const EN = { code: 'en-US', display: 'en', name: 'English' };
+const KO = { code: 'ko-KR', display: 'ko', name: 'Korean' };
+const DE = { code: 'de-DE', display: 'de', name: 'German' };
+const LISTENING = { A: 'ja-JP', B: 'en-US', C: '' };
+
+test("the languages chosen in the dialog are the session's and the ones transcription and translation are given", () => {
+  assert.deepEqual(importLanguages({ A: 'ko-KR', B: 'en-US', C: '' }, LISTENING, 'all'), {
+    codes: { langA: 'ko-KR', langB: 'en-US' },
+    langs: [KO, EN],
+    otherInto: 'all',
+  });
+  const three = importLanguages({ A: 'ja-JP', B: 'en-US', C: 'de-DE' }, LISTENING, 'all');
+  assert.deepEqual(three.codes, { langA: 'ja-JP', langB: 'en-US', langC: 'de-DE' });
+  assert.deepEqual(three.langs, [JA, EN, DE]);
+  const sess = importedSession(RESULT, { ...OPTIONS, langs: three.codes });
+  assert.deepEqual([sess.langA, sess.langB, sess.langC], ['ja-JP', 'en-US', 'de-DE']);
+});
+
+test('the setting for speech in none of the languages keeps meaning its language when the dialog moves it, and turns to all without a third language', () => {
+  // Unchanged languages: the setting as it is.
+  assert.equal(importLanguages(LISTENING, LISTENING, 'B').otherInto, 'B');
+  // Swapped in the dialog: English, which the setting named, is now first.
+  assert.equal(importLanguages({ A: 'en-US', B: 'ja-JP', C: '' }, LISTENING, 'B').otherInto, 'A');
+  // Other languages altogether: the place is kept.
+  assert.equal(importLanguages({ A: 'ko-KR', B: 'de-DE', C: '' }, LISTENING, 'A').otherInto, 'A');
+  // The third language the setting named is left out of the import.
+  const listeningThree = { A: 'ja-JP', B: 'en-US', C: 'de-DE' };
+  assert.equal(importLanguages({ A: 'ja-JP', B: 'en-US', C: '' }, listeningThree, 'C').otherInto, 'all');
+  assert.equal(importLanguages(listeningThree, listeningThree, 'all').otherInto, 'all');
 });

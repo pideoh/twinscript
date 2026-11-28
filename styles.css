@@ -1744,7 +1744,7 @@ body.running #log .seg .tgt {
 .rebuild-changes li[hidden] {
   display: none;
 }
-/* The file to import, its length and the languages of the session made from it. */
+/* The file to import and its length. */
 .import-facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
@@ -1758,10 +1758,11 @@ body.running #log .seg .tgt {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.import-hint {
-  display: block;
-  color: var(--fgColor-muted);
-  font-size: var(--text-body-size-small);
+/* The languages of the session made from it: the first two with the swap button between them, the
+   third below. */
+.import-langs {
+  display: grid;
+  gap: var(--base-size-8);
 }
 .import-status {
   margin: 0;

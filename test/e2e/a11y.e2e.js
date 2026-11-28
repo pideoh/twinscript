@@ -266,6 +266,10 @@ for (const colorScheme of ['light', 'dark']) {
     await chooseAudioFile(page, wavFile());
     await fileRead(page);
     await assertAccessible(page, 'the dialog for an audio file');
+    await page.selectOption('#importLangC', 'de-DE');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await assertAccessible(page, 'the dialog for an audio file with three languages, at 390 px');
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.click('#importConfirm');
     await page.waitForFunction(() => document.getElementById('importStatus').textContent.includes('1/1'));
     await assertAccessible(page, 'an import in progress');

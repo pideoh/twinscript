@@ -1,6 +1,6 @@
 // Making a new session from an audio file: which files are taken, the limits, the title from the
-// file's name, the text of the progress, the session made from the file's transcript
-// (src/session/recording-transcript.js), and its one recording: the decoded audio (16 kHz mono,
+// file's name, the languages chosen in the dialog, the text of the progress, the session made from
+// the file's transcript (src/session/recording-transcript.js), and its one recording: the decoded audio (16 kHz mono,
 // 16-bit) as a WAV, about 115 MB an hour, stored in chunks as the app's own recordings are. The
 // original file is not kept. Pure, DOM-free; the panel is src/ui/import-panel.js.
 //
@@ -20,6 +20,7 @@
 // so a longer file is refused without that cost. A file shorter than MIN_MS or without a sample louder
 // than SILENT_PEAK (-60 dBFS) has nothing to transcribe and is refused before anything is uploaded.
 
+import { followPlace, LANGS } from '../ui/langs.js';
 import { autoTitle } from './session-save.js';
 import { SAMPLE_RATE, wavBytes } from './speakers.js';
 
@@ -130,6 +131,24 @@ export function titleFromFileName(name) {
     .replace(/\s+/g, ' ')
     .trim();
   return base.slice(0, TITLE_LENGTH);
+}
+
+/**
+ * The languages an import uses. chosen: { A, B, C } as the dialog's selects show them ('' for no third
+ * language; they keep the listening choice's rules, src/ui/langs.js); listening: { A, B, C }, the
+ * languages chosen for listening, which `otherInto` (the setting for speech in none of the languages:
+ * 'A', 'B', 'C' or 'all') names a place among. Returns { codes: { langA, langB, langC? } for the session,
+ * langs: [{ code, name }] for transcription and translation, otherInto }. The setting means the
+ * language in its place, so it follows that language when the dialog moved it, and becomes 'all' when
+ * it names a third language that the import does not have.
+ */
+export function importLanguages(chosen, listening, otherInto) {
+  const codes = { langA: chosen.A, langB: chosen.B, ...(chosen.C && { langC: chosen.C }) };
+  return {
+    codes,
+    langs: Object.values(codes).map((code) => LANGS.find((l) => l.code === code)),
+    otherInto: followPlace(otherInto, listening, chosen, 'all'),
+  };
 }
 
 // The text of the progress (as the rebuild shows it): which part is sent or transcribed, then which line is translated.

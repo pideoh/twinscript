@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import {
   chooseAudioFile,
   fileRead,
+  importChoice,
   lineSpeakers,
   listening,
   mockGemini,
@@ -47,7 +48,7 @@ test('choosing a file says what will happen; the import makes a saved session wi
   await fileRead(page);
   assert.equal(await page.textContent('#importName'), 'Weekly sync.wav');
   assert.equal(await page.textContent('#importDuration'), '00:00:20');
-  assert.equal(await page.textContent('#importLangs'), '日本語 / 英語', 'as the header has them');
+  assert.deepEqual(await importChoice(page), { A: 'ja-JP', B: 'en-US', C: '' }, 'as the bottom bar has them');
   const said = (await page.locator('#importDialog li').allTextContents()).join('\n');
   assert.match(said, /Google（Gemini API）にアップロードし、それぞれ解析が終わるとすぐに削除/);
   assert.match(said, /話者つきで文字起こしし、すべての行を翻訳します/);
