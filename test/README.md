@@ -23,7 +23,9 @@ prints a table per file; `scripts/e2e-coverage.mjs` says how a line is counted.
 first has the `electron` package fetch its binary if it is missing (`install-electron`; otherwise the
 first test files to start would all fetch it at once), sets `E2E_TARGET=desktop` (from `e2e/desktop.env`), and `e2e/helpers/desktop.js` then launches the app
 for each page, with its own temporary profile, the fake microphone and the same mocks. It opens real
-windows, so it needs a display; CI runs it on macOS and Windows (`e2e-desktop`). The differences are
+windows, so it needs a display; CI runs it on macOS and Windows (`e2e-desktop`, three jobs per system, each
+with a third of the files through Node's `--test-shard`, given in `NODE_OPTIONS`:
+`NODE_OPTIONS=--test-shard=1/3 npm run test:e2e:desktop` runs the first third locally). The differences are
 kept in the helpers, so a test reads the same for both:
 
 - `download(page, action)` (`e2e/helpers/download.js`) instead of waiting for Playwright's download

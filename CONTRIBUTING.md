@@ -43,7 +43,8 @@ npm run test:app   # desktop smoke tests (opens windows)
 
 A pull request is ready for review when its checks are green: `test` (lint, unit and browser tests on Linux),
 `unit-other-os` (unit tests on macOS and Windows) and `e2e-desktop` (the browser tests against the desktop app on
-macOS and Windows).
+macOS and Windows, each split into three jobs that run a third of the test files: `e2e-desktop (macos-latest, 1)`
+to `e2e-desktop (windows-latest, 3)`).
 
 - Tests come with every behavior change, and docs with every change users can see (README in English and Japanese, `docs/`).
 - No new dependencies. The one runtime dependency, Mediabunny (exact version, imported only by
