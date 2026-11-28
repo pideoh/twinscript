@@ -125,7 +125,7 @@ test('choosing a file says what will happen; the import makes a saved session wi
   await reload(page);
   await page.waitForFunction(() => document.querySelectorAll('#log .seg .speaker-name').length === 4);
   assert.deepEqual(await shownLines(page), IMPORTED);
-  assert.ok(await page.isVisible('#rebuild'), 'Rebuild from recording');
+  assert.ok(await page.isVisible('#rebuild'), 'Rebuild transcript');
   await page.click('#rebuild');
   await page.waitForSelector('#rebuildDialog[open]');
   assert.equal(
@@ -143,6 +143,12 @@ test('choosing a file says what will happen; the import makes a saved session wi
   await page.waitForFunction(() => document.getElementById('toast').textContent.includes('作り直しました'));
   assert.equal(service.uploads.length, 2);
   assert.deepEqual(await shownLines(page), IMPORTED);
+  await page.waitForSelector('#restoreTranscript:not([hidden])');
+  assert.equal(
+    await page.textContent('#restoreTranscript'),
+    '元の文字起こしに戻す',
+    'the imported transcript is restored, not one made while listening',
+  );
   assert.deepEqual(errors, []);
   await close();
 });

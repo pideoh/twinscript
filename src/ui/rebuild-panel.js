@@ -1,6 +1,7 @@
 // Rebuilding a session's transcript from its recording, in the page: the action and its
 // confirmation, its progress and Cancel (in the toolbar above the transcript, beside the speaker
-// tools), and putting back the transcript made while listening. The transcript is made by
+// tools), and putting back the original transcript (made while listening, or with the import). The
+// transcript is made by
 // src/session/recording-transcript.js; the rules about what is kept and offered are in
 // src/session/rebuild.js; the kept transcript is stored by store.replaceTranscript.
 //

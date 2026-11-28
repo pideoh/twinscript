@@ -217,7 +217,7 @@ for (const colorScheme of ['light', 'dark']) {
     await assertAccessible(page, 'a rebuild in progress');
     release();
     await page.waitForSelector('#restoreTranscript:not([hidden])');
-    await assertAccessible(page, 'a rebuilt transcript, with the action to restore the one made while listening');
+    await assertAccessible(page, 'a rebuilt transcript, with the action to restore the original one');
     assert.deepEqual(errors, []);
     await close();
   });

@@ -52,7 +52,8 @@ test('a rebuild says what changes, replaces lines, translations and speakers, su
   const asked = confirms(page);
   const service = await mockSpeakers(page, { analyze: () => ({ body: rebuildAnswer() }) });
   const translations = await mockLineTranslation(page);
-  assert.equal(await page.textContent('#rebuild'), '録音から作り直す');
+  assert.equal(await page.textContent('#rebuild'), '文字起こしを作り直す');
+  assert.equal(await page.getAttribute('#rebuild', 'title'), '録音から、文字起こしをもう一度作ります');
   assert.ok(await page.isHidden('#restoreTranscript'), 'nothing to restore yet');
 
   // The confirmation says what changes, every time.
@@ -84,7 +85,7 @@ test('a rebuild says what changes, replaces lines, translations and speakers, su
   assert.equal(service.analyses[0].generation_config.transcription_config.mode.timestamp_granularities[0], 'word');
   assert.deepEqual(service.deleted, ['files/f1']);
   assert.ok(await page.isVisible('#restoreTranscript'));
-  assert.equal(await page.textContent('#restoreTranscript'), '聞き取り時の文字起こしに戻す');
+  assert.equal(await page.textContent('#restoreTranscript'), '元の文字起こしに戻す');
 
   // Stored: the new lines and, beside them, the transcript made while listening.
   await saved(page);
@@ -133,7 +134,8 @@ test('a rebuild says what changes, replaces lines, translations and speakers, su
   await showTab(page, 'transcript');
   await page.click('#restoreTranscript');
   await page.waitForFunction(() => document.getElementById('toast').textContent.includes('戻しました'));
-  assert.match(asked.at(-1), /聞き取り時の文字起こしに戻しますか/);
+  assert.match(asked.at(-1), /元の文字起こしに戻しますか/);
+  assert.equal(await toastText(page), '元の文字起こしに戻しました。');
   assert.deepEqual(await shownLines(page), SEEDED);
   assert.deepEqual(await lineSpeakers(page), ['Aiko', '話者2', 'Aiko', '話者2']);
   assert.ok(await page.isHidden('#restoreTranscript'));

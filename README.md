@@ -200,7 +200,7 @@ they first speak. Only sessions with a recording can be labeled.
 ### Rebuilding the transcript from the recording
 
 The transcript made while listening is made fast, and keeps what the live model misheard or missed. After a session
-with a recording, "Rebuild from recording" (next to the speaker tools) transcribes the recording again with the model
+with a recording, "Rebuild transcript" (next to "Label speakers") transcribes the recording again with the model
 that transcribes after the fact (`gemini-3.5-transcribe`) and makes the session's lines anew from it: sentence-sized
 lines with their times and their speakers, each translated again into the session's languages.
 
@@ -216,9 +216,9 @@ lines with their times and their speakers, each translated again into the sessio
   failed shows its error, as while listening.
 - Speaker names you gave are kept for a speaker who can be matched with certainty to one of the earlier lines'
   speakers; otherwise the default name is shown.
-- The transcript made while listening is kept, with its translations and speakers. "Restore the transcript made while
-  listening" puts it back and drops the rebuilt one. Rebuilding a rebuilt transcript keeps the one made while
-  listening and replaces only the rebuilt one.
+- The transcript made while listening (or, for an imported audio file, the one made on import) is kept, with its
+  translations and speakers. "Restore the original transcript" puts it back and drops the rebuilt one. Rebuilding a
+  rebuilt transcript keeps the original one and replaces only the rebuilt one.
 - The session's title, recording and earlier usage stay as they are; what the rebuild used is added.
 
 ### Making a session from an audio file

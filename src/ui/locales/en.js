@@ -162,10 +162,11 @@ export default {
   'import.cancelled': 'Importing the audio file was cancelled. Nothing was added.',
   'import.done': 'The audio file was imported: {count} lines.',
   'import.doneFailed': 'The audio file was imported: {count} lines. {failed} of them could not be translated.',
-  'rebuild.action': 'Rebuild from recording',
+  'rebuild.action': 'Rebuild transcript',
+  'rebuild.actionHelp': 'Make the transcript again from the recording',
   'rebuild.cancel': 'Cancel',
-  'rebuild.restore': 'Restore the transcript made while listening',
-  'rebuild.title': 'Rebuild the transcript from the recording',
+  'rebuild.restore': 'Restore the original transcript',
+  'rebuild.title': 'Rebuild transcript',
   'rebuild.intro':
     'The recording is transcribed again, with speakers, and the transcript is made anew from it. What changes:',
   'rebuild.wording':
@@ -195,9 +196,9 @@ export default {
     'The transcript was rebuilt from the recording: {count} lines. {failed} of them could not be translated.',
   'rebuild.cancelled': 'Rebuilding the transcript was cancelled. Nothing was changed.',
   'rebuild.restoreConfirm':
-    'Restore the transcript made while listening? The rebuilt transcript, its translations and its speakers are dropped.',
-  'rebuild.restoreMissing': 'The transcript made while listening was not found.',
-  'rebuild.restored': 'The transcript made while listening was restored.',
+    'Restore the original transcript? The rebuilt transcript, its translations and its speakers are dropped.',
+  'rebuild.restoreMissing': 'The original transcript was not found.',
+  'rebuild.restored': 'The original transcript was restored.',
   'template.quick.name': 'Quick summary',
   'template.quick.description': 'Overview, key points, decisions and action items',
   'template.executive.name': 'Executive summary',
