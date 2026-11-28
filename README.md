@@ -242,7 +242,10 @@ rebuilt (`gemini-3.5-transcribe`, with speakers), and every line is translated.
 
 - Formats: WAV, MP3, M4A and MP4 (AAC), AAC, FLAC, Ogg and WebM, up to 2 hours and 2000 MB. AIFF and CAF cannot be
   read. Files in Vorbis (some Ogg and WebM files) are decoded whole and can be at most 1 hour and 500 MB.
-- The session is in the languages selected in the bottom bar; choose them before importing.
+- The languages are chosen in the dialog: two, and an optional third, from the same list and with the same rules as in
+  the bottom bar, starting from the ones selected there. They apply to this import and the session it makes; the
+  languages selected in the bottom bar stay as they are until the new session is shown, which, like any session
+  opened, shows its own.
 - Before it starts, the app shows the file's name and length, the languages, and what happens: the file is uploaded to
   the Gemini API in parts and each upload is deleted after the analysis; the transcript is made with speakers and every
   line is translated; it costs one pass over the recording with the transcription model and the translation of every

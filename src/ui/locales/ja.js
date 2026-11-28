@@ -136,7 +136,6 @@ export default {
   'import.file': 'ファイル',
   'import.length': '長さ',
   'import.languages': '言語',
-  'import.languagesHint': '別の言語にするには、これを閉じて、先にウィンドウ下部のバーで言語を選んでください。',
   'import.intro': 'ファイルから新しいセッションを作ります:',
   'import.upload': 'ファイルは分割して Google（Gemini API）にアップロードし、それぞれ解析が終わるとすぐに削除します。',
   'import.transcript':

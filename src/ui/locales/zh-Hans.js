@@ -132,7 +132,6 @@ export default {
   'import.file': '文件',
   'import.length': '时长',
   'import.languages': '语言',
-  'import.languagesHint': '如需使用其他语言，请关闭此窗口，先在窗口底部的栏中选择语言。',
   'import.intro': '将根据该文件创建新会话：',
   'import.upload': '文件会分段上传到 Google（Gemini API），每段在分析完成后立即删除。',
   'import.transcript': '生成带说话人的转写，并翻译每一行。全部完成后才会显示会话；没有实时字幕。',

@@ -138,8 +138,6 @@ export default {
   'import.file': 'File',
   'import.length': 'Length',
   'import.languages': 'Languages',
-  'import.languagesHint':
-    'To use other languages, close this and choose them in the bar at the bottom of the window first.',
   'import.intro': 'A new session is made from the file:',
   'import.upload':
     'The file is uploaded to Google (Gemini API) in parts, and each upload is deleted as soon as it has been analyzed.',

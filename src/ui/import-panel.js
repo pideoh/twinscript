@@ -1,7 +1,13 @@
 // Making a new session from an audio file, in the page: the sidebar's control, the file picker, and
-// the dialog that says what will happen, then shows the progress and Cancel. The file is decoded
-// (src/session/speaker-audio.js), transcribed and translated (src/session/recording-transcript.js);
+// the dialog that says what will happen and where the languages are chosen, then shows the progress
+// and Cancel. The file is decoded (src/session/speaker-audio.js), transcribed and translated
+// (src/session/recording-transcript.js);
 // the rules about files, limits and the session made are in src/session/import-audio.js.
+//
+// The dialog's language selects start from the languages chosen for listening each time it opens and
+// follow the same rules as those (src/ui/langs.js). They belong to this import only: changing them
+// changes neither the listening choice nor the saved settings (the new session, once shown, shows its
+// own languages there, as any session opened does). They are held while the import runs.
 //
 // Nothing of the new session exists until it is complete: the lines, their translations and the decoded
 // audio (src/session/import-audio.js: wavChunks) are stored in one write (store.addSession) once everything is there, and only then is the session
@@ -19,6 +25,7 @@ import {
   checkLength,
   checkWhole,
   importedSession,
+  importLanguages,
   LIMITS,
   progressKey,
   WHOLE_LIMITS,
@@ -30,7 +37,7 @@ import { decodeRecording } from '../session/speaker-audio.js';
 import { giveRecordingConsent } from '../session/speaker-labels.js';
 import { translatorFor } from '../translation/translator.js';
 import { addTokens, emptyUsage } from '../usage/usage.js';
-import { LANGS } from './langs.js';
+import { followLangChange, followThirdLangChange, LANGS } from './langs.js';
 
 const METADATA_WAIT_MS = 10_000;
 
@@ -56,8 +63,8 @@ function metadataLength(file) {
 
 // els: the page's elements; t: i18n; store: the session store (addSession); storage: a Storage-like
 // object for the agreement to upload recordings; settings: the live settings (langA, langB, langC,
-// translateModel, otherInto, glossary); toast(message, ms, variant); errorText(err): an error's
-// message; uid(): a new id; langLabel(code): a language's name; getRun(), getCurrent(): the run in
+// translateModel, otherInto, glossary), which this never changes; toast(message, ms, variant);
+// errorText(err): an error's message; uid(): a new id; langLabel(code): a language's name; getRun(), getCurrent(): the run in
 // progress (or null) and the session on screen; getApiKey(): the API key now; openSettings(): opens
 // the settings dialog; recordUsage(sess, usage): counts what a request used; onImported(sess): lists
 // the new session and shows it (resolves once it is on screen); showLineError(seg, code, text): shows
@@ -94,6 +101,32 @@ export function createImportPanel({
     els.importAudio.dataset.i18nTitle = running ? 'import.whileListening' : 'import.button';
     els.importAudio.title = t(els.importAudio.dataset.i18nTitle);
   }
+
+  // ---------- the languages of the import ----------
+  // { A, B, C } as the selects show them ('' for no third language).
+  let shown = { A: '', B: '', C: '' };
+  const picked = () => ({ A: els.importLangA.value, B: els.importLangB.value, C: els.importLangC.value });
+  function showLangs(langs) {
+    shown = langs;
+    els.importLangA.value = langs.A;
+    els.importLangB.value = langs.B;
+    els.importLangC.value = langs.C;
+  }
+  // Filled each time the dialog opens, so that the names are in the display language of the moment.
+  function fillLangs() {
+    for (const sel of [els.importLangA, els.importLangB, els.importLangC]) {
+      sel.replaceChildren(...LANGS.map((l) => new Option(langLabel(l.code), l.code)));
+    }
+    els.importLangC.prepend(new Option(t('header.langC.none'), ''));
+    showLangs({ A: settings.langA, B: settings.langB, C: settings.langC || '' });
+  }
+  function holdLangs(held) {
+    for (const el of [els.importLangA, els.importLangB, els.importLangC, els.importSwap]) el.disabled = held;
+  }
+  els.importLangA.onchange = () => showLangs(followLangChange('A', picked(), shown));
+  els.importLangB.onchange = () => showLangs(followLangChange('B', picked(), shown));
+  els.importLangC.onchange = () => showLangs(followThirdLangChange(picked(), shown));
+  els.importSwap.onclick = () => showLangs({ ...shown, A: shown.B, B: shown.A });
 
   function setStatus(text) {
     els.importStatus.textContent = text;
@@ -133,10 +166,8 @@ export function createImportPanel({
     const mine = job;
     els.importName.textContent = file.name;
     els.importDuration.textContent = '…';
-    els.importLangs.textContent = [settings.langA, settings.langB, settings.langC]
-      .filter(Boolean)
-      .map(langLabel)
-      .join(' / ');
+    fillLangs();
+    holdLangs(false);
     els.importLimits.textContent = t('import.limits', LIMITS);
     showError('');
     setButtons({ ready: false, busy: true });
@@ -186,7 +217,7 @@ export function createImportPanel({
       return openSettings();
     }
     giveRecordingConsent(storage); // the dialog said what is uploaded, every time
-    runImport(job, apiKey);
+    runImport(job, apiKey, shown);
   };
 
   // Anything that closes the dialog (Cancel, the close button, Escape) cancels what is going on.
@@ -199,16 +230,21 @@ export function createImportPanel({
     if (importing) toast(t('import.cancelled'));
   });
 
-  async function runImport(mine, apiKey) {
+  // chosen: the languages the dialog shows, { A, B, C }.
+  async function runImport(mine, apiKey, chosen) {
     mine.importing = true;
+    holdLangs(true);
     showError('');
     setButtons({ ready: true, busy: true });
     setStatus(t('speakers.preparing'));
     mine.controller = new AbortController();
     const { signal } = mine.controller;
     let writing = false;
-    const codes = { langA: settings.langA, langB: settings.langB, ...(settings.langC && { langC: settings.langC }) };
-    const langs = Object.values(codes).map((code) => LANGS.find((l) => l.code === code));
+    const { codes, langs, otherInto } = importLanguages(
+      chosen,
+      { A: settings.langA, B: settings.langB, C: settings.langC || '' },
+      settings.otherInto,
+    );
     // What the requests use is counted on this until the session exists; it is never saved on its own,
     // having neither lines nor recordings.
     const counted = { usage: emptyUsage(), segments: [], recordings: [] };
@@ -218,14 +254,14 @@ export function createImportPanel({
       const result = await transcribeRecording({
         pieces: [{ samples: mine.audio.samples, elapsedStart: 0 }],
         langs,
-        otherInto: settings.otherInto,
+        otherInto,
         diarizer: new GeminiDiarizer({ apiKey }),
         punctuator: new GeminiPunctuator({ apiKey, model: settings.translateModel, onUsage: count('translation') }),
         translator: translatorFor({
           apiKey,
           model: settings.translateModel,
           langs,
-          otherInto: settings.otherInto,
+          otherInto,
           glossary: settings.glossary,
           onUsage: count('translation'),
         }),
@@ -273,6 +309,7 @@ export function createImportPanel({
       const text = t('import.failed', { message: errorText(err) });
       if (job !== mine) return toast(text, 10000, 'critical'); // the dialog was closed while it was stored
       mine.importing = false;
+      holdLangs(false);
       setStatus('');
       setButtons({ ready: true, busy: false });
       showError(text);
