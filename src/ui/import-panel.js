@@ -24,6 +24,7 @@ import {
   WHOLE_LIMITS,
   wavChunks,
 } from '../session/import-audio.js';
+import { GeminiPunctuator } from '../session/punctuate.js';
 import { transcribeRecording } from '../session/recording-transcript.js';
 import { decodeRecording } from '../session/speaker-audio.js';
 import { giveRecordingConsent } from '../session/speaker-labels.js';
@@ -219,6 +220,7 @@ export function createImportPanel({
         langs,
         otherInto: settings.otherInto,
         diarizer: new GeminiDiarizer({ apiKey }),
+        punctuator: new GeminiPunctuator({ apiKey, model: settings.translateModel, onUsage: count('translation') }),
         translator: translatorFor({
           apiKey,
           model: settings.translateModel,

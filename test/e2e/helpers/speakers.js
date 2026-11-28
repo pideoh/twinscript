@@ -1,6 +1,8 @@
-// A stopped session with a recording, and the mocks for speaker labels (Files and Interactions routes).
+// A stopped session with a recording, and the mocks for speaker labels (Files and Interactions routes)
+// and for the punctuation of a transcript made from a recording (generateContent).
 
 import { reload } from './app.js';
+import { MOCK_USAGE } from './gemini.js';
 
 // The lines of the recorded session that seedRecordedSession writes: one every five seconds of a
 // 20-second recording, two people taking turns.
@@ -108,11 +110,32 @@ const SPEAKER_CORS = {
   'access-control-expose-headers': 'x-goog-upload-url',
 };
 // Mocks the upload (start, finalize, one poll while processing), the analysis and the deletion of
-// files for speaker labels. `analyze(request)` answers the analysis: { status, body } (default: 200
-// with seededAnswer()); it may wait. Returns what was asked: uploads (start requests), analyses
-// (their JSON bodies) and deleted file names.
-export async function mockSpeakers(page, { analyze = () => ({ body: seededAnswer() }) } = {}) {
-  const seen = { uploads: [], analyses: [], deleted: [], files: 0 };
+// files for speaker labels, and the request that puts punctuation into a transcript made from a
+// recording. `analyze(request)` answers the analysis: { status, body } (default: 200 with
+// seededAnswer()); it may wait. `punctuate(text)` answers with the text punctuated (default: the text
+// as it came). Returns what was asked: uploads (start requests), analyses (their JSON bodies),
+// deleted file names and the texts sent for punctuation.
+export async function mockSpeakers(
+  page,
+  { analyze = () => ({ body: seededAnswer() }), punctuate = (text) => text } = {},
+) {
+  const seen = { uploads: [], analyses: [], deleted: [], files: 0, punctuations: [] };
+  await page.route(/generativelanguage\.googleapis\.com\/v1beta\/models\/[^/]+:generateContent/, async (route) => {
+    const text = route
+      .request()
+      .postDataJSON()
+      .contents[0].parts[0].text.match(/<text>\n([\s\S]*)\n<\/text>/)[1];
+    seen.punctuations.push(text);
+    const answer = await punctuate(text);
+    return route
+      .fulfill({
+        status: 200,
+        headers: SPEAKER_CORS,
+        contentType: 'application/json',
+        body: JSON.stringify({ candidates: [{ content: { parts: [{ text: answer }] } }], usageMetadata: MOCK_USAGE }),
+      })
+      .catch(() => {}); // the request was cancelled meanwhile
+  });
   await page.route(/generativelanguage\.googleapis\.com\/upload\/v1beta\/files/, (route) => {
     const request = route.request();
     const command = request.headers()['x-goog-upload-command'];

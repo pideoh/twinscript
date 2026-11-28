@@ -84,6 +84,7 @@ test('a rebuild says what changes, replaces lines, translations and speakers, su
   assert.equal(service.uploads.length, 1);
   assert.equal(service.analyses[0].generation_config.transcription_config.mode.timestamp_granularities[0], 'word');
   assert.deepEqual(service.deleted, ['files/f1']);
+  assert.deepEqual(service.punctuations, [], 'punctuated speech is not sent for punctuation');
   assert.ok(await page.isVisible('#restoreTranscript'));
   assert.equal(await page.textContent('#restoreTranscript'), '元の文字起こしに戻す');
 
@@ -274,6 +275,48 @@ test('a line whose translation fails shows its error; the rest of the rebuild go
   assert.deepEqual(lines[3], REBUILT[3]);
   assert.deepEqual(errors, []);
   await close();
+});
+
+// Speech that came back from the transcription without punctuation, long enough to need it.
+const UNPUNCTUATED =
+  'we checked the budget for the spring event and the costs are lower than planned so we can add a second venue and invite more guests next year';
+const PUNCTUATED = `${UNPUNCTUATED.replace('event and', 'event, and').replace('planned so', 'planned. So')}.`;
+
+test('speech that came back without punctuation gets it; a word the model changed stays as it was, and only the mark beside it is dropped', async () => {
+  for (const [answer, expected] of [
+    [
+      PUNCTUATED,
+      [
+        'we checked the budget for the spring event, and the costs are lower than planned.',
+        'so we can add a second venue and invite more guests next year.',
+      ],
+    ],
+    [
+      PUNCTUATED.replace('and the costs', 'and a costs'),
+      [
+        'we checked the budget for the spring event and the costs are lower than planned.',
+        'so we can add a second venue and invite more guests next year.',
+      ],
+    ],
+  ]) {
+    const { page, errors, close } = await openApp('', { apiKey: 'test-key' });
+    await seedRecordedSession(page);
+    const service = await mockSpeakers(page, {
+      analyze: () => ({ body: rebuildAnswer({ lines: [{ at: 500, speaker: 'spk:0', text: UNPUNCTUATED }] }) }),
+      punctuate: () => answer,
+    });
+    await mockLineTranslation(page);
+    await confirmRebuild(page);
+    await page.waitForFunction(() => document.getElementById('toast').textContent.includes('作り直しました'));
+    await rebuildIdle(page);
+    assert.deepEqual(service.punctuations, [UNPUNCTUATED]);
+    assert.deepEqual(
+      (await shownLines(page)).map(([src]) => src),
+      expected,
+    );
+    assert.deepEqual(errors, []);
+    await close();
+  }
 });
 
 test('rebuilding is not offered without a recording, while listening, or in the demo', async () => {

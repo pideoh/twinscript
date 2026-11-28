@@ -128,6 +128,7 @@ test('the progress says the file is read, then which part is sent or transcribed
   assert.equal(progressKey({ step: 'read' }), 'import.reading');
   assert.equal(progressKey({ step: 'upload', part: 1, parts: 2 }), 'speakers.uploading');
   assert.equal(progressKey({ step: 'analyze', part: 1, parts: 2 }), 'rebuild.transcribing');
+  assert.equal(progressKey({ step: 'punctuate', done: 1, total: 3 }), 'rebuild.punctuating');
   assert.equal(progressKey({ step: 'translate', done: 1, total: 4 }), 'rebuild.translating');
 });
 

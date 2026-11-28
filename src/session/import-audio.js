@@ -137,6 +137,7 @@ export function progressKey({ step }) {
   if (step === 'read') return 'import.reading';
   if (step === 'upload') return 'speakers.uploading';
   if (step === 'analyze') return 'rebuild.transcribing';
+  if (step === 'punctuate') return 'rebuild.punctuating';
   return 'rebuild.translating';
 }
 

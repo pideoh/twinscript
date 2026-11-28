@@ -62,6 +62,66 @@ test('speech without a sentence end is cut at the longest line, between words, l
   assert.equal(lines.map((l) => l.text).join(' '), text);
 });
 
+// Asserts that `lines` are the words of `words` in order, at their times, and that joined with
+// `glue` they give `text`.
+function sameWords(lines, words, text, glue) {
+  assert.equal(lines.map((l) => l.text).join(glue), text);
+  assert.equal(lines[0].startMs, words[0].startMs);
+  const starts = new Set(words.map((w) => w.startMs));
+  assert.ok(lines.every((l, i) => starts.has(l.startMs) && (!i || l.startMs > lines[i - 1].startMs)));
+  assert.equal(lines.at(-1).endMs, words.at(-1).endMs);
+}
+const CLAUSE = '来月の 予算について 確認して、';
+
+test('a long Japanese sentence joined by commas becomes lines of at most 180 characters, each ending at a comma', () => {
+  const spoken = `${Array(43).fill(CLAUSE).join(' ')} 終わります。`;
+  const words = said(spoken, 0, 's1', 100);
+  const text = words.map((w) => w.text).join('');
+  assert.ok(text.length > 600);
+  const lines = linesFromWords(words);
+  assert.ok(lines.length >= 4);
+  assert.ok(lines.every((l) => l.text.length <= 180));
+  assert.ok(lines.slice(0, -1).every((l) => l.text.endsWith('、')));
+  assert.ok(lines.at(-1).text.endsWith('終わります。'));
+  sameWords(lines, words, text, '');
+});
+
+test('a sentence end within 180 characters still ends the line', () => {
+  const first = `${Array(5).fill(CLAUSE).join(' ')} 終わります。`;
+  const words = said(`${first} ${Array(43).fill(CLAUSE).join(' ')} 終わります。`, 0, 's1', 100);
+  const lines = linesFromWords(words);
+  assert.equal(lines[0].text, first.replaceAll(' ', ''));
+  assert.ok(lines.every((l) => l.text.length <= 180));
+});
+
+test('a long run without any mark is cut at 180 characters, between words', () => {
+  const words = said(Array(120).fill('来月の 予算を').join(' '), 0, 's1', 100);
+  const text = words.map((w) => w.text).join('');
+  const lines = linesFromWords(words);
+  assert.ok(lines.every((l) => l.text.length <= 180));
+  assert.ok(
+    lines.slice(0, -1).every((l) => l.text.length > 175),
+    'as close to 180 as a word allows',
+  );
+  sameWords(lines, words, text, '');
+});
+
+test('a long English sentence is cut after a comma, or else at a space', () => {
+  const commas = `${Array(12).fill('we looked at the numbers again,').join(' ')} and stopped.`;
+  const words = said(commas, 0, 's1', 100);
+  const lines = linesFromWords(words);
+  assert.ok(lines.length > 2);
+  assert.ok(lines.every((l) => l.text.length <= 180));
+  assert.ok(lines.slice(0, -1).every((l) => l.text.endsWith(',')));
+  sameWords(lines, words, commas, ' ');
+
+  const spaces = `${Array(30).fill('we looked at the numbers again').join(' and ')}.`;
+  const plain = said(spaces, 0, 's1', 100);
+  const cut = linesFromWords(plain);
+  assert.ok(cut.length > 2 && cut.every((l) => l.text.length <= 180 && l.text.length > 90));
+  sameWords(cut, plain, spaces, ' ');
+});
+
 test('Japanese words are joined without spaces and split after 。', () => {
   const words = ['今日は', '予算の', '話を', 'します。', '次に', '日程を', '確認します。'].map((text, i) => ({
     startMs: i * 400,
@@ -264,4 +324,46 @@ test('cancelling while a part is analyzed rejects, deletes the upload and transl
   );
   assert.deepEqual(diarizer.removed, ['files/f1']);
   assert.equal(asked, 0);
+});
+
+test('a recording whose words came back without punctuation gets it from the punctuator, line by sentence', async () => {
+  const sentence = ['来週の', '会議では', '新しい', '計画を', '説明します'];
+  const spoken = Array.from({ length: 6 }, () => sentence).flat();
+  const diarizer = standInDiarizer(spoken.map((text, i) => [text, i * 200, i * 200 + 150, 'spk:0']));
+  const asked = [];
+  const punctuator = {
+    punctuate: async (text) => {
+      asked.push(text);
+      return text.replaceAll('説明します', '説明します。');
+    },
+  };
+  const progress = [];
+  const result = await transcribeRecording({
+    pieces: [recording(8000)],
+    rate: RATE,
+    langs: [JA, EN],
+    diarizer,
+    punctuator,
+    translator,
+    uid: ids(),
+    onProgress: (p) => progress.push(p),
+  });
+  assert.deepEqual(asked, [spoken.join('')]);
+  assert.deepEqual(
+    result.segments.map((s) => s.src),
+    Array.from({ length: 6 }, () => '来週の会議では新しい計画を説明します。'),
+  );
+  assert.deepEqual(
+    result.segments.map((s) => s.elapsed),
+    [0, 1000, 2000, 3000, 4000, 5000],
+    'times come from the words',
+  );
+  assert.deepEqual(
+    progress.filter((p) => p.step === 'punctuate'),
+    [
+      { step: 'punctuate', done: 0, total: 1 },
+      { step: 'punctuate', done: 1, total: 1 },
+    ],
+  );
+  assert.ok(progress.findIndex((p) => p.step === 'punctuate') < progress.findIndex((p) => p.step === 'translate'));
 });
