@@ -102,6 +102,7 @@ test('a session shows its requests, tokens and estimated cost, and the totals ke
   page.once('dialog', (d) => d.accept());
   await page.locator('#sessionList .session').first().locator('.act').last().click();
   await page.waitForFunction(() => document.querySelectorAll('#sessionList .session').length === 0);
+  await saved(page);
   await reload(page);
   await openUsage(page);
   const after = await cells(page, 'usageTotals');

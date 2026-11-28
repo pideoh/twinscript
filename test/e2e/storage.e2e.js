@@ -382,6 +382,7 @@ test('deleting a session removes its transcript and recordings and leaves the ot
   page.once('dialog', (d) => d.accept());
   await page.locator('#sessionList .session', { hasText: 'Recorded call.' }).locator('.act').last().click();
   await page.waitForFunction(() => document.querySelectorAll('#sessionList .session').length === 4);
+  await saved(page);
 
   const after = await dump(page);
   assert.deepEqual(

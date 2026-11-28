@@ -28,6 +28,12 @@ const focused = (page) =>
     return { tag: el.tagName, label: el.getAttribute('aria-label'), value: el.tagName === 'INPUT' ? el.value : null };
   });
 
+// A run records from its start, so the new session is saved (under the date and time) a moment after
+// the start, before anything is said; when, depends on the machine. Waits until it is listed, above
+// "Weekly sync", so that the rows a test picks do not move under it.
+const recordingListed = (page) =>
+  page.waitForFunction(() => document.querySelectorAll('#sessionList .session').length === 2);
+
 // A page with one saved session, "Weekly sync", on screen.
 async function withSession(options) {
   const app = await openApp('', { apiKey: 'test-key' }, undefined, options);
@@ -144,12 +150,13 @@ test('a session saved while a name is typed does not take away what is typed', a
   await mockTranslation(page, ({ text }) => `訳:${text}`);
   await page.click('#toggle');
   await listening(page);
+  await recordingListed(page);
 
-  await pencil(page).click();
+  await pencil(page, 1).click();
   await page.keyboard.type('Budget re');
   await say('final', 'Hello there.');
-  // The new session is saved and the list made anew, with the new session above the one edited.
-  await page.waitForFunction(() => document.querySelectorAll('#sessionList .session').length === 2);
+  // The new session is saved again under its first sentence, and the list made anew.
+  await page.waitForFunction(() => document.querySelector('#sessionList .name')?.textContent === 'Hello there.');
   assert.deepEqual(await focused(page), { tag: 'INPUT', label: 'セッション名', value: 'Budget re' });
   assert.equal(await page.locator('#sessionList .session').nth(1).locator('input').count(), 1);
   await page.keyboard.type('view');
@@ -191,7 +198,9 @@ test("a row's button keeps the focus when another session is saved and the list 
     await page.waitForFunction(() => !window.focusedRow.isConnected);
   };
 
-  await row(page).locator('.act').nth(1).focus();
+  await recordingListed(page);
+
+  await row(page, 1).locator('.act').nth(1).focus();
   await redrawn(() => say('final', 'Hello there.'));
   assert.deepEqual(await focusedIn(), { label: '削除', session: 'Weekly sync' });
 
