@@ -23,14 +23,16 @@
 
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, sep } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron } from 'playwright-core';
 
 export const DESKTOP = process.env.E2E_TARGET === 'desktop';
 export const DESKTOP_ORIGIN = 'app://rt';
 
-const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
+// Without the trailing separator: on Windows a path ending in \ is quoted on the command line as
+// "...\", where \" escapes the closing quote, and Electron does not find the app.
+const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const FAKE_MEDIA = ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'];
 const VIEWPORT = { width: 1280, height: 720 };
 
