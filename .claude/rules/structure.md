@@ -45,3 +45,5 @@ The folder says what a file is; the first comment of a file says what it is for 
 ## What is checked
 
 `test/unit/rules/structure.test.js` fails when: a module imports `app.js`; a part of the screen imports another part; a logic folder touches the page; a unit test has no subject where its folder says, or a DOM-free logic module has no test; a source file does not start with a comment; the folders of `src/` and the files the desktop app serves disagree; `app.js` grows past its limit. Its messages say what to do. When a rule here can be checked and is not, add the check there rather than more words here.
+
+`test/unit/rules/desktop-web-features.test.js` fails when the page (`src/`, `index.html`) uses a web feature the desktop app does not have or that behaves differently there (`window.prompt()`, a `beforeunload` handler, `document.requestStorageAccessFor()`); each has its source and what to use instead.

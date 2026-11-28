@@ -13,6 +13,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { codeOnly, stripComments } from '../../support/source-text.js';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const posix = (p) => p.split(sep).join('/');
@@ -33,35 +34,6 @@ const listing = async (folder, filter) => (await walk(join(ROOT, folder))).filte
 const SCRIPT_FILES = /\.(js|mjs|sh)$/;
 const sourceFiles = async () =>
   (await Promise.all(['src', 'app', 'scripts'].map((d) => listing(d, SCRIPT_FILES)))).flat();
-
-// Source without comments. Strings are copied whole so that `//` in a URL is not taken for a comment.
-function stripComments(code) {
-  let out = '';
-  let i = 0;
-  while (i < code.length) {
-    const c = code[i];
-    const n = code[i + 1];
-    if (c === '/' && n === '/') {
-      while (i < code.length && code[i] !== '\n') i++;
-    } else if (c === '/' && n === '*') {
-      const end = code.indexOf('*/', i + 2);
-      i = end < 0 ? code.length : end + 2;
-      out += ' ';
-    } else if (c === '"' || c === "'" || c === '`') {
-      let j = i + 1;
-      while (j < code.length && code[j] !== c && !(c !== '`' && code[j] === '\n')) j += code[j] === '\\' ? 2 : 1;
-      out += code.slice(i, j + 1);
-      i = j + 1;
-    } else {
-      out += c;
-      i++;
-    }
-  }
-  return out;
-}
-
-// Blank out string contents too, to look for identifiers in code only.
-const codeOnly = (code) => stripComments(code).replace(/(['"`])(?:\\.|(?!\1)[^\\\n])*\1/g, '""');
 
 // Import specifiers of a module, as written.
 function importsOf(code) {

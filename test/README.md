@@ -7,7 +7,7 @@ The folder says what kind of test a file is.
 | `unit/src/` | The app's logic: one file per module in `src/`, in the same group folders (`speech/`, `translation/`, `session/`, `storage/`, `usage/`, `ui/`, `debug/`; DOM-free, no browser) | `npm test` |
 | `unit/app/` | Desktop rules: modules in `app/` (policy, secrets, shortcuts, updates); Electron is not started | `npm test` |
 | `unit/scripts/` | Tools: modules in `scripts/` (commit check, pricing update, metrics, tuning, macOS signing, browser coverage) | `npm test` |
-| `unit/rules/` | Project rules rather than behavior: translation catalogs (`i18n`), design tokens, content security policy | `npm test` |
+| `unit/rules/` | Project rules rather than behavior: translation catalogs (`i18n`), design tokens, content security policy, web features the desktop app does not have | `npm test` |
 | `e2e/` | Browser tests with Chrome, a fake microphone and mocked Gemini endpoints; one file per topic, shared setup in `helpers/` | `npm run test:e2e` |
 | `desktop/` | Desktop smoke tests; they open real windows, so they need a display and are not run in CI | `npm run test:app` |
 | `fixtures/` | Data files read by tests (and by `docs/tuning.md`) | |
