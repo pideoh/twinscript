@@ -2,6 +2,7 @@
 // everything from here:
 //   audio-reader.js  audio files read in pieces against a whole-file decode: test files, the comparison
 //   app.js      the static server, setup / openApp, ready, reload, rows, saved, listening, ...
+//   desktop.js  E2E_TARGET=desktop: each page is a window of the desktop app instead of Chrome
 //   gemini.js   the Gemini mocks (WebSocket, token, translation), MOCK_USAGE, translated
 //   targets.js  the translation mock for a third language, tagged, linesDone
 //   summary.js  the summary mock

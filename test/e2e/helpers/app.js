@@ -1,6 +1,8 @@
 // Shared setup for the browser tests: each *.e2e.js file calls setup() to get its own static
 // server (random port) and its own Chrome, so Node's test runner can run the files in parallel.
 // Also the small readers every file uses (ready, reload, rows, saved, listening, ...).
+// With E2E_TARGET=desktop each page is the desktop app's window instead (see desktop.js), with the
+// same routes, init scripts and readers; no server or Chrome is started then.
 //
 // With E2E_COVERAGE=<directory>, each page openApp opens records Chrome's JavaScript coverage (block
 // level) and writes the part for the app's scripts (under /src/) to that directory as one JSON file,
@@ -11,9 +13,10 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
-import { after, before } from 'node:test';
+import { after, afterEach, before } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { DESKTOP, DESKTOP_ORIGIN, launchDesktop } from './desktop.js';
 import { grantToken, TOKEN_ENDPOINT } from './gemini.js';
 
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
@@ -28,11 +31,11 @@ const TYPES = {
 const COVERAGE_DIR = process.env.E2E_COVERAGE ? resolve(process.env.E2E_COVERAGE) : null;
 const recording = new Map(); // page -> the origin of its server, while its coverage is recorded
 
-async function startCoverage(page, context, origin) {
+async function startCoverage(page, closers, origin) {
   await page.coverage.startJSCoverage({ resetOnNavigation: false });
   recording.set(page, origin);
   // Coverage can only be read from an open page, so closing it (or its context) writes it first.
-  for (const target of [page, context]) {
+  for (const target of closers) {
     const close = target.close.bind(target);
     target.close = async (...args) => {
       await writeCoverage(page);
@@ -61,8 +64,15 @@ async function writeCoverage(page) {
 // Registers before/after hooks and returns { openApp } bound to this file's server and browser.
 export function setup() {
   let server, browser, origin;
+  // Desktop apps still open. Each is quit when its test ends, so a file does not keep one app per
+  // test running (a Chrome context left open costs little; an app is a set of processes).
+  const apps = new Set();
 
   before(async () => {
+    if (DESKTOP) {
+      origin = DESKTOP_ORIGIN;
+      return;
+    }
     server = createServer(async (req, res) => {
       const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname));
       try {
@@ -82,9 +92,11 @@ export function setup() {
   });
   after(async () => {
     await Promise.all([...recording.keys()].map(writeCoverage));
+    await Promise.all([...apps].map((app) => app.close()));
     await browser?.close();
     server?.close();
   });
+  afterEach(() => Promise.all([...apps].map((app) => app.close())));
 
   // The UI is Japanese unless the test says otherwise (most assertions read Japanese text).
   // Settings are seeded on the first load of the tab only, so what the app saves survives a reload.
@@ -93,9 +105,18 @@ export function setup() {
   // put back on every load, as if the user entered the key again after each reload.
   // `colorScheme` ('light' or 'dark') is what the page sees as prefers-color-scheme.
   async function openApp(query = '', settings, init, { locale = 'en-US', colorScheme = 'light' } = {}) {
-    const context = await browser.newContext({ permissions: ['microphone'], locale, colorScheme });
-    const page = await context.newPage();
-    if (COVERAGE_DIR) await startCoverage(page, context, origin);
+    let context, page, closer;
+    if (DESKTOP) {
+      const app = await launchDesktop({ locale, colorScheme });
+      ({ context, page } = app);
+      closer = { close: () => app.close().finally(() => apps.delete(closer)) };
+      apps.add(closer);
+    } else {
+      context = await browser.newContext({ permissions: ['microphone'], locale, colorScheme });
+      page = await context.newPage();
+      closer = context;
+    }
+    if (COVERAGE_DIR) await startCoverage(page, [page, closer], origin);
     const errors = [];
     const messages = [];
     diagnostics.set(page, { messages, keys: [...MASKED_KEYS, settings?.apiKey].filter(Boolean) });
@@ -129,7 +150,7 @@ export function setup() {
     await context.route(TOKEN_ENDPOINT, grantToken);
     await page.goto(`${origin}/${query}`);
     await ready(page);
-    return { page, errors, close: () => context.close() };
+    return { page, errors, close: () => closer.close() };
   }
 
   return { openApp };

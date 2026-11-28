@@ -19,6 +19,12 @@ Run one file with `node --test test/unit/src/speech/segmenter.test.js`.
 `npm run test:e2e:coverage` runs them with Chrome's coverage on (raw files in `dist/e2e-coverage/`) and
 prints a table per file; `scripts/e2e-coverage.mjs` says how a line is counted.
 
+`npm run test:e2e:desktop` runs the same browser tests against the desktop app instead of Chrome: it
+sets `E2E_TARGET=desktop` (from `e2e/desktop.env`), and `e2e/helpers/desktop.js` then launches the app
+for each page, with its own temporary profile, the fake microphone and the same mocks. It opens real
+windows, so it needs a display, and it is not part of CI. Tests that stand in for what only a browser
+has, or for the desktop app's own bridge, do not pass there.
+
 ## Where a new test goes
 
 - A module in `src/<group>/`: `unit/src/<group>/<module>.test.js`. A module in `app/` or `scripts/`: the same name under `unit/app/` or `unit/scripts/`.
