@@ -737,6 +737,21 @@ input[type="range"] {
   font-size: var(--text-body-size-small);
   line-height: var(--base-text-lineHeight-tight);
 }
+/* A session's name being edited: the field takes the place of the name's line and the padding
+   above and below the button's text, so the row keeps its height. */
+.session .renaming {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: var(--base-size-2);
+}
+.session .renaming .text-input {
+  width: 100%;
+  height: max(var(--control-medium-size), calc(1lh + 2 * var(--base-size-6)));
+}
+.session .renaming .when {
+  padding-inline: var(--base-size-8);
+}
 .session .act {
   opacity: 0;
 }

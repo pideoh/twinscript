@@ -80,6 +80,12 @@ for (const colorScheme of ['light', 'dark']) {
     await page.waitForFunction(() => document.querySelectorAll('#log .seg').length === 3);
     await assertAccessible(page, 'main screen with a transcript');
 
+    // A saved session's name being edited in its row of the sidebar.
+    await page.locator('#sessionList .session .act').first().click();
+    await page.waitForSelector('#sessionList .renaming input:focus');
+    await assertAccessible(page, 'a session being renamed');
+    await page.keyboard.press('Escape');
+
     // The usage dialog with what the session used, and a translation model without a price.
     await page.click('#openUsage');
     await page.waitForSelector('#usageDialog[open]');

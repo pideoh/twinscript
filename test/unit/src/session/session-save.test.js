@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { formatDateTime } from '../../../../src/session/exporter.js';
-import { autoTitle, blankSession, createSessionSaver, isEmpty, uid } from '../../../../src/session/session-save.js';
+import {
+  autoTitle,
+  blankSession,
+  createSessionSaver,
+  isEmpty,
+  typedTitle,
+  uid,
+} from '../../../../src/session/session-save.js';
 
 test('each new session or recording gets an id of its own', () => {
   const ids = new Set(Array.from({ length: 100 }, uid));
@@ -101,6 +108,15 @@ test('a session is named after the start of its first sentence, or when it was m
   );
   const silent = { ...blankSession(settings, { id: 'b', now: Date.UTC(2026, 0, 2, 3, 4) }), segments: [] };
   assert.equal(autoTitle(silent), formatDateTime(silent.createdAt));
+});
+
+test('a typed name becomes the title without the spaces around it, and an empty or unchanged one keeps the title', () => {
+  assert.equal(typedTitle('  Weekly sync \n', 'Old'), 'Weekly sync');
+  assert.equal(typedTitle('週次定例', 'Old'), '週次定例');
+  assert.equal(typedTitle('', 'Old'), null);
+  assert.equal(typedTitle('   ', 'Old'), null);
+  assert.equal(typedTitle('Old', 'Old'), null);
+  assert.equal(typedTitle(' Old ', 'Old'), null);
 });
 
 test('changes are written once, a moment after the last one', () => {

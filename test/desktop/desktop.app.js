@@ -308,3 +308,26 @@ test('starting from the shortcut without an API key asks for the key, as the but
   assert.ok(await page.locator('#checkUpdates').isChecked(), 'checking for new versions is on by default');
   await page.keyboard.press('Escape');
 });
+
+// Electron has no window.prompt; the name is edited in the sidebar instead.
+test('a saved session is renamed from its pencil button', async () => {
+  const page = await app.firstWindow();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.evaluate(() => localStorage.setItem('rt-settings', JSON.stringify({ uiLang: 'ja' })));
+  await page.goto('app://rt/?mock=1');
+  await page.click('#toggle');
+  await page.waitForFunction(() => document.querySelectorAll('.seg:not(.live)').length >= 1);
+  await page.click('#toggle');
+  const row = page.locator('#sessionList .session.current');
+  await row.waitFor();
+
+  await row.locator('.act').first().click();
+  await page.locator('#sessionList .renaming input:focus').waitFor();
+  await page.keyboard.type('Desktop rename');
+  await page.keyboard.press('Enter');
+  assert.equal(await row.locator('.name').textContent(), 'Desktop rename');
+  assert.equal(await page.textContent('#sessionName'), 'Desktop rename');
+  assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), '名前を変更');
+  assert.deepEqual(errors, []);
+});

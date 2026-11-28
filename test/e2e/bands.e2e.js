@@ -80,10 +80,12 @@ test('the name of the session is the heading of the main region; it follows rena
   assert.equal(await page.evaluate(() => document.getElementById('sessionName').localName), 'h2');
   assert.equal(await page.getAttribute('main', 'aria-labelledby'), 'sessionName');
 
-  page.once('dialog', (dialog) =>
-    dialog.accept('Budget review with the whole team, and the schedule for next quarter'),
-  );
   await page.locator('#sessionList .session.current .act').first().click();
+  await page.fill(
+    '#sessionList .renaming input',
+    'Budget review with the whole team, and the schedule for next quarter',
+  );
+  await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.getElementById('sessionName').textContent.startsWith('Budget review'));
   const box = await page.locator('#sessionName').boundingBox();
   const fits = await page.evaluate(() => {
