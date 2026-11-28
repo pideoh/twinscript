@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.18.0](https://github.com/pideoh/twinscript/compare/v0.17.0...v0.18.0) (2026-11-28)
+
+
+### Features
+
+* choose the languages of an audio file when importing it ([#189](https://github.com/pideoh/twinscript/issues/189)) ([59289a6](https://github.com/pideoh/twinscript/commit/59289a652b92974ddb84f34fcb4be29df8e917c7))
+* give each band of the screen one meaning ([#183](https://github.com/pideoh/twinscript/issues/183)) ([fd26582](https://github.com/pideoh/twinscript/commit/fd26582828698b7511c7a839d16c8024e2bcede2))
+* show the app's version and check for a newer one on request ([#180](https://github.com/pideoh/twinscript/issues/180)) ([87dbb3c](https://github.com/pideoh/twinscript/commit/87dbb3cb5fdc850e860e087af85fe6cbbef4af3c))
+
+
+### Bug Fixes
+
+* punctuate a transcript made from a recording when the service leaves punctuation out ([#186](https://github.com/pideoh/twinscript/issues/186)) ([72b6451](https://github.com/pideoh/twinscript/commit/72b6451827d7c9d4e27f428fd7ae94f0d434821b))
+* rename a session in the desktop app ([#190](https://github.com/pideoh/twinscript/issues/190)) ([58fe87c](https://github.com/pideoh/twinscript/commit/58fe87ce5e50c697f6b5383f77c4979b9c77b9dc))
+
 ## [0.17.0](https://github.com/pideoh/twinscript/compare/v0.16.1...v0.17.0) (2026-11-27)
 
 
